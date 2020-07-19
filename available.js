@@ -33,6 +33,7 @@ function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
   var availableDataRange = _getColumnRangeFromRow(sheet, columns.available, rangeRow, lastItemRow-rangeRow+1);
 
   var preReqValues = preReqRange.getValues();
+  var preReqFormulas = preReqRange.getFormulas();
   //var preReqValidations = preReqRange.getDataValidations();
 
   //console.log("weirddebug", lastItemRow, rows.header, preReqValues.length, availableDataRange.getNumRows());
@@ -45,8 +46,13 @@ function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
 
   for (var i = 0; i < preReqValues.length; i++) {
     var andFormulas = [];
+    if (preReqFormulas[i][0]) {
+      // Allow direct formulas, just use reference
+      availables[i][0] = "=R" + (i+rangeRow) + "C" + columns.preReq;
+      continue;
+    }
     if (preReqValues[i][0]) {
-      var preReqAnds = preReqValues[i][0].trim().split(/ *[\n;] */);
+      var preReqAnds = preReqValues[i][0].toString().trim().split(/ *[\n;] */);
       for (var j = 0; j < preReqAnds.length; j++) {
         var preReq = preReqAnds[j].trim();
         if (!preReq) continue;
