@@ -1,4 +1,4 @@
-/* exported UTIL, functionTime, functionTimeEnd */
+/* exported UTIL, time, timeEnd */
 // eslint-disable-next-line no-redeclare
 const UTIL = (function(){
   // Helpers to get various columns/rows/config
@@ -7,7 +7,7 @@ const UTIL = (function(){
     if (headerRowCache) {
       return headerRowCache;
     }
-    functionTime();
+    time();
     var filter = sheet.getFilter();
     if (filter) {
       headerRowCache = filter.getRange().getRow();
@@ -21,7 +21,7 @@ const UTIL = (function(){
         }
       }
     }
-    functionTimeEnd();
+    timeEnd();
     return headerRowCache;
   }
 
@@ -46,7 +46,7 @@ const UTIL = (function(){
       columns.byHeader = Object.assign({}, columns.byHeader);
       return columns;
     }
-    functionTime();
+    time();
 
     var headerRow = getHeaderRow(sheet);
     if (!headerRow) return {};
@@ -76,7 +76,7 @@ const UTIL = (function(){
     }
     columnsCache = Object.assign({},columns);
     columnsCache.byHeader = Object.assign({}, columns.byHeader);
-    functionTimeEnd();
+    timeEnd();
     if (_extraHeaders) {
       // until we remove the need for extraHeaders by only relying on byHeader, remove byHeader
       delete columns.byHeader;
@@ -87,7 +87,7 @@ const UTIL = (function(){
   var rowsCache;
   function getRows(sheet = SpreadsheetApp.getActiveSheet()) {
     if (rowsCache) return rowsCache;
-    functionTime();
+    time();
     var headerRow = getHeaderRow(sheet);
     rowsCache = {
       header: headerRow,
@@ -102,7 +102,7 @@ const UTIL = (function(){
         }
       }
     }
-    functionTimeEnd();
+    timeEnd();
     return rowsCache;
   }
 
@@ -181,9 +181,9 @@ const UTIL = (function(){
   function getColumnRangeFromRow(sheet, columnIndex, rowIndex, _numRows) {
     var key = sheet.getName() + ":" + columnIndex + ":" + rowIndex + ":" + _numRows;
     if (rangeCache[key]) return rangeCache[key];
-    functionTime();
+    time();
     rangeCache[key] = sheet.getRange(rowIndex, columnIndex, _numRows || (sheet.getLastRow()-rowIndex+1) || 1);
-    functionTimeEnd();
+    timeEnd();
     return rangeCache[key];
   }
 
@@ -218,8 +218,8 @@ const UTIL = (function(){
 // Without log aggregating, the _includeUnlabeled will just produce a secondary useless metric in log;
 //   including for symmetry
 // eslint-disable-next-line no-redeclare
-function functionTime(_extraLabel, _includeUnlabeled) {
-  var functionName = functionTime.caller.name;
+function time(_extraLabel, _includeUnlabeled) {
+  var functionName = time.caller.name;
   if (!_extraLabel || _includeUnlabeled) {
     console.time(functionName);
   }
@@ -233,8 +233,8 @@ function functionTime(_extraLabel, _includeUnlabeled) {
 }
 
 // eslint-disable-next-line no-redeclare
-function functionTimeEnd(_extraLabel, _includeUnlabeled) {
-  var functionName = functionTimeEnd.caller.name;
+function timeEnd(_extraLabel, _includeUnlabeled) {
+  var functionName = timeEnd.caller.name;
   if (!_extraLabel || _includeUnlabeled) {
     console.timeEnd(functionName);
   }

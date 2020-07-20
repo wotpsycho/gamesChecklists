@@ -3,7 +3,7 @@
 const RESET = (function(){
 
   function promptReset() {
-    functionTime();
+    time();
     var ui = SpreadsheetApp.getUi();
   
     let response;
@@ -27,7 +27,7 @@ const RESET = (function(){
         response = ui.alert("Verify Reset","Are you sure you want to reset all progress on this list?", ui.ButtonSet.YES_NO);
         if (response != ui.Button.YES) return;
         resetData = true;
-        functionTime("full");
+        time("full");
       } else {
       // Hidden special flags
         specialReset = responseText;
@@ -35,7 +35,7 @@ const RESET = (function(){
     }
 
     ui.alert("Resetting", (resetData ? "The checklist" : "The view ") + " will reset when you close this message.\n\nThis may take up to a minute, you will get a confirmation message when it has finished.", ui.ButtonSet.OK);
-    functionTime("nonUI");
+    time("nonUI");
   
     var filter = sheet.getFilter();
     var columns = UTIL.getColumns(sheet);
@@ -175,7 +175,7 @@ const RESET = (function(){
     var checkboxDisableFormula = "=OR(ISBLANK($"+ itemDataCellA1 +"),$" + availableDataCellA1 + "=FALSE)";
     var crossthroughCheckedFormula = "=$" + checkboxDataCellA1 + "=TRUE";
     
-    functionTime("available rules");
+    time("available rules");
     var existingRules = sheet.getConditionalFormatRules();
     var removedRules = []; // not doing anything with these...yet!
   
@@ -245,21 +245,21 @@ const RESET = (function(){
   
     sheet.setConditionalFormatRules([crossthroughCheckedRule,checkboxDisableRule].concat(existingRules,[availableErrorRule,notAvailableRule]));
   
-    functionTimeEnd("available rules");
-    functionTimeEnd("available");
+    timeEnd("available rules");
+    timeEnd("available");
   
   
-    functionTime("quickFilter");
+    time("quickFilter");
     if (rows.quickFilter) {
       sheet.getRange(rows.quickFilter,2,1,sheet.getLastColumn()-1).clearContent();
     }
-    functionTimeEnd("quickFilter");
+    timeEnd("quickFilter");
   
     if (CONFIG.getConfig(sheet).metaSheet) {
       META.ProcessMeta();
     }
   
-    functionTime("filterCreate");
+    time("filterCreate");
     // Create new filter
     headerRow = UTIL.getHeaderRow(sheet);
     var filterRange = sheet.getRange(headerRow,1,sheet.getMaxRows()-headerRow+1,sheet.getLastColumn());
@@ -292,16 +292,16 @@ const RESET = (function(){
         }
       }
     }
-    functionTimeEnd("filterCreate");
+    timeEnd("filterCreate");
   
     TOTALS.updateTotals(sheet);
     SETTINGS.resetSettings(sheet, previousMode || "Dynamic");
   
-    functionTimeEnd("nonUI");
-    functionTimeEnd("full");
+    timeEnd("nonUI");
+    timeEnd("full");
     ui.alert("Reset Complete!","You may now use this checklist again.",ui.ButtonSet.OK);
   
-    functionTimeEnd();
+    timeEnd();
   }
 
   return {

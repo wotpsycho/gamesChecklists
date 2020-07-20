@@ -7,7 +7,7 @@ const AVAILABLE = (function(){
   var MULTI_REGEX = /^((\d+)[*x]|[*x](\d+)) +(((.*)!)?(.+))$/;
 
   function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
-    functionTime();
+    time();
     var columns = UTIL.getColumns(sheet);
     var rows = UTIL.getRows(sheet);
   
@@ -151,14 +151,14 @@ const AVAILABLE = (function(){
   
     //Logger.log(availables);
     availableDataRange.setFormulasR1C1(availables);
-    functionTimeEnd();
+    timeEnd();
   }
 
 
   function _getRowsByValue(range) {
-    functionTime();
+    time();
     var column = range.getColumn();
-    functionTime(column);
+    time(column);
   
     var values = range.getValues();
     var rows = {
@@ -180,7 +180,7 @@ const AVAILABLE = (function(){
         rows[value].push(row);
       }
     }
-    functionTimeEnd(column,true);
+    timeEnd(column,true);
     return rows;
   }
 

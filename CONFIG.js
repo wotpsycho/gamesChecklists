@@ -29,7 +29,7 @@ const CONFIG = (function(){
   var configCache;
   function getConfig(sheet) {
     if (configCache) return Object.assign({},configCache);
-    console.time("getConfig");
+    time();
     
     var columns = UTIL.getColumns(sheet);
     configCache = {
@@ -51,7 +51,7 @@ const CONFIG = (function(){
       }
     }
     
-    console.timeEnd("getConfig");
+    timeEnd();
     return Object.assign({},configCache);
   }
   function setConfig(sheet = SpreadsheetApp.getActiveSheet(), configType, configValue) {

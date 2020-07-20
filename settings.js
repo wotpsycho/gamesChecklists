@@ -113,7 +113,7 @@ const SETTINGS = (function(){
   const SETTING_REGEX = /^(.+): (.+?)(\*)?$/;
 
   function updateSettings(sheet, _range) {
-    console.time("updateSettings");
+    time();
     var settingsObject = getSettingsObject(sheet);
     
     Object.entries(settingsObject).forEach(function([setting, settingInfo]) {
@@ -125,7 +125,7 @@ const SETTINGS = (function(){
     });
     
     _populateEmptyDataValidation(sheet); 
-    console.timeEnd("updateSettings");
+    timeEnd();
   }
 
   function setSettings(sheet,settings) {
@@ -135,7 +135,7 @@ const SETTINGS = (function(){
   }
 
   function setSetting(sheet, setting, _settingValue) {
-    console.time("setSetting");
+    time();
     var rows = UTIL.getRows(sheet);
     var settingsObject = getSettingsObject(sheet);
     
@@ -157,7 +157,7 @@ const SETTINGS = (function(){
     
     // cache
     settingsCache = undefined;
-    console.timeEnd("setSetting");
+    timeEnd();
   }
 
   function getSetting(sheet, setting) {
@@ -171,7 +171,7 @@ const SETTINGS = (function(){
   var settingsCache;
   function getSettingsObject(sheet) {
     if (settingsCache) return Object.assign({},settingsCache);
-    console.time("getSettingsObject");
+    time();
     
     var settings = {
       _available: {},
@@ -220,22 +220,21 @@ const SETTINGS = (function(){
     
     settingsRange.setValues([settingsSheetValues]);
     
-    console.timeEnd("getSettingsObject");
+    timeEnd();
     return settingsCache = settings;
   }
 
   function resetSettings(sheet, _mode) {
-    console.time("resetSettings");
+    time();
     _populateEmptyDataValidation(sheet);
     if (_mode) {
       setSetting(sheet,"Mode",_mode);
     }
-    console.timeEnd("resetSettings");
+    timeEnd();
   }
 
   function _executeSetting(sheet, setting) {
-    console.time("_executeSetting");
-    console.time("_executeSetting " + setting);
+    time(setting, true);
     var settings = getSettings(sheet);
     
     var settingFunction = SETTINGS_CONFIG[setting].options[settings[setting]];
@@ -246,12 +245,11 @@ const SETTINGS = (function(){
     } else {
       settingFunction(sheet);
     }
-    console.timeEnd("_executeSetting");
-    console.timeEnd("_executeSetting " + setting);
+    timeEnd(setting, true);
   }
 
   function _populateEmptyDataValidation(sheet) {
-    console.time("_populateEmptyDataValidation");
+    time();
     var rows = UTIL.getRows(sheet);
     var settingsObject = getSettingsObject(sheet);
     
@@ -287,11 +285,11 @@ const SETTINGS = (function(){
       }
     }
     
-    console.timeEnd("_populateEmptyDataValidation");
+    timeEnd();
   }
 
   function _checkCustomMode(sheet) {
-    console.time("_checkCustomMode");
+    time();
     var rows = UTIL.getRows(sheet);
     var settingsObject = getSettingsObject(sheet);
     
@@ -317,7 +315,7 @@ const SETTINGS = (function(){
       }
       cell.setValue(newCellValue);
     } 
-    console.timeEnd("_checkCustomMode");
+    timeEnd();
   }
 
 
@@ -334,8 +332,7 @@ const SETTINGS = (function(){
 
   function _generateUpdateFilterValuesVisibilityFunction(columnName, valuesToShow, valuesToHide) {
     return function updateFilterValuesVisibility(sheet) {
-      console.time("updateFilterCriteria");
-      console.time("updateFilterCriteria " + columnName);
+      time(columnName, true);
       var columns = UTIL.getColumns(sheet);
       var filter = sheet.getFilter();
       var changed = false;
@@ -373,8 +370,7 @@ const SETTINGS = (function(){
       if (changed) {
         filter.setColumnFilterCriteria(columns[columnName], newCriteria);
       }
-      console.timeEnd("updateFilterCriteria");
-      console.timeEnd("updateFilterCriteria " + columnName);
+      timeEnd(columnName,true);
     };
   }
 
@@ -388,7 +384,7 @@ const SETTINGS = (function(){
 
   function _generateSetColumnVisibilityFunction(columnId, isVisible) {
     return function setColumnVisibility(sheet) {
-      functionTime(columnId + " " + isVisible, true);
+      time(columnId + " " + isVisible, true);
       var columns = UTIL.getColumns(sheet);
       if (!columns[columnId]) throw new Error("Column does not exist", columnId);
       
@@ -397,13 +393,13 @@ const SETTINGS = (function(){
       } else {
         sheet.hideColumns(columns[columnId]);
       }
-      functionTimeEnd(columnId + " " + isVisible, true);
+      timeEnd(columnId + " " + isVisible, true);
     };
   }
 
   function _generateSetEditableFunction(editable) {
     return function setEditable(sheet) {
-      console.time("setEditable");
+      time();
       var rows = UTIL.getRows(sheet);
       var columns = UTIL.getColumns(sheet);
       var preReqColumnRange = UTIL.getColumnDataRange(sheet, columns.preReq);
@@ -447,7 +443,7 @@ const SETTINGS = (function(){
         );
         META.setDataValidation(sheet);
       }
-      console.timeEnd("setEditable");
+      timeEnd();
     };
   }
 
@@ -523,7 +519,7 @@ const SETTINGS = (function(){
   }
 
   function _setDataValidation(cell, setting, _additionalOption) {
-    console.time("_setDataValidation");
+    time();
     
     var settingOptions = Object.keys(SETTINGS_CONFIG[setting].options).map(function(value){
       return setting + ": " + value;
@@ -542,7 +538,7 @@ const SETTINGS = (function(){
       .setAllowInvalid(false)
       .build()
     );
-    console.timeEnd("_setDataValidation");
+    timeEnd();
   }
   function resetCache() {
     settingsCache = undefined;

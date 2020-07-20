@@ -40,7 +40,7 @@
         "TOTALS": false,
         "UTIL": false,
 
-        "functionTime": false,
-        "functionTimeEnd": false
+        "time": false,
+        "timeEnd": false
     }
 }

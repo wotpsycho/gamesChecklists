@@ -3,7 +3,7 @@
 const FILTER = (function(){
 // Forces filter to update
   function reapplyFilter(filter) {
-    console.time("reapplyFilter");
+    time();
     if (filter) {
       Logger.log("Reapplying Filter");
       var range = filter.getRange();
@@ -12,12 +12,12 @@ const FILTER = (function(){
         var criteria = filter.getColumnFilterCriteria(i);
         if (criteria) {
           filter.setColumnFilterCriteria(i,criteria);
-          console.timeEnd("reapplyFilter");
+          timeEnd();
           return; // Don't need to do more than one
         }
       }
     }
-    console.timeEnd("reapplyFilter");
+    timeEnd();
   }
 
   return {

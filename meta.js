@@ -4,7 +4,7 @@
 const META = (function(){
 
   function ProcessMeta() {
-    console.time("ProcessMeta");
+    time();
     var sheet = SpreadsheetApp.getActiveSheet();
   
     var checkboxHeaderRow = UTIL.getHeaderRow(sheet);
@@ -27,11 +27,11 @@ const META = (function(){
     // Replace conditional format rules
     _updateConditionalFormatToMetaValues(sheet, headerMetadata);
   
-    console.timeEnd("ProcessMeta");
+    timeEnd();
   }
 
   function removeDataValidationFromMeta(sheet) {
-    console.time("getMetadataValidationColumns");
+    time();
     var metaSheet = _getMetaSheet(sheet);
     var headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
     var columns = UTIL.getColumns(sheet);
@@ -45,7 +45,7 @@ const META = (function(){
       });
     }
   
-    console.timeEnd("getMetadataValidationColumns");
+    timeEnd();
   }
 
   function setDataValidationFromMeta(sheet) {
@@ -102,7 +102,7 @@ const META = (function(){
   }
 
   function _readHeaderMetadata(metaSheet) {
-    console.time("_readHeaderMetadata");
+    time();
     var headerMetadata = {};
     var metaHeaders = metaSheet.getRange("A1:1");
     var metaHeaderValues = metaHeaders.getValues()[0];
@@ -150,11 +150,11 @@ const META = (function(){
       // TODO determine what to include as meta
       }
     }
-    console.timeEnd("_readHeaderMetadata");
+    timeEnd();
     return headerMetadata;
   }
   function _associateChecklistToMetadata(sheet, headerMetadata, _includeMissingValues) {
-    console.time("_associateChecklistMetadata");
+    time();
     // Associate header info with checklist
     var checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
     Object.keys(checklistColumns).forEach(function(checklistColumnName) {
@@ -170,11 +170,11 @@ const META = (function(){
     if (_includeMissingValues) {
       _determineMissingValues(sheet,headerMetadata);
     }
-    console.timeEnd("_associateChecklistMetadata");
+    timeEnd();
   }
 
   function _determineMissingValues(sheet, headerMetadata) {
-    console.time("_determineMissingValues");
+    time();
     var checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
     console.log("[checklistcolumns]", checklistColumns);
     Object.entries(checklistColumns).forEach(([checklistColumnName, checklistColumn]) => {
@@ -200,11 +200,11 @@ const META = (function(){
       //Logger.log("[checklistColumnName, checklistColumn, metadata]",[checklistColumnName, checklistColumn, metadata]);
       }
     });
-    console.timeEnd("_determineMissingValues");
+    timeEnd();
   }
 
   function _setDataValidationForChecklistToMetaValues(sheet, headerMetadata) {
-    console.time("_setDataValidationForChecklistToMetaValuas");
+    time();
     var columns = UTIL.getColumns(sheet);
     Object.values(headerMetadata).forEach(function(metadata) {
       if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
@@ -216,11 +216,11 @@ const META = (function(){
         metadata.range.setDataValidation(metadata.rangeValidation);
       }
     });
-    console.timeEnd("_setDataValidationForChecklistToMetaValuas");
+    timeEnd();
   }
 
   function _updateMetaSheetWithMissingValues(metaSheet, headerMetadata) {
-    console.time("_updateMetaSheetWithMissingValues");
+    time();
     Object.values(headerMetadata).forEach(function(metadata) {
       if (metadata.missingValues) {
         var missingValues = Object.keys(metadata.missingValues);
@@ -233,11 +233,11 @@ const META = (function(){
         }
       }
     });
-    console.timeEnd("_updateMetaSheetWithMissingValues");
+    timeEnd();
   }
 
   function _updateConditionalFormatToMetaValues(sheet, headerMetadata) {
-    console.time("_updateConditionalFormatToMetaValues");
+    time();
     var formulaMap = {};
     var newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
     // Get validation
@@ -325,7 +325,7 @@ const META = (function(){
   Logger.log("[oldRules,replacedRules,newConditionalFormatRules]",[_debugFunc(oldRules),_debugFunc(replacedRules),_debugFunc(newConditionalFormatRules)])
   */
     sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
-    console.timeEnd("_updateConditionalFormatToMetaValues");
+    timeEnd();
   }
   return {
     ProcessMeta: ProcessMeta,
@@ -341,7 +341,7 @@ function ProcessMeta() {
 
 // eslint-disable-next-line no-unused-vars
 function debug(){
-  console.time("debug");
+  time();
   META.removeDataValidationFromMeta(SpreadsheetApp.getActiveSheet());
-  console.timeEnd("debug");
+  timeEnd();
 }

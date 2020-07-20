@@ -3,7 +3,7 @@
 const TOTALS = (function(){
 // Save as Note to A1
   function updateTotals(sheet) {
-    console.time("totals");
+    time();
     var columns = UTIL.getColumns(sheet);
     if (columns.item === columns.check+1) return; // No type/category to break down
     var counts = _countByType(sheet, columns.check+1);
@@ -16,11 +16,11 @@ const TOTALS = (function(){
     }
     notes.push(counts._total.checked + "/" + counts._total.total + " Total");
     sheet.getRange("A1").setNote(notes.join("\n"));
-    console.timeEnd("totals");
+    timeEnd();
   }
 
   function _countByType(sheet, _typeColumn) {
-    console.time("_countByType");
+    time();
     var columns = UTIL.getColumns(sheet);
     var counts = {
       _total: {
@@ -32,10 +32,10 @@ const TOTALS = (function(){
     if (!_typeColumn) _typeColumn = columns.type;
     if (!_typeColumn || !columns.check) return;
   
-    console.time("_countByType data");
+    time("data");
     var checkData = UTIL.getColumnDataRange(sheet, columns.check).getValues();
     var typeData = UTIL.getColumnDataRange(sheet, _typeColumn).getValues();
-    console.timeEnd("_countByType data");
+    timeEnd("data");
     for (var i = 0; i < typeData.length; i++) {
       var type = typeData[i][0];
       if (!type || !type.trim()) continue;
@@ -53,7 +53,7 @@ const TOTALS = (function(){
         counts._total.checked++;
       }
     }
-    console.timeEnd("_countByType");
+    timeEnd();
     return counts;
   }
 

@@ -3,7 +3,7 @@
 const NOTES = (function(){
 // Update the Item hover notes with the data in the Item Notes column
   function moveNotes(range) {
-    functionTime();
+    time();
     var sheet = range.getSheet();
     var columns = UTIL.getColumns(sheet);
     if (!columns.item || !columns.notes) {
@@ -19,7 +19,7 @@ const NOTES = (function(){
   var notes = sheet.getRange(range.getRow(),columns.notes,range.getNumRows());
 */
     items.setNotes(notes.getValues());
-    functionTimeEnd();
+    timeEnd();
   }
 
 
