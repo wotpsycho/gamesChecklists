@@ -84,7 +84,7 @@ const SETTINGS = (function(){
         No: _generateSetEditableFunction(false),
       },
       determiner: function(sheet) {
-        var protection = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        const protection = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         return protection && protection[0] ? "No" : "Yes";
       },
     },
@@ -108,7 +108,7 @@ const SETTINGS = (function(){
 
   function updateSettings(sheet, _range) {
     time();
-    var settingsObject = getSettingsObject(sheet);
+    const settingsObject = getSettingsObject(sheet);
     
     Object.entries(settingsObject).forEach(function([setting, settingInfo]) {
       if (settingInfo.column && (!_range || UTIL.isColumnInRange(settingInfo.column, _range))) {
@@ -130,8 +130,8 @@ const SETTINGS = (function(){
 
   function setSetting(sheet, setting, _settingValue) {
     time();
-    var rows = UTIL.getRows(sheet);
-    var settingsObject = getSettingsObject(sheet);
+    const rows = UTIL.getRows(sheet);
+    const settingsObject = getSettingsObject(sheet);
     
     if (!settingsObject[setting]) throw new Error("Invalid setting: ", + setting);
     
@@ -140,7 +140,7 @@ const SETTINGS = (function(){
         
     settingsObject[setting].value = _settingValue;
     if (settingsObject[setting].column) {
-      var cell = sheet.getRange(rows.settings, settingsObject[setting].column);
+      const cell = sheet.getRange(rows.settings, settingsObject[setting].column);
       cell.setValue(setting + ": " + _settingValue);
       _setDataValidation(cell, setting);
     }
@@ -160,12 +160,12 @@ const SETTINGS = (function(){
     return Object.fromEntries(Object.entries(getSettingsObject(sheet)).map(([setting, settingInfo]) => [setting, settingInfo.value]));
   }
 
-  var settingsCache;
+  let settingsCache;
   function getSettingsObject(sheet) {
     if (settingsCache) return Object.assign({},settingsCache);
     time();
     
-    var settings = {
+    const settings = {
       _available: {},
     };
     Object.keys(SETTINGS_CONFIG).forEach(function(setting) {
@@ -173,16 +173,16 @@ const SETTINGS = (function(){
       };
       settings._available[setting] = true;
     });
-    var rows = UTIL.getRows(sheet);
+    const rows = UTIL.getRows(sheet);
     
     if (!rows.settings) return settings;
     
-    var lastSheetColumn = sheet.getLastColumn();
-    var settingsRange = sheet.getRange(rows.settings, 2, 1, lastSheetColumn-1);
+    const lastSheetColumn = sheet.getLastColumn();
+    const settingsRange = sheet.getRange(rows.settings, 2, 1, lastSheetColumn-1);
     
-    var settingsSheetValues = settingsRange.getValues()[0];
-    for (var column = 2; column <= lastSheetColumn; column++) {
-      var [, cellSetting, cellSettingValue, isCustom] = SETTING_REGEX.exec(settingsSheetValues[column-2]) || [];
+    const settingsSheetValues = settingsRange.getValues()[0];
+    for (let column = 2; column <= lastSheetColumn; column++) {
+      const [, cellSetting, cellSettingValue, isCustom] = SETTING_REGEX.exec(settingsSheetValues[column-2]) || [];
       
       if (cellSettingValue && SETTINGS_CONFIG[cellSetting] && SETTINGS_CONFIG[cellSetting].options[cellSettingValue] && !settings[cellSetting].column) {
         settings[cellSetting].column = column;
@@ -227,9 +227,9 @@ const SETTINGS = (function(){
 
   function _executeSetting(sheet, setting) {
     time(setting, true);
-    var settings = getSettings(sheet);
+    const settings = getSettings(sheet);
     
-    var settingFunction = SETTINGS_CONFIG[setting].options[settings[setting]];
+    const settingFunction = SETTINGS_CONFIG[setting].options[settings[setting]];
     if (Array.isArray(settingFunction)) {
       settingFunction.forEach(function(func) {
         func(sheet);
@@ -242,20 +242,20 @@ const SETTINGS = (function(){
 
   function _populateEmptyDataValidation(sheet) {
     time();
-    var rows = UTIL.getRows(sheet);
-    var settingsObject = getSettingsObject(sheet);
+    const rows = UTIL.getRows(sheet);
+    const settingsObject = getSettingsObject(sheet);
     
-    var lastSheetColumn = sheet.getLastColumn();
+    const lastSheetColumn = sheet.getLastColumn();
     
-    var range = sheet.getRange(rows.settings,2,1,lastSheetColumn-1);
-    var rangeValues = range.getValues();
+    const range = sheet.getRange(rows.settings,2,1,lastSheetColumn-1);
+    const rangeValues = range.getValues();
     
-    var first = true;
-    for (var column = 1; column <= rangeValues[0].length; column++) {
-      var cellValue = rangeValues[0][column-1];
+    let first = true;
+    for (let column = 1; column <= rangeValues[0].length; column++) {
+      const cellValue = rangeValues[0][column-1];
       if (!cellValue) {
-        var cell = range.getCell(1,column);
-        var validation = SpreadsheetApp.newDataValidation();
+        const cell = range.getCell(1,column);
+        const validation = SpreadsheetApp.newDataValidation();
         validation.setAllowInvalid(false);
         
         if (first) {
@@ -282,23 +282,23 @@ const SETTINGS = (function(){
 
   function _checkCustomMode(sheet) {
     time();
-    var rows = UTIL.getRows(sheet);
-    var settingsObject = getSettingsObject(sheet);
+    const rows = UTIL.getRows(sheet);
+    const settingsObject = getSettingsObject(sheet);
     
     if (!settingsObject.Mode.column) return;
     
-    var modeSettings = MODE_CONFIG[settingsObject.Mode.value];
-    var isCustom = false;
-    for (var setting in modeSettings) {
+    const modeSettings = MODE_CONFIG[settingsObject.Mode.value];
+    let isCustom = false;
+    Object.entries(modeSettings).forEach(([setting, modeSetting]) =>{
     // console.log("settingsObject[setting].value, modeSettings[setting], setting",settingsObject[setting].value, modeSettings[setting], setting);
-      if (settingsObject[setting].value != modeSettings[setting]) {
+      if (settingsObject[setting].value != modeSetting) {
         isCustom = true;
       }
-    } 
+    });
     //  console.log("[isCustom, settingsObject.Mode.isCustom]",[isCustom, settingsObject.Mode.isCustom]);
     if (settingsObject.Mode.isCustom != isCustom) {
-      var cell = sheet.getRange(rows.settings, settingsObject.Mode.column);
-      var newCellValue = "Mode: " + settingsObject.Mode.value;
+      const cell = sheet.getRange(rows.settings, settingsObject.Mode.column);
+      let newCellValue = "Mode: " + settingsObject.Mode.value;
       if (isCustom) {
         newCellValue += "*";
         _setDataValidation(cell, "Mode", newCellValue);
@@ -313,10 +313,10 @@ const SETTINGS = (function(){
 
   function _generateFilterValueVisibilityDeterminer(columnId, value, ifVisible, ifHidden) {
     return function filterValueVisibilityDeterminer(sheet) {
-      var columns = UTIL.getColumns(sheet);
-      var filter = sheet.getFilter();
-      var criteria = filter && filter.getColumnFilterCriteria(columns[columnId]);
-      var hiddenValues = criteria && criteria.getHiddenValues();
+      const columns = UTIL.getColumns(sheet);
+      const filter = sheet.getFilter();
+      const criteria = filter && filter.getColumnFilterCriteria(columns[columnId]);
+      const hiddenValues = criteria && criteria.getHiddenValues();
       return hiddenValues && hiddenValues.includes(value) ? ifHidden : ifVisible;
     };
   }
@@ -324,10 +324,10 @@ const SETTINGS = (function(){
   function _generateUpdateFilterValuesVisibilityFunction(columnName, valuesToShow, valuesToHide) {
     return function updateFilterValuesVisibility(sheet) {
       time(columnName, true);
-      var columns = UTIL.getColumns(sheet);
-      var filter = sheet.getFilter();
-      var changed = false;
-      var criteria = filter.getColumnFilterCriteria(columns[columnName]);
+      const columns = UTIL.getColumns(sheet);
+      const filter = sheet.getFilter();
+      let changed = false;
+      const criteria = filter.getColumnFilterCriteria(columns[columnName]);
       let newCriteria, hiddenValues;
       if (criteria) {
         newCriteria = criteria.copy();
@@ -340,7 +340,7 @@ const SETTINGS = (function(){
       
       if (valuesToShow && hiddenValues.length > 0){ 
         valuesToShow.forEach(function(showValue){
-          var index;
+          let index;
           while ((index = hiddenValues.indexOf(showValue)) >= 0) {
             changed = true;
             hiddenValues.splice(index,1);
@@ -366,7 +366,7 @@ const SETTINGS = (function(){
 
   function _generateColumnVisibilityDeterminer(columnId, ifVisible, ifHidden) {
     return function columnVisibilityDeterminer(sheet) {
-      var columns = UTIL.getColumns(sheet);
+      const columns = UTIL.getColumns(sheet);
       return sheet.isColumnHiddenByUser(columns[columnId]) ? ifHidden : ifVisible;
     };
   }
@@ -374,7 +374,7 @@ const SETTINGS = (function(){
   function _generateSetColumnVisibilityFunction(columnId, isVisible) {
     return function setColumnVisibility(sheet) {
       time(columnId + " " + isVisible, true);
-      var columns = UTIL.getColumns(sheet);
+      const columns = UTIL.getColumns(sheet);
       if (!columns[columnId]) throw new Error("Column does not exist", columnId);
       
       if (isVisible) {
@@ -389,21 +389,21 @@ const SETTINGS = (function(){
   function _generateSetEditableFunction(editable) {
     return function setEditable(sheet) {
       time();
-      var rows = UTIL.getRows(sheet);
-      var columns = UTIL.getColumns(sheet);
-      var preReqColumnRange = UTIL.getColumnDataRange(sheet, columns.preReq);
+      const rows = UTIL.getRows(sheet);
+      const columns = UTIL.getColumns(sheet);
+      const preReqColumnRange = UTIL.getColumnDataRange(sheet, columns.preReq);
       
       // Remove old protection either way; was hitting race condition with deleting quickFilter row
-      var protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
       if (protections && protections[0]) {
         protections[0].remove();
       }
       
       if (!editable) {
         // Protect sheet
-        var protection = sheet.protect();
+        const protection = sheet.protect();
         protection.setWarningOnly(true);
-        var unprotected = [];
+        const unprotected = [];
         if (rows.quickFilter) {
           unprotected.push(sheet.getRange("R" + rows.quickFilter + "C2:R" + rows.quickFilter));
         }
@@ -450,25 +450,25 @@ const SETTINGS = (function(){
 
   function _generateEnableQuickFilterFunction(enabled) {
     return function enableQuickFilter(sheet) {
-      var rows = UTIL.getRows(sheet);
-      var filter = sheet.getFilter();
+      let rows = UTIL.getRows(sheet);
+      const filter = sheet.getFilter();
       if (enabled) {
         if (!rows.quickFilter) {
           sheet.insertRowBefore(rows.header);
-          var filterHeadingCell = sheet.getRange(rows.header,1);
+          const filterHeadingCell = sheet.getRange(rows.header,1);
           filterHeadingCell.setValue(CONFIG.ROW_HEADERS.quickFilter);
           UTIL.resetCache();
           rows = UTIL.getRows(sheet);
-          var filterValueRange = sheet.getRange(rows.quickFilter, 2, 1, sheet.getLastColumn()-1);
-          var color = filterHeadingCell.getBackgroundObject().asRgbColor().asHexString();
+          const filterValueRange = sheet.getRange(rows.quickFilter, 2, 1, sheet.getLastColumn()-1);
+          const color = filterHeadingCell.getBackgroundObject().asRgbColor().asHexString();
           // HACK lighten the color
-          var r = parseInt(color.slice(1,3),16);
-          var g = parseInt(color.slice(3,5),16);
-          var b = parseInt(color.slice(5,7),16);
-          var newR = parseInt((r+255)/2);
-          var newG = parseInt((g+255)/2);
-          var newB = parseInt((b+255)/2);
-          var newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
+          const r = parseInt(color.slice(1,3),16);
+          const g = parseInt(color.slice(3,5),16);
+          const b = parseInt(color.slice(5,7),16);
+          const newR = parseInt((r+255)/2);
+          const newG = parseInt((g+255)/2);
+          const newB = parseInt((b+255)/2);
+          const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
           filterValueRange.setBackground(newColor);
         }
       } else {
@@ -476,9 +476,9 @@ const SETTINGS = (function(){
           sheet.deleteRow(rows.quickFilter);
           UTIL.resetCache();
         }
-        var lastColumn = sheet.getLastColumn();
-        for (var column = 2; column <= lastColumn; column++) {
-          var criteria = filter.getColumnFilterCriteria(column);
+        const lastColumn = sheet.getLastColumn();
+        for (let column = 2; column <= lastColumn; column++) {
+          const criteria = filter.getColumnFilterCriteria(column);
           if (criteria && criteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA && QUICK_FILTER.isQuickFilterFormula(criteria.getCriteriaValues()[0])) {
             filter.removeColumnFilterCriteria(column);
           }
@@ -494,7 +494,7 @@ const SETTINGS = (function(){
   function _setDataValidation(cell, setting, _additionalOption) {
     time();
     
-    var settingOptions = Object.keys(SETTINGS_CONFIG[setting].options).map(function(value){
+    const settingOptions = Object.keys(SETTINGS_CONFIG[setting].options).map(function(value){
       return setting + ": " + value;
     });
     
@@ -531,7 +531,7 @@ const SETTINGS = (function(){
 
 // eslint-disable-next-line no-unused-vars
 function debug() {
-  var sheet = SpreadsheetApp.getActiveSheet();
+  const sheet = SpreadsheetApp.getActiveSheet();
   SETTINGS.setSetting(sheet, "Editable");
 //  getSettingsObject(SpreadsheetApp.getActiveSheet());
 }

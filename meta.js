@@ -5,18 +5,18 @@ const META = (function(){
 
   function ProcessMeta() {
     time();
-    var sheet = SpreadsheetApp.getActiveSheet();
+    const sheet = SpreadsheetApp.getActiveSheet();
   
-    var checkboxHeaderRow = UTIL.getHeaderRow(sheet);
+    const checkboxHeaderRow = UTIL.getHeaderRow(sheet);
     if (!checkboxHeaderRow) {
       SpreadsheetApp.getUi().alert("This does not appear to be a checklist. Please run on the correct sheet, or run the Reset method.");
       return;
     }
   
-    var metaSheet = _getMetaSheet(sheet, true);
+    const metaSheet = _getMetaSheet(sheet, true);
   
     // Get info from sheets
-    var headerMetadata = _getMetadata(metaSheet, sheet, true);
+    const headerMetadata = _getMetadata(metaSheet, sheet, true);
   
     // Data validation for given column
     _setDataValidationForChecklistToMetaValues(sheet, headerMetadata);
@@ -32,9 +32,9 @@ const META = (function(){
 
   function removeDataValidationFromMeta(sheet) {
     time();
-    var metaSheet = _getMetaSheet(sheet);
-    var headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
-    var columns = UTIL.getColumns(sheet);
+    const metaSheet = _getMetaSheet(sheet);
+    const headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
+    const columns = UTIL.getColumns(sheet);
   
   
     if (headerMetadata) {
@@ -49,27 +49,27 @@ const META = (function(){
   }
 
   function setDataValidationFromMeta(sheet) {
-    var metaSheet = _getMetaSheet(sheet);
-    var headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
+    const metaSheet = _getMetaSheet(sheet);
+    const headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
     if (headerMetadata) {
       _setDataValidationForChecklistToMetaValues(sheet, headerMetadata);
     }
   }
 
   function setMetaEditable(sheet, _isEditable) {
-    var metaSheet = _getMetaSheet(sheet);
+    const metaSheet = _getMetaSheet(sheet);
     if (metaSheet) {
       if (_isEditable === false) {
         metaSheet.protect().setWarningOnly(true);
       } else {
-        var protections = metaSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        const protections = metaSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         protections && protections[0] && protections[0].remove();
       }
     }
   }
 
   function _getMetadata(metaSheet, _sheet, _includeMissingValues) {
-    var headerMetadata = _readHeaderMetadata(metaSheet);
+    const headerMetadata = _readHeaderMetadata(metaSheet);
     if (_sheet) {
       _associateChecklistToMetadata(_sheet, headerMetadata);
       if (_includeMissingValues) {
@@ -80,13 +80,13 @@ const META = (function(){
   }
 
   function _getMetaSheet(sheet, _interactive) {
-    var config = CONFIG.getConfig(sheet);
-    var metaSheetName = config.metaSheet || sheet.getName().split(" ")[0] + " Meta";
-    var metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
+    const config = CONFIG.getConfig(sheet);
+    let metaSheetName = config.metaSheet || sheet.getName().split(" ")[0] + " Meta";
+    let metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
     if (_interactive) {
+      const ui = SpreadsheetApp.getUi();
       if (!metaSheet) {
-        var ui = SpreadsheetApp.getUi();
-        var response = ui.prompt("Meta Spreadsheet Name","Could not determine Meta sheet. Please enter the name of the spreadsheet that contains the Metadata.", ui.ButtonSet.OK_CANCEL);
+        const response = ui.prompt("Meta Spreadsheet Name","Could not determine Meta sheet. Please enter the name of the spreadsheet that contains the Metadata.", ui.ButtonSet.OK_CANCEL);
         if (response.getSelectedButton() !== ui.Button.OK) return;
         metaSheetName = response.getResponseText();
         metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
@@ -103,33 +103,33 @@ const META = (function(){
 
   function _readHeaderMetadata(metaSheet) {
     time();
-    var headerMetadata = {};
-    var metaHeaders = metaSheet.getRange("A1:1");
-    var metaHeaderValues = metaHeaders.getValues()[0];
-    for (var column = 1; column <= metaHeaderValues.length; column++) {
+    const headerMetadata = {};
+    const metaHeaders = metaSheet.getRange("A1:1");
+    const metaHeaderValues = metaHeaders.getValues()[0];
+    for (let column = 1; column <= metaHeaderValues.length; column++) {
       let metaHeader = metaHeaderValues[column-1];
       if (metaHeader && metaHeader.toString().trim() && metaHeader != "META") {
         //      Logger.log("[metaHeader]", [metaHeader]);
         let additionalHeaders;
         [, metaHeader,  additionalHeaders] = /^(.+?)(?:\[(.+)\])?$/.exec(metaHeader);
         //      Logger.log("[originalHeader, metaHeader,  additionalHeaders]", [originalHeader, metaHeader,  additionalHeaders]);
-        var formatHeaders = [metaHeader];
+        const formatHeaders = [metaHeader];
         if (additionalHeaders) {
           additionalHeaders = additionalHeaders.split(/ *, */);
-          formatHeaders = formatHeaders.concat(additionalHeaders);
+          formatHeaders.psh(...additionalHeaders);
           additionalHeaders.forEach(function(header) {
             if (header && !headerMetadata[header]) headerMetadata[header] = {};
           });
         }
-        var metaValueCells = {};
+        const metaValueCells = {};
         let metaValueRange = UTIL.getColumnRangeFromRow(metaSheet, column, 2);
       
-        var metaValues = metaValueRange.getValues().map(function(metaValueRow){
+        const metaValues = metaValueRange.getValues().map(function(metaValueRow){
           return metaValueRow[0];
         });
-        var lastRow = 2;
-        for (var i = 0; i < metaValues.length; i++) {
-          var metaValue = metaValues[i];
+        let lastRow = 2;
+        for (let i = 0; i < metaValues.length; i++) {
+          const metaValue = metaValues[i];
           if (metaValue) {
             metaValueCells[metaValue] = metaValueRange.getCell(i+1,1);
             lastRow = i+2;
@@ -156,13 +156,13 @@ const META = (function(){
   function _associateChecklistToMetadata(sheet, headerMetadata, _includeMissingValues) {
     time();
     // Associate header info with checklist
-    var checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
+    const checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
     Object.keys(checklistColumns).forEach(function(checklistColumnName) {
       if (headerMetadata[checklistColumnName]) {
       // Add associated column info
-        var checklistColumn = checklistColumns[checklistColumnName];
-        var checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
-        var metadata = headerMetadata[checklistColumnName];
+        const checklistColumn = checklistColumns[checklistColumnName];
+        const checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
+        const metadata = headerMetadata[checklistColumnName];
         metadata.column = checklistColumn;
         metadata.range = checklistRange;
       }
@@ -175,16 +175,16 @@ const META = (function(){
 
   function _determineMissingValues(sheet, headerMetadata) {
     time();
-    var checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
+    const checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
     console.log("[checklistcolumns]", checklistColumns);
     Object.entries(checklistColumns).forEach(([checklistColumnName, checklistColumn]) => {
       if (checklistColumnName == "Item") return; // Skip the Item column
-      var checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
-      var metadata = headerMetadata[checklistColumnName];
+      const checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
+      const metadata = headerMetadata[checklistColumnName];
       if (headerMetadata[checklistColumnName]) {
       // Determine missing values
         if (metadata.metaColumn && metadata.metaValueCells) {
-          var checklistValues = checklistRange.getValues().map(function(checklistValueRow) {
+          const checklistValues = checklistRange.getValues().map(function(checklistValueRow) {
             return checklistValueRow[0];
           });
           checklistValues.forEach(function(checklistValue){
@@ -205,7 +205,7 @@ const META = (function(){
 
   function _setDataValidationForChecklistToMetaValues(sheet, headerMetadata) {
     time();
-    var columns = UTIL.getColumns(sheet);
+    const columns = UTIL.getColumns(sheet);
     Object.values(headerMetadata).forEach(function(metadata) {
       if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
         metadata.rangeValidation = SpreadsheetApp
@@ -223,10 +223,10 @@ const META = (function(){
     time();
     Object.values(headerMetadata).forEach(function(metadata) {
       if (metadata.missingValues) {
-        var missingValues = Object.keys(metadata.missingValues);
+        const missingValues = Object.keys(metadata.missingValues);
         if (missingValues && missingValues.length > 0) {
-          var outputRange = metaSheet.getRange(metadata.lastMetaRow + 2, metadata.metaColumn, missingValues.length);
-          var outputValues = missingValues.map(function(missingValue) { 
+          const outputRange = metaSheet.getRange(metadata.lastMetaRow + 2, metadata.metaColumn, missingValues.length);
+          const outputValues = missingValues.map(function(missingValue) { 
             return [missingValue];
           });
           outputRange.setValues(outputValues);
@@ -238,57 +238,55 @@ const META = (function(){
 
   function _updateConditionalFormatToMetaValues(sheet, headerMetadata) {
     time();
-    var formulaMap = {};
-    var newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
+    const formulaToRuleMap = {};
+    const newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
     // Get validation
     Object.values(headerMetadata).forEach(function(metadata) {
     // Conditional formatting rules for given columns
       if (metadata.formatHeaders && metadata.range) {
-        var formatRanges = [];
+        const formatRanges = [];
         metadata.formatHeaders.forEach(function(headerName) {
           if (headerMetadata[headerName] && headerMetadata[headerName].range) {
             formatRanges.push(headerMetadata[headerName].range);
           }
         });
         if (formatRanges.length > 0) {
-          var firstCellA1 = metadata.range.getCell(1,1).getA1Notation();
+          const firstCellA1 = metadata.range.getCell(1,1).getA1Notation();
           // This can be made into rules based on cells.
           Object.entries(metadata.metaValueCells).forEach(function([cellValue, cell]){
-            var background, color;
-            [background, color] = [cell.getBackground(), cell.getFontColor()];
-            var isBold = cell.getFontWeight() == "bold";
-            var isItalic = cell.getFontStyle() == "italic";
-            var isUnderline = cell.getFontLine() == "underline";
-            var isStrikethrough = cell.getFontLine() == "line-through";
-            var isBackgroundWhite = background === "#ffffff";
-            var isTextBlack = color === "#000000";
-            var rule = SpreadsheetApp.newConditionalFormatRule();
-            var formula = "=REGEXMATCH($" + firstCellA1 + ",\"^(" + cellValue + "\\n|" + cellValue + "$)\")";
-            rule.whenFormulaSatisfied(formula);
-            rule.setRanges(formatRanges);
+            const [background, color] = [cell.getBackground(), cell.getFontColor()];
+            const isBold = cell.getFontWeight() == "bold";
+            const isItalic = cell.getFontStyle() == "italic";
+            const isUnderline = cell.getFontLine() == "underline";
+            const isStrikethrough = cell.getFontLine() == "line-through";
+            const isBackgroundWhite = background === "#ffffff";
+            const isTextBlack = color === "#000000";
+            const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
+            const formula = "=REGEXMATCH($" + firstCellA1 + ",\"^(" + cellValue + "\\n|" + cellValue + "$)\")";
+            ruleBuilder.whenFormulaSatisfied(formula);
+            ruleBuilder.setRanges(formatRanges);
             if (!isBackgroundWhite) {
-              rule.setBackground(background);
+              ruleBuilder.setBackground(background);
             }
             if (!isTextBlack) {
-              rule.setFontColor(color);
+              ruleBuilder.setFontColor(color);
             }
             if (isBold){
-              rule.setBold(true);
+              ruleBuilder.setBold(true);
             }
             if (isItalic) {
-              rule.setItalic(true);
+              ruleBuilder.setItalic(true);
             }
             if (isUnderline) {
-              rule.setUnderline();
+              ruleBuilder.setUnderline();
             } else if (isStrikethrough) {
-              rule.setStrikethrough(true);
+              ruleBuilder.setStrikethrough(true);
             }
-            rule = rule.build();
-            formulaMap[formula] = rule;
+            formulaToRuleMap[formula] = ruleBuilder.build();
             if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isUnderline || isStrikethrough) {
             // Don't add the rule if there is no change. Keep in formula to remove old settings.
               if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
-              newConditionalFormatRulesByColumn[metadata.metaColumn].push(rule);
+              newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
             }
           });
         }
@@ -296,18 +294,18 @@ const META = (function(){
     });
   
     // update conditional formatting
-    var oldRules = sheet.getConditionalFormatRules();
-    var replacedRules = [];
-    for (var i = oldRules.length-1; i >= 0; i--) {
-      var oldRule = oldRules[i];
+    const oldRules = sheet.getConditionalFormatRules();
+    const replacedRules = [];
+    for (let i = oldRules.length-1; i >= 0; i--) {
+      const oldRule = oldRules[i];
       if (!oldRule.getBooleanCondition() || oldRule.getBooleanCondition().getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
         continue;
       }
-      var criteriaValues = oldRule.getBooleanCondition().getCriteriaValues();
+      const criteriaValues = oldRule.getBooleanCondition().getCriteriaValues();
       if (criteriaValues.length !== 1) {
         continue;
       }
-      if (formulaMap[criteriaValues[0]]) {
+      if (formulaToRuleMap[criteriaValues[0]]) {
         //      Logger.log("found duplicate formula: ", criteriaValues[0]);
         replacedRules.push(oldRules.splice(i,1)[0]);
         oldRule.getBooleanCondition().getCriteriaValues()[0];
@@ -315,13 +313,8 @@ const META = (function(){
     }
   
   
-    var newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(function(rules) {return rules && rules.length;}).flat();
-    /*
-  var _debugFunc = function(rules) { return rules.map(function(rule){
-    try {       return rule.getBooleanCondition().getCriteriaValues()[0]; } catch (e) { return rule; }
-  }); };
-  Logger.log("[oldRules,replacedRules,newConditionalFormatRules]",[_debugFunc(oldRules),_debugFunc(replacedRules),_debugFunc(newConditionalFormatRules)])
-  */
+    const newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(function(rules) {return rules && rules.length;}).flat();
+    
     sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
     timeEnd();
   }

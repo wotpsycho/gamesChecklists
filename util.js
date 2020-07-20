@@ -2,19 +2,19 @@
 // eslint-disable-next-line no-redeclare
 const UTIL = (function(){
   // Helpers to get various columns/rows/config
-  var headerRowCache;
+  let headerRowCache;
   function getHeaderRow(sheet = SpreadsheetApp.getActiveSheet()) {
     if (headerRowCache) {
       return headerRowCache;
     }
     time();
-    var filter = sheet.getFilter();
+    const filter = sheet.getFilter();
     if (filter) {
       headerRowCache = filter.getRange().getRow();
     } else if (sheet.getFrozenRows()) {
       headerRowCache = sheet.getFrozenRows();
     } else {
-      for (var row = 1; row <= sheet.getLastRow(); row++) {
+      for (let row = 1; row <= sheet.getLastRow(); row++) {
         if (sheet.getRange(row,1).getValue() == CONFIG.COLUMN_HEADERS.check) {
           headerRowCache = row;
           break;
@@ -39,7 +39,7 @@ const UTIL = (function(){
     return row >= range.getRow() && row <= range.getLastRow();
   }
 
-  var columnsCache;
+  let columnsCache;
   function getColumns(sheet = SpreadsheetApp.getActiveSheet(), _extraHeaders) {
     if (columnsCache && !_extraHeaders) {
       const columns =  Object.assign({},columnsCache);
@@ -48,15 +48,15 @@ const UTIL = (function(){
     }
     time();
 
-    var headerRow = getHeaderRow(sheet);
+    const headerRow = getHeaderRow(sheet);
     if (!headerRow) return {};
 
-    var headers = sheet.getRange(headerRow,1,1,sheet.getLastColumn() || 1).getValues()[0];
+    const headers = sheet.getRange(headerRow,1,1,sheet.getLastColumn() || 1).getValues()[0];
     const columns  = {
       byHeader: {
       }
     };
-    for (var i = 0; i < headers.length; i++) {
+    for (let i = 0; i < headers.length; i++) {
       columns.byHeader[headers[i]] = i + 1;
     }
     Object.entries(CONFIG.COLUMN_HEADERS).forEach(([columnId, columnHeader]) => {
@@ -84,23 +84,23 @@ const UTIL = (function(){
     return columns;
   }
 
-  var rowsCache;
+  let rowsCache;
   function getRows(sheet = SpreadsheetApp.getActiveSheet()) {
     if (rowsCache) return rowsCache;
     time();
-    var headerRow = getHeaderRow(sheet);
+    const headerRow = getHeaderRow(sheet);
     rowsCache = {
       header: headerRow,
     };
     if (headerRow > 1) {
-      var rowHeaderValues = sheet.getRange(1,1,headerRow-1).getValues();
-      for (var row in CONFIG.ROW_HEADERS) {
-        for (var i = 0; i < rowHeaderValues.length; i++) {
-          if (rowHeaderValues[i][0] === CONFIG.ROW_HEADERS[row]) {
+      const rowHeaderValues = sheet.getRange(1,1,headerRow-1).getValues();
+      Object.entries(CONFIG.ROW_HEADERS).forEach(([row, header]) => {
+        for (let i = 0; i < rowHeaderValues.length; i++) {
+          if (rowHeaderValues[i][0] === header) {
             rowsCache[row] = i+1;
           }
         }
-      }
+      });
     }
     timeEnd();
     return rowsCache;
@@ -117,8 +117,8 @@ const UTIL = (function(){
   const A1_REGEX = /^\$?([A-Z]+)?\$?([0-9]+)(?::\$?([A-Z]+)?([0-9]+)?)?$/;
   // This intentionally has column before row because A1 does that :(
   function a1ToAbsolute(a1, columnAbsolute, rowAbsolute, endColumnAbsolute, endRowAbsolute) {
-    var [,alphaColumn,row,endAlphaColumn,endRow] = A1_REGEX.exec(a1);
-    var result = "";
+    const [,alphaColumn,row,endAlphaColumn,endRow] = A1_REGEX.exec(a1);
+    let result = "";
     if (alphaColumn) {
       if (columnAbsolute !== false) result += "$";
       result += alphaColumn;
@@ -142,32 +142,26 @@ const UTIL = (function(){
   }
 
   function a1ToRowAndColumn(a1) {
-    var [,alphaColumn,row,endAlphaColumn,endRow] = A1_REGEX.exec(a1);
-    var column;
-    if (alphaColumn) {
-      column = _alphaColumnToNumber(alphaColumn);
-    }
-    var endColumn;
-    if (endAlphaColumn) {
-      endAlphaColumn = _alphaColumnToNumber(endAlphaColumn);
-    }
+    const [,alphaColumn,row,endAlphaColumn,endRow] = A1_REGEX.exec(a1);
+    const column = (alphaColumn) && _alphaColumnToNumber(alphaColumn);
+    const endColumn = (endAlphaColumn)  && _alphaColumnToNumber(endAlphaColumn);
     return [row, column, endRow, endColumn];
   }
 
   function _alphaColumnToNumber(alphaColumn) {
-    var column = 0;
-    for (var i = alphaColumn.length-1; i >= 0; i--) {
-      var alpha = alphaColumn.charAt(alphaColumn.length - i - 1);
-      var num = parseInt(alpha,36)-9;
-      var poweredNum = num * Math.pow(26, i);
+    let column = 0;
+    for (let i = alphaColumn.length-1; i >= 0; i--) {
+      const alpha = alphaColumn.charAt(alphaColumn.length - i - 1);
+      const num = parseInt(alpha,36)-9;
+      const poweredNum = num * Math.pow(26, i);
       column += poweredNum;
     }
     return column;
   }
 
   function a1ToR1C1Absolute(a1) {
-    var [row,column,endRow,endColumn] = a1ToRowAndColumn(a1);
-    var result = "";
+    const [row,column,endRow,endColumn] = a1ToRowAndColumn(a1);
+    let result = "";
     if (row) result += "R" + row;
     if (column) result += "C" + column;
     if (endRow || endColumn) result += ":";
@@ -177,9 +171,9 @@ const UTIL = (function(){
     return result;
   }
 
-  var rangeCache = {};
+  let rangeCache = {};
   function getColumnRangeFromRow(sheet, columnIndex, rowIndex, _numRows) {
-    var key = sheet.getName() + ":" + columnIndex + ":" + rowIndex + ":" + _numRows;
+    const key = sheet.getName() + ":" + columnIndex + ":" + rowIndex + ":" + _numRows;
     if (rangeCache[key]) return rangeCache[key];
     time();
     rangeCache[key] = sheet.getRange(rowIndex, columnIndex, _numRows || (sheet.getLastRow()-rowIndex+1) || 1);
@@ -200,7 +194,7 @@ const UTIL = (function(){
   //   including for symmetry
   // eslint-disable-next-line no-redeclare
   function time(_extraLabel, _includeUnlabeled) {
-    var functionName = time.caller.name;
+    const functionName = time.caller.name;
     if (!_extraLabel || _includeUnlabeled) {
       console.time(functionName);
     }
@@ -215,7 +209,7 @@ const UTIL = (function(){
 
   // eslint-disable-next-line no-redeclare
   function timeEnd(_extraLabel, _includeUnlabeled) {
-    var functionName = timeEnd.caller.name;
+    const functionName = timeEnd.caller.name;
     if (!_extraLabel || _includeUnlabeled) {
       console.timeEnd(functionName);
     }

@@ -4,15 +4,15 @@ const AVAILABLE = (function(){
 // 12x item
 // x12 item
 // 12x column!value
-  var MULTI_REGEX = /^((\d+)[*x]|[*x](\d+)) +(((.*)!)?(.+))$/;
+  const MULTI_REGEX = /^((\d+)[*x]|[*x](\d+)) +(((.*)!)?(.+))$/;
 
   function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
     time();
-    var columns = UTIL.getColumns(sheet);
-    var rows = UTIL.getRows(sheet);
+    const columns = UTIL.getColumns(sheet);
+    const rows = UTIL.getRows(sheet);
   
     if (!columns.available || !columns.check || !columns.item || !columns.preReq) return;
-    var rangeRow;
+    let rangeRow;
     if (range) {
       if (range.getLastRow()  <= rows.header) return;
       rangeRow = range.getRow();
@@ -20,70 +20,70 @@ const AVAILABLE = (function(){
       rangeRow = rows.header+1;
     }
   
-    var itemDataRange = UTIL.getColumnDataRange(sheet,columns.item);
-    var itemRowsByColumn = {
+    const itemDataRange = UTIL.getColumnDataRange(sheet,columns.item);
+    const itemRowsByColumn = {
       item: {}
     };
   
     itemRowsByColumn.item = _getRowsByValue(itemDataRange);
-    var lastItemRow = itemRowsByColumn.item._lastRow;
+    const lastItemRow = itemRowsByColumn.item._lastRow;
   
     if (!lastItemRow || rangeRow > lastItemRow) return;  
   
-    var preReqRange = UTIL.getColumnRangeFromRow(sheet, columns.preReq, rangeRow, lastItemRow-rangeRow+1);
-    var availableDataRange = UTIL.getColumnRangeFromRow(sheet, columns.available, rangeRow, lastItemRow-rangeRow+1);
+    const preReqRange = UTIL.getColumnRangeFromRow(sheet, columns.preReq, rangeRow, lastItemRow-rangeRow+1);
+    const availableDataRange = UTIL.getColumnRangeFromRow(sheet, columns.available, rangeRow, lastItemRow-rangeRow+1);
 
-    var preReqValues = preReqRange.getValues();
-    var preReqFormulas = preReqRange.getFormulas();
+    const preReqValues = preReqRange.getValues();
+    const preReqFormulas = preReqRange.getFormulas();
     // TODO
-    //var preReqValidations = preReqRange.getDataValidations(); 
+    //const preReqValidations = preReqRange.getDataValidations(); 
   
     // will be overwriting these
-    var availables = availableDataRange.getValues();
+    const availables = availableDataRange.getValues();
   
     // cache!
-    var formulaCache = {};
+    const formulaCache = {};
 
-    for (var i = 0; i < preReqValues.length; i++) {
-      var andFormulas = [];
+    for (let i = 0; i < preReqValues.length; i++) {
+      const andFormulas = [];
       if (preReqFormulas[i][0]) {
       // Allow direct formulas, just use reference
         availables[i][0] = "=R" + (i+rangeRow) + "C" + columns.preReq;
         continue;
       }
       if (preReqValues[i][0]) {
-        var preReqAnds = preReqValues[i][0].toString().trim().split(/ *[\n;] */);
-        for (var j = 0; j < preReqAnds.length; j++) {
-          var preReq = preReqAnds[j].trim();
+        const preReqAnds = preReqValues[i][0].toString().trim().split(/ *[\n;] */);
+        for (let j = 0; j < preReqAnds.length; j++) {
+          let preReq = preReqAnds[j].trim();
           if (!preReq) continue;
         
-          var preReqOrs = preReq.split(/ *\| */);
+          const preReqOrs = preReq.split(/ *\| */);
         
-          var orFormulas = [];        
-          for (var k = 0; k < preReqOrs.length; k++) {
+          const orFormulas = [];        
+          for (let k = 0; k < preReqOrs.length; k++) {
             preReq = preReqOrs[k];
-            var multipleCheck = MULTI_REGEX.exec(preReq);
+            const multipleCheck = MULTI_REGEX.exec(preReq);
             if (multipleCheck) {
-              var numNeeded = multipleCheck[2] || multipleCheck[3];
-              var key = multipleCheck[4];
-              var altColumnName = multipleCheck[6];
+              const numNeeded = multipleCheck[2] || multipleCheck[3];
+              const key = multipleCheck[4];
+              const altColumnName = multipleCheck[6];
               preReq = multipleCheck[7];
             
               let formula;
               if (formulaCache[key]) {
                 formula = formulaCache[key];
               } else {
-                var column = "item";
-                var doPrefixMatch = true;
+                let column = "item";
+                let doPrefixMatch = true;
                 if (altColumnName) {
                   column = altColumnName;
                   if (!itemRowsByColumn[column]) {
-                    var altColumn = UTIL.getColumns(sheet, [altColumnName])[altColumnName];
-                    if (!altColumn) {
+                    const altColumn = UTIL.getColumns(sheet, [altColumnName])[altColumnName];
+                    if (!(altColumn >= 0)) {
                       orFormulas.push("ERROR: Cannot find column " + altColumnName);
                       continue;
                     } else {
-                      var altColumnDataRange = UTIL.getColumnDataRange(sheet,altColumn);
+                      const altColumnDataRange = UTIL.getColumnDataRange(sheet,altColumn);
                       itemRowsByColumn[altColumnName] = _getRowsByValue(altColumnDataRange);
                       doPrefixMatch = preReq.charAt(preReq.length-1) == "*";
                     }
@@ -94,18 +94,16 @@ const AVAILABLE = (function(){
                   preReq = preReq.substring(0,preReq.length-1);
                 }
               
-                var multiCellRows = [];
-                for (var itemName in itemRowsByColumn[column]) {
+                const multiRows = [];
+                Object.entries(itemRowsByColumn[column]).forEach(([itemName, itemRows]) => {
                   if (doPrefixMatch ? itemName.match("^" + preReq) : (itemName === preReq)) {
-                    for (let cellIndex = 0; cellIndex < itemRowsByColumn[column][itemName].length; cellIndex++) {
-                      multiCellRows.push(itemRowsByColumn[column][itemName][cellIndex]);
-                    }
+                    multiRows.push(...itemRows);
                   }
-                }
-                if (multiCellRows.length < numNeeded) {
-                  formula = "ERROR: There are only " + multiCellRows.length + " of " + preReq;
+                });
+                if (multiRows.length < numNeeded) {
+                  formula = "ERROR: There are only " + multiRows.length + " of " + preReq;
                 } else {
-                  formula = "SUM(IF(R" + multiCellRows.join("C" + columns.check + ", 1), IF(R") + "C" + columns.check + ", 1)) >= ";
+                  formula = "SUM(IF(R" + multiRows.join("C" + columns.check + ", 1), IF(R") + "C" + columns.check + ", 1)) >= ";
                 }
              
                 formulaCache[key] = formula;
@@ -131,7 +129,7 @@ const AVAILABLE = (function(){
         }
       }
     
-      var cellFormula;
+      let cellFormula;
       if (andFormulas.length == 0) {
         cellFormula = "TRUE";
       } else if (andFormulas.length == 1) {
@@ -151,21 +149,21 @@ const AVAILABLE = (function(){
 
   function _getRowsByValue(range) {
     time();
-    var column = range.getColumn();
+    const column = range.getColumn();
     time(column);
   
-    var values = range.getValues();
-    var rows = {
+    const values = range.getValues();
+    const rows = {
       _duplicates: [],
       _lastRow: 0,
       _values: values,
     };
   
-    var firstRow = range.getRow();
-    var lastRow = firstRow + values.length - 1;
+    const firstRow = range.getRow();
+    const lastRow = firstRow + values.length - 1;
   
-    for (var row = firstRow; row <= lastRow; row++) {
-      var value = values[row-firstRow].toString() || "";
+    for (let row = firstRow; row <= lastRow; row++) {
+      const value = values[row-firstRow].toString() || "";
       if (!value || !value.trim()) continue;
       rows._lastRow = row;
       if (!Object.prototype.hasOwnProperty.call(rows,value)) {

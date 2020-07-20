@@ -6,10 +6,10 @@ const FILTER = (function(){
     time();
     if (filter) {
       Logger.log("Reapplying Filter");
-      var range = filter.getRange();
+      const range = filter.getRange();
     
-      for (var i = range.getColumn(); i <= range.getLastColumn(); i++) {
-        var criteria = filter.getColumnFilterCriteria(i);
+      for (let i = range.getColumn(); i <= range.getLastColumn(); i++) {
+        const criteria = filter.getColumnFilterCriteria(i);
         if (criteria) {
           filter.setColumnFilterCriteria(i,criteria);
           timeEnd();

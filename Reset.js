@@ -4,14 +4,14 @@ const RESET = (function(){
 
   function promptReset() {
     time();
-    var ui = SpreadsheetApp.getUi();
+    const ui = SpreadsheetApp.getUi();
   
     let response;
 
-    var resetData = false;  
-    var sheet = SpreadsheetApp.getActiveSheet();
-    var headerRow = UTIL.getHeaderRow(sheet);
-    var specialReset;
+    let resetData = false;  
+    const sheet = SpreadsheetApp.getActiveSheet();
+    let headerRow = UTIL.getHeaderRow(sheet);
+    let specialReset;
     if (!UTIL.getHeaderRow(sheet) || sheet.getRange(headerRow,1).getValue() !== CONFIG.COLUMN_HEADERS.check) {
       response = ui.alert("Checklist not found", "This does not appear to be a checklist. Would you like to turn it into one?", ui.ButtonSet.YES_NO);
       if (response !== ui.Button.YES) return;
@@ -22,7 +22,7 @@ const RESET = (function(){
         "This will reset filters and columns.\n\nIf you want to reset the checklist as well, " +
                            "type \"FULL RESET\" in the box.", ui.ButtonSet.OK_CANCEL);
       if (response.getSelectedButton() != ui.Button.OK) return;
-      var responseText = response.getResponseText();
+      const responseText = response.getResponseText();
       if (responseText == "FULL RESET" || responseText == "\"FULL RESET\"") {
         response = ui.alert("Verify Reset","Are you sure you want to reset all progress on this list?", ui.ButtonSet.YES_NO);
         if (response != ui.Button.YES) return;
@@ -37,12 +37,12 @@ const RESET = (function(){
     ui.alert("Resetting", (resetData ? "The checklist" : "The view ") + " will reset when you close this message.\n\nThis may take up to a minute, you will get a confirmation message when it has finished.", ui.ButtonSet.OK);
     time("nonUI");
   
-    var filter = sheet.getFilter();
-    var columns = UTIL.getColumns(sheet);
+    let filter = sheet.getFilter();
+    let columns = UTIL.getColumns(sheet);
     let lastSheetColumn = sheet.getLastColumn();
     let lastSheetRow = sheet.getLastRow();
-    var rows = UTIL.getRows(sheet);
-    var previousMode = SETTINGS.getSetting(sheet,"Mode"); // Preserve mode
+    let rows = UTIL.getRows(sheet);
+    let previousMode = SETTINGS.getSetting(sheet,"Mode"); // Preserve mode
   
     Logger.log("Reseting checklist ", sheet.getName());
   
@@ -128,7 +128,7 @@ const RESET = (function(){
     }
   
     // Ensure checkboxes
-    var checklist = sheet.getRange(rows.header+1, columns.check, sheet.getMaxRows() - rows.header);
+    const checklist = sheet.getRange(rows.header+1, columns.check, sheet.getMaxRows() - rows.header);
 
     checklist.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
   
@@ -143,45 +143,45 @@ const RESET = (function(){
     }
   
     // Set Item validation
-    var itemDataRange = sheet.getRange("R" + (rows.header+1) + "C" + columns.item + ":C" + columns.item);
-    var itemDataRangeA1 = itemDataRange.getA1Notation();
-    var itemDataCellA1 = itemDataRange.getCell(1,1).getA1Notation();
-    var itemDataValidationFormula = "=COUNTIF(" + UTIL.a1ToAbsolute(itemDataRangeA1,true,true,true,false) + ",\"=\"&"+ UTIL.a1ToAbsolute(itemDataCellA1,false,false) +") < 2";
-    var itemDataValidation = SpreadsheetApp.newDataValidation();
+    const itemDataRange = sheet.getRange("R" + (rows.header+1) + "C" + columns.item + ":C" + columns.item);
+    const itemDataRangeA1 = itemDataRange.getA1Notation();
+    const itemDataCellA1 = itemDataRange.getCell(1,1).getA1Notation();
+    const itemDataValidationFormula = "=COUNTIF(" + UTIL.a1ToAbsolute(itemDataRangeA1,true,true,true,false) + ",\"=\"&"+ UTIL.a1ToAbsolute(itemDataCellA1,false,false) +") < 2";
+    const itemDataValidation = SpreadsheetApp.newDataValidation();
     itemDataValidation.setAllowInvalid(true);
     itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
     itemDataRange.setDataValidation(itemDataValidation);
   
-    var preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
-    var availableData = UTIL.getColumnDataRange(sheet, columns.available);
-    var checkboxData = UTIL.getColumnDataRange(sheet, columns.check);
+    const preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
+    const availableData = UTIL.getColumnDataRange(sheet, columns.available);
+    const checkboxData = UTIL.getColumnDataRange(sheet, columns.check);
     availableData.setDataValidation(null);
   
-    var allDataRange = sheet.getRange("R" + (rows.header+1) + "C1:C" + sheet.getLastColumn());
+    const allDataRange = sheet.getRange("R" + (rows.header+1) + "C1:C" + sheet.getLastColumn());
   
     AVAILABLE.populateAvailable(sheet);
   
     // Add conditional formatting rules
-    var availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
-    var checkboxDataCellA1 = checkboxData.getCell(1,1).getA1Notation();
-    var notAvailableFormula = "=NOT(OR(ISBLANK($" + availableDataCellA1 + "),$" + availableDataCellA1 + "))";
-    var availableErrorFormula = "=ERROR.TYPE($" + availableDataCellA1 + ")=8";
-    var checkboxDisableFormula = "=OR(ISBLANK($"+ itemDataCellA1 +"),$" + availableDataCellA1 + "=FALSE)";
-    var crossthroughCheckedFormula = "=$" + checkboxDataCellA1 + "=TRUE";
+    const availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
+    const checkboxDataCellA1 = checkboxData.getCell(1,1).getA1Notation();
+    const notAvailableFormula = "=NOT(OR(ISBLANK($" + availableDataCellA1 + "),$" + availableDataCellA1 + "))";
+    const availableErrorFormula = "=ERROR.TYPE($" + availableDataCellA1 + ")=8";
+    const checkboxDisableFormula = "=OR(ISBLANK($"+ itemDataCellA1 +"),$" + availableDataCellA1 + "=FALSE)";
+    const crossthroughCheckedFormula = "=$" + checkboxDataCellA1 + "=TRUE";
     
     time("available rules");
-    var existingRules = sheet.getConditionalFormatRules();
-    var removedRules = []; // not doing anything with these...yet!
+    let existingRules = sheet.getConditionalFormatRules();
+    let removedRules = []; // not doing anything with these...yet!
   
     if (specialReset == "Conditional Format") {
       removedRules = existingRules;
       existingRules = [];
     }
-    for (var i = existingRules.length-1; i >= 0; i--) {
-      var condition = existingRules[i].getBooleanCondition();
+    for (let i = existingRules.length-1; i >= 0; i--) {
+      const condition = existingRules[i].getBooleanCondition();
       if (condition.getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) continue;
 
-      var values = condition.getCriteriaValues();
+      const values = condition.getCriteriaValues();
       if (!values || values.length !== 1) continue;
 
       if (values[0].match("#REF!")) {
@@ -190,9 +190,9 @@ const RESET = (function(){
         continue;
       }
 
-      var ranges = existingRules[i].getRanges();
-      var remove = false;
-      for (var j = 0; j < ranges.length && !remove; j++) {
+      const ranges = existingRules[i].getRanges();
+      let remove = false;
+      for (let j = 0; j < ranges.length && !remove; j++) {
         if (UTIL.isColumnInRange(columns.check, ranges[j])) {
           if (values[0] == checkboxDisableFormula) {
             remove = true;
@@ -213,17 +213,17 @@ const RESET = (function(){
       }
     }
   
-    var availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
+    const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
     availableErrorRule.setBackground(CONFIG.COLORS.error);
     availableErrorRule.whenFormulaSatisfied(availableErrorFormula);
     availableErrorRule.setRanges([preReqData,availableData]);
 
-    var notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
+    const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
     notAvailableRule.setBackground(CONFIG.COLORS.notAvailable);
     notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
     notAvailableRule.setRanges([preReqData,availableData]);
   
-    var crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
+    const crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
     crossthroughCheckedRule.setStrikethrough(true);
     crossthroughCheckedRule.setBackground(CONFIG.COLORS.checkedBackground);
     crossthroughCheckedRule.setFontColor(CONFIG.COLORS.checkedText);
@@ -231,7 +231,7 @@ const RESET = (function(){
     crossthroughCheckedRule.setRanges([allDataRange]);
   
   
-    var checkboxDisableRule = SpreadsheetApp.newConditionalFormatRule();
+    const checkboxDisableRule = SpreadsheetApp.newConditionalFormatRule();
     checkboxDisableRule.setBackground(CONFIG.COLORS.disabled);
     checkboxDisableRule.setFontColor(CONFIG.COLORS.disabled);
     checkboxDisableRule.whenFormulaSatisfied(checkboxDisableFormula);
@@ -256,7 +256,7 @@ const RESET = (function(){
     // Create new filter
     time("filterCreate");
     headerRow = UTIL.getHeaderRow(sheet);
-    var filterRange = sheet.getRange(headerRow,1,sheet.getMaxRows()-headerRow+1,sheet.getLastColumn());
+    const filterRange = sheet.getRange(headerRow,1,sheet.getMaxRows()-headerRow+1,sheet.getLastColumn());
     filter = filterRange.createFilter();
     timeEnd("filterCreate");
   

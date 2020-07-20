@@ -12,7 +12,6 @@
 /**/
 // NOTE: Arguments are hard coded in the reset function, ensure to make updates there as well.
 function PRE_REQ_FULFILLED(content,checks,items) {
-  var preReqs;
   try {
     if (!checks || !checks.length || checks[0].length !== 1) {
       throw new Error("Second argument must be a single column range");
@@ -24,27 +23,27 @@ function PRE_REQ_FULFILLED(content,checks,items) {
       throw new Error("Second and third argument should be single column ranges of the same size");
     }
     if (!content) return true;
-    preReqs = content.split("\n");
   } catch (e) {
     throw new Error("Error processing arguments, please verify content",e); 
   }
-  Logger.log(preReqs);
-  var fulfilled = true;
 
-  for (var i in preReqs) {
-    var preReq = preReqs[i];
-    var itemNeeded;
+  const preReqs = content.split("\n");
+  Logger.log(preReqs);
+  let fulfilled = true;
+
+  preReqs.forEach((preReq) => {
+    let itemNeeded;
     if (/^\s*$/.exec(preReq)) { // empty counts as fulfilled
-      continue;
+      return;
     }
-    var found = false;
-    var multipleCheck = /^(\d+)x +(.*?) *$/.exec(preReq);
+    let found = false;
+    const multipleCheck = /^(\d+)x +(.*?) *$/.exec(preReq);
     if (multipleCheck) {
       Logger.log("Pre-req multi parsed: requires \"",multipleCheck[1],"\" of \"",multipleCheck[2],"\"");
-      var numberNeeded = multipleCheck[1];
+      const numberNeeded = multipleCheck[1];
       itemNeeded = multipleCheck[2];
-      var numChecked = 0;
-      var numFound = 0;
+      let numChecked = 0;
+      let numFound = 0;
       
       for (let j in items) {
         if (items[j][0] && items[j][0].match("^"+itemNeeded)) { 
@@ -84,6 +83,6 @@ function PRE_REQ_FULFILLED(content,checks,items) {
     if (!found) {
       throw new Error("\"" + itemNeeded + "\" not found in list of items");
     }
-  }
+  });
   return fulfilled;
 }

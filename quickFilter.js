@@ -16,23 +16,23 @@ const QUICK_FILTER = (function(){
   }
 
   function quickFilterChange(sheet, range) {
-    var rows = UTIL.getRows(sheet);
-    var filter = sheet.getFilter();
+    const rows = UTIL.getRows(sheet);
+    const filter = sheet.getFilter();
 
-    var firstChangedColumn = range.getColumn();
-    var lastChangedColumn = range.getLastColumn();
-    var changedValues = range.getValues()[rows.quickFilter - range.getRow()];
-    for (var column = firstChangedColumn; column <= lastChangedColumn; column++) {
+    const firstChangedColumn = range.getColumn();
+    const lastChangedColumn = range.getLastColumn();
+    const changedValues = range.getValues()[rows.quickFilter - range.getRow()];
+    for (let column = firstChangedColumn; column <= lastChangedColumn; column++) {
       if (column == 1) continue; // First column is header
-      var changedValue = changedValues[column-firstChangedColumn];
-      var criteria = filter.getColumnFilterCriteria(column);
+      const changedValue = changedValues[column-firstChangedColumn];
+      let criteria = filter.getColumnFilterCriteria(column);
       if (changedValue) {
         if (criteria) {
           criteria = criteria.copy();
         } else {
           criteria = SpreadsheetApp.newFilterCriteria();
         }
-        var filterRange = UTIL.getColumnDataRange(sheet, column);
+        const filterRange = UTIL.getColumnDataRange(sheet, column);
         criteria.whenFormulaSatisfied("=REGEXMATCH(" + filterRange.getA1Notation() + ",\"(?mis:"+ changedValue +")\")");
         filter.setColumnFilterCriteria(column, criteria);
       } else {
@@ -58,5 +58,5 @@ const QUICK_FILTER = (function(){
 
 // eslint-disable-next-line no-unused-vars
 function debug() {
-  //var sheet = SpreadsheetApp.getActiveSheet();
+  //let sheet = SpreadsheetApp.getActiveSheet();
 }

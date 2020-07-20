@@ -23,7 +23,8 @@
         "semi": [
             "error",
             "always"
-        ]
+        ],
+        "no-var": "error"
     },
     "globals": {
         "SpreadsheetApp": false,

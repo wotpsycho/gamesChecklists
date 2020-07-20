@@ -26,13 +26,17 @@ const CONFIG = (function(){
     headers: "✓",
   };
 
-  var configCache;
+  let configCache;
   function getConfig(sheet) {
-    if (configCache) return Object.assign({},configCache);
+    if (configCache) {
+      const config = Object.assign({},configCache);
+      config.static = Object.assign({},config);
+      return config;
+    }
     time();
     
-    var columns = UTIL.getColumns(sheet);
-    configCache = {
+    const columns = UTIL.getColumns(sheet);
+    const config = {
       static: {
         columnTitles: Object.assign({},COLUMN_HEADERS),
         colors: Object.assign({},COLORS),
@@ -40,22 +44,22 @@ const CONFIG = (function(){
       },
     };
     if (columns.CONFIG) {
-      var configValues = UTIL.getColumnDataRange(sheet, columns.CONFIG).getValues();
-      for (var i = 1; i <= configValues.length; i++) {
-        var configValue = configValues[i-1][0];
-        if (!configValue) break;
-        var key, value;
-        [key,value] = configValue.split("=");
-        configCache[key] = value;
-      }
+      const configValues = UTIL.getColumnDataRange(sheet, columns.CONFIG).getValues().map((configRow) => configRow[0]);
+      configValues.forEach((configValue) => {
+        if (!configValue) return;
+        const [key,value] = configValue.split("=");
+        config[key] = value;
+      });
     }
-    
+    configCache = Object.assign({}, config);
+    configCache.static = Object.assign({}, config.static);
     timeEnd();
-    return Object.assign({},configCache);
+
+    return config;
   }
   function setConfig(sheet = SpreadsheetApp.getActiveSheet(), configType, configValue) {
-    var columns = UTIL.getColumns(sheet);
-    var config = getConfig(sheet);
+    const columns = UTIL.getColumns(sheet);
+    const config = getConfig(sheet);
     if (Object.prototype.hasOwnProperty.call(config, configType)) {
       if (configValue === null) delete configCache(configType);
       else configCache[configType] = configValue;
@@ -63,11 +67,11 @@ const CONFIG = (function(){
       if (configValue !== null) configCache[configType] = configValue;
     }
     if (columns.CONFIG) {
-      var configRange = UTIL.getColumnDataRange(sheet, columns.CONFIG);
-      var configValues = configRange.getValues();
-      var row;
+      const configRange = UTIL.getColumnDataRange(sheet, columns.CONFIG);
+      const configValues = configRange.getValues();
+      let row;
       for (row = 1; row <= configValues.length; row++) {
-        var existingConfigValue = configValues[row-1][0];
+        const existingConfigValue = configValues[row-1][0];
         let [key] = existingConfigValue.split("=");
         if (key == configType) break; // found cell with setting
         if (!existingConfigValue) break; // found first empty cell

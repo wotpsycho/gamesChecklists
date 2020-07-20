@@ -4,21 +4,21 @@ function onEdit(e) {
   time();
   try {
     time("1");
-    var range = e.range;
+    const range = e.range;
     timeEnd("1");
     
     time("2");
-    var sheet = range.getSheet();
+    const sheet = range.getSheet();
     timeEnd("2");
     
     
     if (!UTIL.getHeaderRow(sheet)) return; // Non checklist
     
     time("3");
-    var columns = UTIL.getColumns(sheet);
+    const columns = UTIL.getColumns(sheet);
     timeEnd("3");
     time("4");
-    var rows = UTIL.getRows(sheet);
+    const rows = UTIL.getRows(sheet);
     timeEnd("4");
     time("5");
     Logger.log("edit: ", range.getA1Notation());
@@ -31,7 +31,7 @@ function onEdit(e) {
     }
 
     time("2.5");
-    var filter = sheet.getFilter();
+    const filter = sheet.getFilter();
     timeEnd("2.5");
     
     time("6");
