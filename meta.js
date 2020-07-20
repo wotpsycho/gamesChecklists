@@ -262,8 +262,6 @@ const META = (function(){
             var isStrikethrough = cell.getFontLine() == "line-through";
             var isBackgroundWhite = background === "#ffffff";
             var isTextBlack = color === "#000000";
-            //console.log("[cellValue, background, color]",[cellValue, background, color, cell.getFontWeight()]);
-            //console.log("[cellValue, backgroundType, colorType]",[cellValue, cell.getBackgroundObject().getColorType().toString(), cell.getFontColorObject().getColorType().toString()]);
             var rule = SpreadsheetApp.newConditionalFormatRule();
             var formula = "=REGEXMATCH($" + firstCellA1 + ",\"^(" + cellValue + "\\n|" + cellValue + "$)\")";
             rule.whenFormulaSatisfied(formula);

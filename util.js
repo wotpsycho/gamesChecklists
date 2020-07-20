@@ -195,6 +195,39 @@ const UTIL = (function(){
     SETTINGS.resetCache();
   }
 
+
+  // Without log aggregating, the _includeUnlabeled will just produce a secondary useless metric in log;
+  //   including for symmetry
+  // eslint-disable-next-line no-redeclare
+  function time(_extraLabel, _includeUnlabeled) {
+    var functionName = time.caller.name;
+    if (!_extraLabel || _includeUnlabeled) {
+      console.time(functionName);
+    }
+    if (_extraLabel) {
+      if (Array.isArray(_extraLabel)) {
+        _extraLabel.forEach(extraLabel => console.time(functionName + " " + extraLabel));
+      } else {
+        console.time(functionName + " " + _extraLabel);
+      }
+    }
+  }
+
+  // eslint-disable-next-line no-redeclare
+  function timeEnd(_extraLabel, _includeUnlabeled) {
+    var functionName = timeEnd.caller.name;
+    if (!_extraLabel || _includeUnlabeled) {
+      console.timeEnd(functionName);
+    }
+    if (_extraLabel) {
+      if (Array.isArray(_extraLabel)) {
+        _extraLabel.forEach(extraLabel => console.timeEnd(functionName + " " + extraLabel));
+      } else {
+        console.timeEnd(functionName + " " + _extraLabel);
+      }
+    }
+  }
+
   return {
     a1ToAbsolute: a1ToAbsolute,
     a1ToR1C1Absolute: a1ToR1C1Absolute,
@@ -211,42 +244,17 @@ const UTIL = (function(){
     isColumnInRange: isColumnInRange,
     isRowInRange: isRowInRange,
 
+    time: time,
+    timeEnd: timeEnd,
+
     resetCache: _resetCache,
   };
 })();
 
-// Without log aggregating, the _includeUnlabeled will just produce a secondary useless metric in log;
-//   including for symmetry
 // eslint-disable-next-line no-redeclare
-function time(_extraLabel, _includeUnlabeled) {
-  var functionName = time.caller.name;
-  if (!_extraLabel || _includeUnlabeled) {
-    console.time(functionName);
-  }
-  if (_extraLabel) {
-    if (Array.isArray(_extraLabel)) {
-      _extraLabel.forEach(extraLabel => console.time(functionName + " " + extraLabel));
-    } else {
-      console.time(functionName + " " + _extraLabel);
-    }
-  }
-}
-
+const time = UTIL.time;
 // eslint-disable-next-line no-redeclare
-function timeEnd(_extraLabel, _includeUnlabeled) {
-  var functionName = timeEnd.caller.name;
-  if (!_extraLabel || _includeUnlabeled) {
-    console.timeEnd(functionName);
-  }
-  if (_extraLabel) {
-    if (Array.isArray(_extraLabel)) {
-      _extraLabel.forEach(extraLabel => console.timeEnd(functionName + " " + extraLabel));
-    } else {
-      console.timeEnd(functionName + " " + _extraLabel);
-    }
-  }
-}
-
+const timeEnd = UTIL.timeEnd;
 
 // eslint-disable-next-line no-unused-vars
 function testA1ToAbsolute() {

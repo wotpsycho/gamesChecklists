@@ -28,7 +28,6 @@ const AVAILABLE = (function(){
     itemRowsByColumn.item = _getRowsByValue(itemDataRange);
     var lastItemRow = itemRowsByColumn.item._lastRow;
   
-    //Logger.log("LIR: ", lastItemRow,rangeRow,lastRangeRow);
     if (!lastItemRow || rangeRow > lastItemRow) return;  
   
     var preReqRange = UTIL.getColumnRangeFromRow(sheet, columns.preReq, rangeRow, lastItemRow-rangeRow+1);
@@ -36,9 +35,8 @@ const AVAILABLE = (function(){
 
     var preReqValues = preReqRange.getValues();
     var preReqFormulas = preReqRange.getFormulas();
-    //var preReqValidations = preReqRange.getDataValidations();
-
-    //console.log("weirddebug", lastItemRow, rows.header, preReqValues.length, availableDataRange.getNumRows());
+    // TODO
+    //var preReqValidations = preReqRange.getDataValidations(); 
   
     // will be overwriting these
     var availables = availableDataRange.getValues();
@@ -70,7 +68,6 @@ const AVAILABLE = (function(){
               var key = multipleCheck[4];
               var altColumnName = multipleCheck[6];
               preReq = multipleCheck[7];
-              //Logger.log("DEBUG AV2: [num, key, multiColumn, preReq]", [numNeeded, key, altColumnName, preReq]);            
             
               let formula;
               if (formulaCache[key]) {
@@ -144,9 +141,6 @@ const AVAILABLE = (function(){
       }
     
       availables[i][0] = cellFormula;
-    
-    //Logger.log("DEBUG PA: ",i, available);
-    //availables[i][0] = available;
     }
   
     //Logger.log(availables);

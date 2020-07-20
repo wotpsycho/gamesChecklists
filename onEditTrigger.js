@@ -80,8 +80,6 @@ function onEdit(e) {
       TOTALS.updateTotals(sheet);
     }
     timeEnd("10");
-    
-    //sheet.getRange("D2").setValue(sheet.getRange("B4:D").getLastRow());
   } finally {
     timeEnd();
   }

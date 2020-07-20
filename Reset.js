@@ -102,14 +102,9 @@ const RESET = (function(){
       columns = UTIL.getColumns(sheet);
       lastSheetColumn = sheet.getLastColumn();
     }
-    /* Handled by settings
-  if (!rows.quickFilter) {
-    sheet.insertRowBefore(rows.header);
-    sheet.getRange(rows.header,1).setValue(CONFIG.ROW_HEADERS.quickFilter);
-    UTIL.resetCache();
-    rows = UTIL.getRows(sheet);
-  }
-  */
+    sheet.hideColumns(columns.available);
+    sheet.hideColumns(columns.CONFIG);
+
     if (!rows.settings) {
       sheet.insertRowBefore(rows.quickFilter);
       sheet.getRange(rows.quickFilter,1).setValue(CONFIG.ROW_HEADERS.settings);
@@ -156,7 +151,6 @@ const RESET = (function(){
     itemDataValidation.setAllowInvalid(true);
     itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
     itemDataRange.setDataValidation(itemDataValidation);
-    //console.log("R" + (rows.header+1) + "C" + columns.item + ":C" + columns.item, itemDataValidationFormula);
   
     var preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
     var availableData = UTIL.getColumnDataRange(sheet, columns.available);
@@ -259,39 +253,11 @@ const RESET = (function(){
       META.ProcessMeta();
     }
   
-    time("filterCreate");
     // Create new filter
+    time("filterCreate");
     headerRow = UTIL.getHeaderRow(sheet);
     var filterRange = sheet.getRange(headerRow,1,sheet.getMaxRows()-headerRow+1,sheet.getLastColumn());
     filter = filterRange.createFilter();
-  
-    for (let i = 1; i <= sheet.getLastColumn(); i++) {
-    // Set filters
-      if (i == columns.check) {
-      // Settings mode should handle this
-      /*
-      var newCriteria = SpreadsheetApp.newFilterCriteria();
-      newCriteria.setHiddenValues(["TRUE"]);
-      filter.setColumnFilterCriteria(i, newCriteria);
-      */
-      } else if (i == columns.available) {
-      // Settings mode should handle this
-      /*
-      var newCriteria = SpreadsheetApp.newFilterCriteria();
-      newCriteria.setHiddenValues(["FALSE"]);
-      filter.setColumnFilterCriteria(i, newCriteria);
-      */
-        sheet.hideColumns(i);
-      } else if (i == columns.CONFIG){
-        sheet.hideColumns(i);
-      } else {
-        if (i == columns.notes) {
-          // Hide notes by default
-        // Settings should handle this
-        //sheet.hideColumns(i);
-        }
-      }
-    }
     timeEnd("filterCreate");
   
     TOTALS.updateTotals(sheet);

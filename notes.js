@@ -15,9 +15,6 @@ const NOTES = (function(){
     var items = UTIL.getColumnRangeFromRow(sheet,columns.item, range.getRow(),range.getNumRows());
     var notes = UTIL.getColumnRangeFromRow(sheet,columns.notes,range.getRow(),range.getNumRows());
 
-    /* var items = sheet.getRange(range.getRow(),columns.item,range.getNumRows());
-  var notes = sheet.getRange(range.getRow(),columns.notes,range.getNumRows());
-*/
     items.setNotes(notes.getValues());
     timeEnd();
   }

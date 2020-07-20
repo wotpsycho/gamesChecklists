@@ -43,7 +43,6 @@ const CONFIG = (function(){
       var configValues = UTIL.getColumnDataRange(sheet, columns.CONFIG).getValues();
       for (var i = 1; i <= configValues.length; i++) {
         var configValue = configValues[i-1][0];
-        // Logger.log("[i,configValues,configValue]",[i,configValues,configValue])
         if (!configValue) break;
         var key, value;
         [key,value] = configValue.split("=");

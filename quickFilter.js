@@ -3,7 +3,6 @@
 *  run the formula every time the filter updates (which is every check) it ends up being faster. Even
 *  ISBLANK checks to short-circuit the filter formula doesn't improve client side performance, so this is the
 *  most efficient way so far.
-*
 */
 /* exported QUICK_FILTER */
 
@@ -12,7 +11,7 @@ const QUICK_FILTER = (function(){
 
   // eslint-disable-next-line no-unused-vars
   function isQuickFilterFormula(formula) {
-    // TODO
+    // TODO if needed
     return true;
   }
 

@@ -102,12 +102,6 @@ const SETTINGS = (function(){
       determiner: function() {
         return "Classic";
       },
-      /*{
-        Dynamic: _generateSetModeFunction(MODE_CONFIG.Dynamic),
-        Classic: _generateSetModeFunction(MODE_CONFIG.Classic),
-        Edit: _generateSetModeFunction(MODE_CONFIG.Edit),
-        Create: _generateSetModeFunction(MODE_CONFIG.Create),
-      }*/
     },
   };
   const SETTING_REGEX = /^(.+): (.+?)(\*)?$/;
@@ -143,9 +137,7 @@ const SETTINGS = (function(){
     
     _settingValue || (_settingValue = settingsObject[setting].value);
     if (!SETTINGS_CONFIG[setting].options[_settingValue]) throw new Error("Invalid value for setting \"" + setting +"\": "+ _settingValue);
-    
-    //  console.log(setting, settingsObject, _settingValue, MODE_CONFIG);
-    
+        
     settingsObject[setting].value = _settingValue;
     if (settingsObject[setting].column) {
       var cell = sheet.getRange(rows.settings, settingsObject[setting].column);
@@ -328,7 +320,6 @@ const SETTINGS = (function(){
       return hiddenValues && hiddenValues.includes(value) ? ifHidden : ifVisible;
     };
   }
-  //("item","","Show","Hide"),
 
   function _generateUpdateFilterValuesVisibilityFunction(columnName, valuesToShow, valuesToHide) {
     return function updateFilterValuesVisibility(sheet) {
@@ -364,7 +355,6 @@ const SETTINGS = (function(){
           }
         });
       }
-      //Logger.log("DEBUG: [columnName, valuesToShow, valuesToHide, hiddenValues]", [columnName, valuesToShow, valuesToHide, hiddenValues]);
       newCriteria.setHiddenValues(hiddenValues);
 
       if (changed) {
@@ -380,7 +370,6 @@ const SETTINGS = (function(){
       return sheet.isColumnHiddenByUser(columns[columnId]) ? ifHidden : ifVisible;
     };
   }
-  //("preReq", "Show", "Hide"),
 
   function _generateSetColumnVisibilityFunction(columnId, isVisible) {
     return function setColumnVisibility(sheet) {
@@ -482,22 +471,6 @@ const SETTINGS = (function(){
           var newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
           filterValueRange.setBackground(newColor);
         }
-        /*
-        for (var column = 2; column <= sheet.getLastColumn(); column++) {
-          if (column == columns.notes || column == column.
-          // Add quick filter logic
-          var newCriteria = SpreadsheetApp.newFilterCriteria();
-          var quickFilterCell = sheet.getRange(rows.quickFilter,i);
-          // HACK convert R1C1 to A1 using intermediate cell to get absolute references
-          var quickFilterR1C1 = "R" + quickFilterCell.getRow() + "C[0]";
-          var quickFilterRange = UTIL.getColumnRangeFromRow(sheet, i, headerRow);
-          var quickFilterRangeR1C1 = "R" + quickFilterRange.getRow() + "C[0]" + ":C[0]";
-          quickFilterCell.setFormulaR1C1("=OR(ISBLANK(" + quickFilterR1C1 + "),REGEXMATCH(" + quickFilterRangeR1C1 + ',"(?mis:"&' + quickFilterR1C1 + '&")"))');
-          newCriteria.whenFormulaSatisfied(quickFilterCell.getFormula());
-          quickFilterCell.clearContent();
-          //      newCriteria.whenFormulaSatisfied('=OR(ISBLANK(indirect("' + quickFilterCell.getA1Notation() + '")),REGEXMATCH(' + quickFilterRange.getA1Notation() + ',"(?mis:"&indirect("' + quickFilterCell.getA1Notation() + '")&")"))');
-          filter.setColumnFilterCriteria(i, newCriteria);
-        }*/
       } else {
         if (rows.quickFilter) {
           sheet.deleteRow(rows.quickFilter);
@@ -553,7 +526,6 @@ const SETTINGS = (function(){
     updateSettings: updateSettings,
 
     resetCache: resetCache,
-
   };
 })();
 
