@@ -1,3 +1,4 @@
+/* exported PRE_REQ_FULFILLED *?
 /**
 * Determine whether the Pre-Reqs have been fulfilled.
 *
@@ -23,7 +24,7 @@ function PRE_REQ_FULFILLED(content,checks,items) {
       throw new Error("Second and third argument should be single column ranges of the same size");
     }
     if (!content) return true;
-    preReqs = content.split('\n');
+    preReqs = content.split("\n");
   } catch (e) {
     throw new Error("Error processing arguments, please verify content",e); 
   }
@@ -39,13 +40,13 @@ function PRE_REQ_FULFILLED(content,checks,items) {
     var found = false;
     var multipleCheck = /^(\d+)x +(.*?) *$/.exec(preReq);
     if (multipleCheck) {
-      Logger.log('Pre-req multi parsed: requires "',multipleCheck[1],'" of "',multipleCheck[2],'"');
+      Logger.log("Pre-req multi parsed: requires \"",multipleCheck[1],"\" of \"",multipleCheck[2],"\"");
       var numberNeeded = multipleCheck[1];
       itemNeeded = multipleCheck[2];
       var numChecked = 0;
       var numFound = 0;
       
-      for (var j in items) {
+      for (let j in items) {
         if (items[j][0] && items[j][0].match("^"+itemNeeded)) { 
           Logger.log("found0:",itemNeeded,j,items[j],checks[j]);
 
@@ -65,12 +66,12 @@ function PRE_REQ_FULFILLED(content,checks,items) {
         fulfilled = false;
       }
       if (numFound < numberNeeded) {
-        throw new Error('There are only ' + numFound + ' of "' + itemNeeded + '", not ' + numberNeeded);
+        throw new Error("There are only " + numFound + " of \"" + itemNeeded + "\", not " + numberNeeded);
       }
     } else {
       itemNeeded = preReq.trim();
-      Logger.log('Pre-req single parsed: requires"', itemNeeded);
-      for (var j in items) {
+      Logger.log("Pre-req single parsed: requires\"", itemNeeded);
+      for (let j in items) {
         if (preReq === items[j][0]) {
           found = true;
           if (!checks[j][0]) {
@@ -81,7 +82,7 @@ function PRE_REQ_FULFILLED(content,checks,items) {
       }
     }
     if (!found) {
-      throw new Error('"' + itemNeeded + '" not found in list of items');
+      throw new Error("\"" + itemNeeded + "\" not found in list of items");
     }
   }
   return fulfilled;

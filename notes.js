@@ -1,20 +1,29 @@
+/* exported NOTES */
+// eslint-disable-next-line no-redeclare
+const NOTES = (function(){
 // Update the Item hover notes with the data in the Item Notes column
-function moveNotes(range) {
-  console.time("moveNotes");
-  var sheet = range.getSheet();
-  var columns = getColumns(sheet);
-  if (!columns.item || !columns.notes) {
-    throw new Error("Cannot move notes on a sheet without both columns: ", COLUMNS_TITLES.item, COLUMN_TITLES.notes);
-  }
+  function moveNotes(range) {
+    functionTime();
+    var sheet = range.getSheet();
+    var columns = UTIL.getColumns(sheet);
+    if (!columns.item || !columns.notes) {
+      throw new Error("Cannot move notes on a sheet without both columns: ", CONFIG.COLUMN_HEADERS.item, CONFIG.COLUMN_HEADERS.notes);
+    }
   
-  Logger.log("Updating notes for rows ", range.getRow(), " to ", range.getLastRow());
+    Logger.log("Updating notes for rows ", range.getRow(), " to ", range.getLastRow());
   
-  var items = _getColumnRangeFromRow(sheet,columns.item, range.getRow(),range.getNumRows());
-  var notes = _getColumnRangeFromRow(sheet,columns.notes,range.getRow(),range.getNumRows());
+    var items = UTIL.getColumnRangeFromRow(sheet,columns.item, range.getRow(),range.getNumRows());
+    var notes = UTIL.getColumnRangeFromRow(sheet,columns.notes,range.getRow(),range.getNumRows());
 
- /* var items = sheet.getRange(range.getRow(),columns.item,range.getNumRows());
+    /* var items = sheet.getRange(range.getRow(),columns.item,range.getNumRows());
   var notes = sheet.getRange(range.getRow(),columns.notes,range.getNumRows());
 */
-  items.setNotes(notes.getValues());
-  console.timeEnd("moveNotes");
-}
+    items.setNotes(notes.getValues());
+    functionTimeEnd();
+  }
+
+
+  return {
+    moveNotes: moveNotes
+  };
+})();

@@ -1,0 +1,46 @@
+{
+    "env": {
+        "browser": true,
+        "es2020": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 11
+    },
+    "rules": {
+        "indent": [
+            "error",
+            2
+        ],
+        "linebreak-style": [
+            "error",
+            "unix"
+        ],
+        "quotes": [
+            "error",
+            "double"
+        ],
+        "semi": [
+            "error",
+            "always"
+        ]
+    },
+    "globals": {
+        "SpreadsheetApp": false,
+        "Logger": false,
+
+        "AVAILABLE": false,
+        "CONFIG": false, 
+        "FILTER": false,
+        "META": false,
+        "NOTES": false,
+        "QUICK_FILTER": false, 
+        "RESET": false,
+        "SETTINGS": false,
+        "TOTALS": false,
+        "UTIL": false,
+
+        "functionTime": false,
+        "functionTimeEnd": false
+    }
+}

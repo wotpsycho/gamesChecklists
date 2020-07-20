@@ -1,3 +1,6 @@
+
+/* eslint-disable */
+
 function clearWhitespace() {
   SpreadsheetApp.getActiveRange().trimWhitespace()
 }
