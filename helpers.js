@@ -85,31 +85,44 @@ function _isRowInRange(row,range) {
 }
 
 var columnsCache;
-function getColumns(sheet = SpreadsheetApp.getActiveSheet(), _extraTitles = undefined) {
-  if (columnsCache && !_extraTitles) {
-    return columnsCache;
+function getColumns(sheet = SpreadsheetApp.getActiveSheet(), _extraHeaders) {
+  if (columnsCache && !_extraHeaders) {
+    const columns =  Object.assign({},columnsCache);
+    columns.byHeader = Object.assign({}, columns.byHeader);
+    return columns;
   }
   functionTime();
+
   var headerRow = _getHeaderRow(sheet);
   if (!headerRow) return {};
+
   var headers = sheet.getRange(headerRow,1,1,sheet.getLastColumn() || 1).getValues()[0];
-  columnsCache = {};
+  const columns  = {
+    byHeader: {
+    }
+  };
   for (var i = 0; i < headers.length; i++) {
-    for (var column in COLUMN_TITLES) {
-      if (headers[i] === COLUMN_TITLES[column]) {
-        columnsCache[column] = i+1;
-      }
-    }
-    if (_extraTitles && _extraTitles.length) {
-      for (var j = 0; j < _extraTitles.length; j++){
-        if (headers[i] === _extraTitles[j]) {
-          columnsCache[_extraTitles[j]] = i+1;
-        }
-      }
-    }
+    columns.byHeader[headers[i]] = i + 1;
   }
+  Object.entries(COLUMN_TITLES).forEach(([columnId, columnHeader]) => {
+    const column = columns.byHeader[columnHeader];
+    if (column >= 0) {
+      columns[columnId] = columns.byHeader[columnHeader];
+    }
+  });
+  // TODO remove and just use byHeader instead
+  if (Array.isArray(_extraHeaders)) {
+    _extraHeaders.forEach((header) =>  {
+      const column = columns.byHeader[header];
+      if (column >= 0) {
+        columns[header] = column;
+      }
+    });
+  }
+  columnsCache = Object.assign({},columns);
+  columnsCache.byHeader = Object.assign({}, columns.byHeader)
   functionTimeEnd();
-  return columnsCache;
+  return columns;
 }
 
 var rowsCache;
