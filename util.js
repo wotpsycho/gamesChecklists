@@ -1,8 +1,6 @@
 /* exported UTIL, functionTime, functionTimeEnd */
 // eslint-disable-next-line no-redeclare
 const UTIL = (function(){
-
-
   // Helpers to get various columns/rows/config
   var headerRowCache;
   function getHeaderRow(sheet = SpreadsheetApp.getActiveSheet()) {
