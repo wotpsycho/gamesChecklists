@@ -75,6 +75,7 @@ function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
               formula = formulaCache[key];
             } else {
               var column = "item";
+              var doPrefixMatch = true;
               if (altColumnName) {
                 column = altColumnName;
                 if (!itemRowsByColumn[column]) {
@@ -85,13 +86,18 @@ function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
                   } else {
                     var altColumnDataRange = _getColumnDataRange(sheet,altColumn);
                     itemRowsByColumn[altColumnName] = _getRowsByValue(altColumnDataRange);
+                    doPrefixMatch = preReq.charAt(preReq.length-1) == "*";
                   }
                 }
+              }
+              if (preReq.charAt(preReq.length-1) == "*") {
+                // is only useful in altColumn format (since it is implied otherwise), but include here so the preReq can be more verbose
+                preReq = preReq.substring(0,preReq.length-1);
               }
               
               var multiCellRows = [];
               for (var itemName in itemRowsByColumn[column]) {
-                if (itemName.match("^" + preReq)) {
+                if (doPrefixMatch ? itemName.match("^" + preReq) : (itemName === preReq)) {
                   for (var cellIndex = 0; cellIndex < itemRowsByColumn[column][itemName].length; cellIndex++) {
                     multiCellRows.push(itemRowsByColumn[column][itemName][cellIndex]);
                   }
