@@ -111,10 +111,19 @@ const AVAILABLE = (function(){
               orFormulas.push(formula + numNeeded);
             // end multi
             } else {
-            // single item
+              let isNot = false;
+              if (preReq.charAt(0) == "!") {
+                isNot = true;
+                preReq = preReq.substr(1);
+              }
+              // single item
               if (itemRowsByColumn.item[preReq]) {
                 for (let cellIndex = 0; cellIndex < itemRowsByColumn.item[preReq].length; cellIndex++) {
-                  orFormulas.push("R" + itemRowsByColumn.item[preReq][cellIndex] + "C" + columns.check);
+                  let formula = "R" + itemRowsByColumn.item[preReq][cellIndex] + "C" + columns.check;
+                  if (isNot) {
+                    formula = "NOT(" + formula + ")";
+                  }
+                  orFormulas.push(formula);
                 }
               } else {
                 orFormulas.push("ERROR: Cannot find item " + preReq);
