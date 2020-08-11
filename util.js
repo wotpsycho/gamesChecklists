@@ -181,7 +181,7 @@ const UTIL = (function(){
     return rangeCache[key];
   }
 
-  function _resetCache() {
+  function resetCache() {
     rangeCache = {};
     columnsCache = undefined;
     headerRowCache = undefined;
@@ -223,25 +223,25 @@ const UTIL = (function(){
   }
 
   return {
-    a1ToAbsolute: a1ToAbsolute,
-    a1ToR1C1Absolute: a1ToR1C1Absolute,
-    a1ToRowAndColumn: a1ToRowAndColumn,
+    a1ToAbsolute,
+    a1ToR1C1Absolute,
+    a1ToRowAndColumn,
 
-    getColumnDataRange: getColumnDataRange,
-    getColumnRange: getColumnRange,
-    getColumnRangeFromRow: getColumnRangeFromRow,
-    getColumns: getColumns,
-    getHeaderRow: getHeaderRow,
-    getQuickFilterRow: getQuickFilterRow,
-    getRows: getRows,
+    getColumnDataRange,
+    getColumnRange,
+    getColumnRangeFromRow,
+    getColumns,
+    getHeaderRow,
+    getQuickFilterRow,
+    getRows,
 
-    isColumnInRange: isColumnInRange,
-    isRowInRange: isRowInRange,
+    isColumnInRange,
+    isRowInRange,
 
-    time: time,
-    timeEnd: timeEnd,
+    time,
+    timeEnd,
 
-    resetCache: _resetCache,
+    resetCache,
   };
 })();
 
