@@ -116,7 +116,7 @@ const META = (function(){
         const formatHeaders = [metaHeader];
         if (additionalHeaders) {
           additionalHeaders = additionalHeaders.split(/ *, */);
-          formatHeaders.psh(...additionalHeaders);
+          formatHeaders.push(...additionalHeaders);
           additionalHeaders.forEach(function(header) {
             if (header && !headerMetadata[header]) headerMetadata[header] = {};
           });

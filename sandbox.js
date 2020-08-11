@@ -1,8 +1,70 @@
 
 /* eslint-disable */
 
+function timeRangeStuff() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DC2');
+  let range;
+  for (var i = 0; i < 10; i++) {
+    time("getA1Range");
+    range = sheet.getRange("A1:B4");
+    timeEnd("getA1Range");
+  }
+  for (var i = 0; i < 10; i++) {
+    time("getLastRange");
+    range.getLastColumn();
+    timeEnd("getLastRange");
+  }
+  for (var i = 0; i < 10; i++) {
+    time("get2Range");
+    range.getCell(2,2).getValue();
+    timeEnd("get2Range");
+  }
+  for (var i = 0; i < 10; i++) {
+    time("getLastRange3");
+    range.getLastColumn();
+    timeEnd("getLastRange3");
+  }
+}
+
 function clearWhitespace() {
   SpreadsheetApp.getActiveRange().trimWhitespace()
+}
+
+function activeSheetTest() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  return [sheet.getName(), sheet.getActiveRange().getA1Notation(),SpreadsheetApp.getActiveSpreadsheet().getName(),SpreadsheetApp.getActiveRange()];
+}
+
+function metaData() {
+  time();
+  try {
+    time("active sheet")
+    const sheet = SpreadsheetApp.getActiveSheet();
+    timeEnd("active sheet")
+    time("metadata");
+    const sheetMetadatas = sheet.getDeveloperMetadata();
+    timeEnd("metadata");
+    time("processMeta");
+    const metadata = {};
+    sheetMetadatas.forEach((metadataObject,i) => {
+      time("metaValues " + i);
+      const [key,value] = [metadataObject.getKey(), metadataObject.getValue()];
+      timeEnd("metaValues " + i);
+      if (Object.hasOwnProperty.call(metadata,key)) {
+        console.warn("Found duplicate metadata \"%s\" for sheet \"%s\", removing", key, sheet.getName());
+        metadataObject.remove();
+      } else {
+        console.log("Found metadata key \"%s\" with value \"%s\"", key, value);
+        metadata[key] = value;
+      }
+    });
+    timeEnd("processMeta");
+
+    console.log(metadata);
+    return metadata;
+  } finally {
+    timeEnd();
+  }
 }
 
 function test(){
