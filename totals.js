@@ -5,6 +5,7 @@ const TOTALS = (function(){
   function updateTotals(sheet) {
     time();
     const columns = UTIL.getColumns(sheet);
+    const rows = UTIL.getRows(sheet);
     if (columns.item === columns.check+1) return; // No type/category to break down
     const counts = _countByType(sheet, columns.check+1);
     Logger.log("counts",counts);
@@ -15,7 +16,9 @@ const TOTALS = (function(){
     });
 
     notes.push(counts._total.checked + "/" + counts._total.total + " Total");
-    sheet.getRange("A1").setNote(notes.join("\n"));
+    const totalCell = sheet.getRange("A1");
+    totalCell.setNote(notes.join("\n"));
+    totalCell.setFormulaR1C1(`=CONCATENATE(COUNTIF(R${rows.header + 1}C${columns.check}:C${columns.check},TRUE), "/", COUNTA(R${rows.header+1}C${columns.item}:C${columns.item}))`);
     timeEnd();
   }
 
