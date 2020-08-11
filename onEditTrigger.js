@@ -57,7 +57,7 @@ function onEdit(e) {
     time("7");
     if (UTIL.isColumnInRange(columns.item, range)) {
       AVAILABLE.populateAvailable(sheet);
-    } else if (UTIL.isColumnInRange(columns.preReq, range) || UTIL.isColumnInRange(columns.available, range)) {
+    } else if (UTIL.isColumnInRange(columns.preReq, range) || UTIL.isColumnInRange(columns.missed, range) || UTIL.isColumnInRange(columns.available, range)) {
       AVAILABLE.populateAvailable(sheet, range);
     }
     timeEnd("7");

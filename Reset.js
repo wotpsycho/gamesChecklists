@@ -88,6 +88,13 @@ const RESET = (function(){
       columns = UTIL.getColumns(sheet);
       lastSheetColumn = sheet.getLastColumn();
     }
+    if (!columns.missed) {
+      sheet.insertColumnAfter(columns.preReq);
+      sheet.getRange(rows.header, columns.preReq+1).setValue(CONFIG.COLUMN_HEADERS.missed);
+      UTIL.resetCache();
+      columns = UTIL.getColumns(sheet);
+      lastSheetColumn = sheet.getLastColumn();
+    }
     if (!columns.CONFIG) {
       sheet.insertColumnAfter(lastSheetColumn);
       sheet.getRange(rows.header, lastSheetColumn+1).setValue(CONFIG.COLUMN_HEADERS.CONFIG);
@@ -153,6 +160,7 @@ const RESET = (function(){
     itemDataRange.setDataValidation(itemDataValidation);
   
     const preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
+    const missedData = UTIL.getColumnDataRange(sheet, columns.missed);
     const availableData = UTIL.getColumnDataRange(sheet, columns.available);
     const checkboxData = UTIL.getColumnDataRange(sheet, columns.check);
     availableData.setDataValidation(null);
@@ -216,12 +224,12 @@ const RESET = (function(){
     const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
     availableErrorRule.setBackground(CONFIG.COLORS.error);
     availableErrorRule.whenFormulaSatisfied(availableErrorFormula);
-    availableErrorRule.setRanges([preReqData,availableData]);
+    availableErrorRule.setRanges([preReqData,missedData,availableData]);
 
     const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
     notAvailableRule.setBackground(CONFIG.COLORS.notAvailable);
     notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
-    notAvailableRule.setRanges([preReqData,availableData]);
+    notAvailableRule.setRanges([preReqData,missedData,availableData]);
   
     const crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
     crossthroughCheckedRule.setStrikethrough(true);

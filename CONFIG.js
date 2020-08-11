@@ -2,11 +2,11 @@
 // eslint-disable-next-line no-redeclare
 const CONFIG = (function(){
 
-  // eslint-disable-next-line no-redeclare
   const COLUMN_HEADERS = {
     check: "✓",
     item: "Item",
     preReq: "Pre-Reqs",
+    missed: "Missable After",
     available: "Available",
     notes: "Notes",
     CONFIG: "CONFIG",
@@ -27,14 +27,14 @@ const CONFIG = (function(){
   };
 
   let configCache;
-  function getConfig(sheet) {
+  function getConfig(sheet = SpreadsheetApp.getActiveSheet()) {
     if (configCache) {
       const config = Object.assign({},configCache);
       config.static = Object.assign({},config);
       return config;
     }
     time();
-    
+
     const columns = UTIL.getColumns(sheet);
     const config = {
       static: {
@@ -57,6 +57,7 @@ const CONFIG = (function(){
 
     return config;
   }
+
   function setConfig(sheet = SpreadsheetApp.getActiveSheet(), configType, configValue) {
     const columns = UTIL.getColumns(sheet);
     const config = getConfig(sheet);
@@ -82,18 +83,38 @@ const CONFIG = (function(){
   }
 
   return {
-    COLUMN_HEADERS: COLUMN_HEADERS,
-    COLORS: COLORS,
-    ROW_HEADERS: ROW_HEADERS,
+    COLUMN_HEADERS,
+    COLORS,
+    ROW_HEADERS,
 
-    getConfig: getConfig,
-    setConfig: setConfig,
+    getConfig,
+    setConfig,
   };
 
 })();
 
-
-// eslint-disable-next-line no-unused-vars
+/* eslint-disable */
 function testConfig() {
-  console.log(CONFIG.getConfig(SpreadsheetApp.getActiveSheet()));
+  time(); 
+  try{
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const headerRowFinder = sheet.createDeveloperMetadataFinder()
+      .withLocationType(SpreadsheetApp.DeveloperMetadataLocationType.ROW)
+      .withKey("headerRow");
+    const metaHeaderRowMeta = headerRowFinder.find();
+    const metaHeaderRowRange = metaHeaderRowMeta[0].getLocation().getRow();
+    return [metaHeaderRowRange.getRow(), metaHeaderRowRange.getColumn(), metaHeaderRowRange.getLastColumn()];
+    const headerRow = UTIL.getHeaderRow(sheet);
+    const headerRange = sheet.getRange(`${headerRow}:${headerRow}`);
+    const metadataRange = headerRange.getDeveloperMetadata()[0].getLocation().getRow();
+    //headerRange.addDeveloperMetadata("headerRow");
+
+    return [metadataRange.getRow(), metadataRange.getColumn(), metadataRange.getLastColumn()];
+ 
+    const config = CONFIG.getConfig(SpreadsheetApp.getActiveSheet());
+    console.log(config);
+    return config;
+  } finally {
+    timeEnd();
+  }
 }

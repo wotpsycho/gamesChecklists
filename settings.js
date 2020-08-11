@@ -65,9 +65,13 @@ const SETTINGS = (function(){
       options: {
         "Hide": [
           _generateSetColumnVisibilityFunction("preReq",false),
+          _generateSetColumnVisibilityFunction("missed",false),
           _generateSetSettingHelperFunction("Unavailable","Hide")
         ],
-        "Show": _generateSetColumnVisibilityFunction("preReq",true),
+        "Show": [
+          _generateSetColumnVisibilityFunction("preReq",true),
+          _generateSetColumnVisibilityFunction("missed",true),
+        ],
       },
       determiner: _generateColumnVisibilityDeterminer("preReq", "Show", "Hide"),
     },
@@ -392,6 +396,7 @@ const SETTINGS = (function(){
       const rows = UTIL.getRows(sheet);
       const columns = UTIL.getColumns(sheet);
       const preReqColumnRange = UTIL.getColumnDataRange(sheet, columns.preReq);
+      const missedColumnRange = UTIL.getColumnDataRange(sheet, columns.missed);
       
       // Remove old protection either way; was hitting race condition with deleting quickFilter row
       const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
@@ -418,18 +423,20 @@ const SETTINGS = (function(){
         console.log("Set Editable: [unprotect.length, rows, columns]",[unprotected.length, rows, columns]);
         // Remove validation
         preReqColumnRange.clearDataValidations();
+        missedColumnRange.clearDataValidations();
         META.removeDataValidation(sheet);
       } else {
         // Remove protection
         META.setEditable(sheet, true);
         
-        // Add Pre-Req validation
-        preReqColumnRange.setDataValidation(SpreadsheetApp
+        const validation = SpreadsheetApp
           .newDataValidation()
-          .requireValueInRange(UTIL.getColumnDataRange(sheet,columns.item), true)
+          .requireValueInRange(UTIL.getColumnDataRange(sheet, columns.item), true)
           .setAllowInvalid(true)
-          .build()
-        );
+          .build();
+        // Add Pre-Req validation
+        preReqColumnRange.setDataValidation(validation);
+        missedColumnRange.setDataValidation(validation);
         META.setDataValidation(sheet);
       }
       timeEnd();
