@@ -1,1 +1,3 @@
 .vscode
+.clasp*
+.clasp.json

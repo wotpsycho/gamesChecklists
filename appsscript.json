@@ -12,5 +12,12 @@
       "menuName": "ProcessMeta",
       "functionName": "ProcessMeta"
     }]
-  }
+  },
+  "executionApi": {
+    "access": "ANYONE"
+  },
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/script.container.ui"
+  ]
 }
