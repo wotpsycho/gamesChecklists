@@ -10,7 +10,7 @@ const RESET = (function(){
 
     let resetData = false;  
     const sheet = SpreadsheetApp.getActiveSheet();
-    let headerRow = UTIL.getHeaderRow(sheet);
+    const headerRow = UTIL.getHeaderRow(sheet);
     let specialReset;
     if (!UTIL.getHeaderRow(sheet) || sheet.getRange(headerRow,1).getValue() !== CONFIG.COLUMN_HEADERS.check) {
       response = ui.alert("Checklist not found", "This does not appear to be a checklist. Would you like to turn it into one?", ui.ButtonSet.YES_NO);
@@ -36,7 +36,17 @@ const RESET = (function(){
 
     ui.alert("Resetting", (resetData ? "The checklist" : "The view ") + " will reset when you close this message.\n\nThis may take up to a minute, you will get a confirmation message when it has finished.", ui.ButtonSet.OK);
     time("nonUI");
+
+    reset(sheet, resetData, specialReset);
+    timeEnd("nonUI");
+    timeEnd("full");
+    ui.alert("Reset Complete!","You may now use this checklist again.",ui.ButtonSet.OK);
   
+    timeEnd();
+  }
+
+  function reset(sheet = SpreadsheetApp.getActiveSheet(), _resetData, _specialReset) {
+    time();
     let filter = sheet.getFilter();
     let columns = UTIL.getColumns(sheet);
     let lastSheetColumn = sheet.getLastColumn();
@@ -46,11 +56,14 @@ const RESET = (function(){
   
     Logger.log("Reseting checklist ", sheet.getName());
   
+    time("filter removal");
     // Remove filter first to ensure data is available to write
     if (filter) {
       filter.remove();
     }
+    timeEnd("filter removal");
   
+    time("row/column show");
     // Show all rows/columns
     if (lastSheetRow > 1) {
       sheet.showRows(1,lastSheetColumn);
@@ -58,7 +71,9 @@ const RESET = (function(){
     if (lastSheetColumn > 1) {
       sheet.showColumns(1,lastSheetColumn);
     }
+    timeEnd("row/column show");
   
+    time("column existence");
     // Ensure existence of columns/rows
     if (!columns.check) {
       sheet.insertColumnBefore(1);
@@ -111,6 +126,7 @@ const RESET = (function(){
     }
     sheet.hideColumns(columns.available);
     sheet.hideColumns(columns.CONFIG);
+    timeEnd("column existence");
 
     if (!rows.settings) {
       sheet.insertRowBefore(rows.quickFilter);
@@ -140,7 +156,7 @@ const RESET = (function(){
     checklist.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
   
     // Reset checkboxes
-    if (resetData) {
+    if (_resetData) {
       checklist.uncheck();
     }
   
@@ -172,16 +188,18 @@ const RESET = (function(){
     // Add conditional formatting rules
     const availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
     const checkboxDataCellA1 = checkboxData.getCell(1,1).getA1Notation();
+    const missedDataCellA1 = missedData.getCell(1,1).getA1Notation();
     const notAvailableFormula = "=NOT(OR(ISBLANK($" + availableDataCellA1 + "),$" + availableDataCellA1 + "))";
     const availableErrorFormula = "=ERROR.TYPE($" + availableDataCellA1 + ")=8";
     const checkboxDisableFormula = "=OR(ISBLANK($"+ itemDataCellA1 +"),$" + availableDataCellA1 + "=FALSE)";
     const crossthroughCheckedFormula = "=$" + checkboxDataCellA1 + "=TRUE";
+    const missableFormula = "=NOT(ISBLANK(" + missedDataCellA1 + "))";
     
     time("available rules");
     let existingRules = sheet.getConditionalFormatRules();
     let removedRules = []; // not doing anything with these...yet!
   
-    if (specialReset == "Conditional Format") {
+    if (_specialReset == "Conditional Format") {
       removedRules = existingRules;
       existingRules = [];
     }
@@ -202,18 +220,13 @@ const RESET = (function(){
       let remove = false;
       for (let j = 0; j < ranges.length && !remove; j++) {
         if (UTIL.isColumnInRange(columns.check, ranges[j])) {
-          if (values[0] == checkboxDisableFormula) {
-            remove = true;
-          }  else if (values[0] == crossthroughCheckedFormula) {
-            remove = true;
-          }
+          remove = values[0] == checkboxDisableFormula || values[0] == crossthroughCheckedFormula;
         }
-        if (!remove && UTIL.isColumnInRange(columns.preReq, ranges[j])) {
-          if (values[0] == notAvailableFormula) {
-            remove = true;
-          } else if (values[0] == availableErrorFormula) {
-            remove = true;
-          }
+        if (!remove && UTIL.isColumnInRange(columns.preReq, ranges[j]) || UTIL.isColumnInRange(columns.missed)) {
+          remove = values[0] == notAvailableFormula || values[0] == availableErrorFormula;
+        }
+        if (!remove && UTIL.isColumnInRange(columns.item, ranges[j])) {
+          remove = values[0] == missableFormula;
         }
       }
       if (remove) {
@@ -244,8 +257,14 @@ const RESET = (function(){
     checkboxDisableRule.setFontColor(CONFIG.COLORS.disabled);
     checkboxDisableRule.whenFormulaSatisfied(checkboxDisableFormula);
     checkboxDisableRule.setRanges([checkboxData]);
+
+    const missableRule = SpreadsheetApp.newConditionalFormatRule();
+    missableRule.setBackground(CONFIG.COLORS.missable);
+    missableRule.setFontColor("white");
+    missableRule.whenFormulaSatisfied(missableFormula);
+    missableRule.setRanges([itemDataRange]);
   
-    sheet.setConditionalFormatRules([crossthroughCheckedRule,checkboxDisableRule].concat(existingRules,[availableErrorRule,notAvailableRule]));
+    sheet.setConditionalFormatRules([crossthroughCheckedRule,checkboxDisableRule,missableRule].concat(existingRules,[availableErrorRule,notAvailableRule]));
   
     timeEnd("available rules");
     timeEnd("available");
@@ -253,7 +272,10 @@ const RESET = (function(){
   
     time("quickFilter");
     if (rows.quickFilter) {
-      sheet.getRange(rows.quickFilter,2,1,sheet.getLastColumn()-1).clearContent();
+      const quickFilterCells = sheet.getRange(rows.quickFilter, 2, 1, sheet.getLastColumn() - 1);
+      time("quickFilter clear");
+      quickFilterCells.clearContent();
+      timeEnd("quickFilter clear");
     }
     timeEnd("quickFilter");
   
@@ -263,23 +285,19 @@ const RESET = (function(){
   
     // Create new filter
     time("filterCreate");
-    headerRow = UTIL.getHeaderRow(sheet);
+    const headerRow = UTIL.getHeaderRow(sheet);
     const filterRange = sheet.getRange(headerRow,1,sheet.getMaxRows()-headerRow+1,sheet.getLastColumn());
     filter = filterRange.createFilter();
     timeEnd("filterCreate");
   
     TOTALS.updateTotals(sheet);
     SETTINGS.resetSettings(sheet, previousMode || "Dynamic");
-  
-    timeEnd("nonUI");
-    timeEnd("full");
-    ui.alert("Reset Complete!","You may now use this checklist again.",ui.ButtonSet.OK);
-  
     timeEnd();
   }
 
   return {
-    promptReset: promptReset
+    promptReset,
+    reset,
   };
 })();
 

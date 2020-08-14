@@ -122,7 +122,7 @@ const META = (function(){
           });
         }
         const metaValueCells = {};
-        let metaValueRange = UTIL.getColumnRangeFromRow(metaSheet, column, 2);
+        const metaValueRange = UTIL.getColumnRangeFromRow(metaSheet, column, 2);
       
         const metaValues = metaValueRange.getValues().map(function(metaValueRow){
           return metaValueRow[0];
