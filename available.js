@@ -4,32 +4,72 @@ const AVAILABLE = (function(){
   // 12x item
   // x12 item
   // 12x column!value
-  const MULTI_REGEX = /^((\d+)[*x]|[*x](\d+)) +(((.*)!)?(.+))$/;
-  const BOOLEAN_FORMULAS = {
-    AND: {
-      regEx: / *&& */,
-      identifier: value => !!(value && value.match(BOOLEAN_FORMULAS.AND.regEx)),
-      splitter: value => value.split(BOOLEAN_FORMULAS.AND.regEx),
-      generator: values => {
-        if (values.length == 1) return values[0];
-        else if (values.length > 1) return "AND(" + values.join(",") + ")";
-      },
-    },
-    OR: {
-      regEx: / *\|\|? */, 
-      identifier: value => !!(value && value.match(BOOLEAN_FORMULAS.OR.regEx)),
-      splitter: value => value.split(BOOLEAN_FORMULAS.OR.regEx),
-      generator: values => {
-        if (values.length == 1) return values[0];
-        else if (values.length > 1) return "OR(" + values.join(",") + ")";
-      },
-    },
-    NOT: {
-      regEx: /^ *! */,
-      identifier: value => !!(value && value.match(BOOLEAN_FORMULAS.NOT.regEx)),
-      splitter: value => BOOLEAN_FORMULAS.NOT.identifier(value) ? value.split(BOOLEAN_FORMULAS.NOT.regEx)[1] : value,
-      generator: value => "NOT(" + value + ")",
+  const MULTI_REGEX = /^((\d+)[*x]|[*x](\d+)) +(((.*)!)?(.+))$/; 
+
+  class BooleanFormulaTranslationHelper {
+    constructor(regEx, formulaName) {
+      this.regEx = regEx;
+      this.formulaName = formulaName;
     }
+    
+    identify(text) {
+      console.log("DEBUG: identify [this.regEx, this.formulaName, text]",[this.regEx, this.formulaName, text]);
+      return !!(text && text.match(this.regEx));
+    }
+
+    parseOperands(text) {
+      if (!text) return;
+      const match = text.match(this.regEx);
+      return (match && match.slice(1));
+    }
+
+    generateFormula(values) {
+      let result = this.formulaName + "(";
+      if (values) {
+        if (Array.isArray(values)) {
+          result += values.join(",");
+        } else {
+          result += values;
+        }
+      }
+      result += ")";
+      return result;
+    }
+  }
+  // Since certain Boolean formulas accept 0-N arguments, handle that instead of nested groups
+  class FlexibleBinaryBooleanFormulaTranslationHelper extends BooleanFormulaTranslationHelper {
+    parseOperands(text) {
+      if (!text) return;
+
+      const match = text.match(this.regEx);
+      if (!match) return;
+
+      console.log("DoueoBUG: [text,match]",[text,match]);
+
+      const results = [];
+      const lMatch = match[1];
+      const lResult = this.parseOperands(lMatch);
+      if (lResult) results.push(...lResult);
+      else results.push(lMatch);
+
+      const rMatch = match[2];
+      const rResult = this.parseOperands(rMatch);
+      if (rResult) results.push(...rResult);
+      else results.push(rMatch);
+
+      return results;
+    }
+    generateFormula(values) {
+      if (!Array.isArray(values)) return values;
+      else if (values.length == 1) return values[0];
+      else return super.generateFormula(values);
+    }
+  }
+
+  const BOOLEAN_FORMULA_TRANSLATION_HELPERS = {
+    AND: new FlexibleBinaryBooleanFormulaTranslationHelper(/ *(.+) *&& *(.+) */,"AND"),
+    OR: new FlexibleBinaryBooleanFormulaTranslationHelper(/ *(.+) *\|\|? *(.+) */,"OR"),
+    NOT: new BooleanFormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
   };
 
   function populateAvailable(sheet = SpreadsheetApp.getActiveSheet(), range) {
@@ -48,7 +88,7 @@ const AVAILABLE = (function(){
     const lastItemRow = itemRowsByColumn.item._lastRow;
 
     let rangeRow = range ? range.getRow() : rows.header+1;
-    let lastRangeRow = range ? range.getLastRow() : lastItemRow;
+    const lastRangeRow = range ? range.getLastRow() : lastItemRow;
     if (rangeRow <= rows.header) rangeRow = rows.header+1;
 
     if (!lastItemRow || lastRangeRow <= rows.header) return;
@@ -73,29 +113,29 @@ const AVAILABLE = (function(){
         // Allow direct formulas, just use reference
         andFormulas.push("R" + (i+rangeRow) + "C" + columns.preReq);
       } else if (preReqValues[i][0]) {
-        const calculatedPreReqFormulas = _determineCellLineFormulas(preReqValues[i][0], BOOLEAN_FORMULAS.OR);
+        const calculatedPreReqFormulas = _determineCellLineFormulas(preReqValues[i][0], BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR);
         andFormulas.push(...calculatedPreReqFormulas);
       }
       if (missedFormulas && missedFormulas[i][0]) {
-        andFormulas.push(BOOLEAN_FORMULAS.NOT.generator("R" + (i+rangeRow) + "C" + columns.missed));
+        andFormulas.push(BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT.generateFormula("R" + (i+rangeRow) + "C" + columns.missed));
       } else if (missedValues && missedValues[i][0]) {
-        const calculatedMissedFormulas = _determineCellLineFormulas(missedValues[i][0], BOOLEAN_FORMULAS.AND);
-        andFormulas.push(BOOLEAN_FORMULAS.NOT.generator(BOOLEAN_FORMULAS.OR.generator(calculatedMissedFormulas)));
+        const calculatedMissedFormulas = _determineCellLineFormulas(missedValues[i][0], BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND);
+        andFormulas.push(BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT.generateFormula(BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR.generateFormula(calculatedMissedFormulas)));
       }
     
       let cellFormula;
       if (andFormulas.length == 0) {
         cellFormula = "TRUE";
       } else {
-        cellFormula = "=" + BOOLEAN_FORMULAS.AND.generator(andFormulas);
+        cellFormula = "=" + BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND.generateFormula(andFormulas);
       }
     
       availables[i][0] = cellFormula;
     }
   
-    //Logger.log(availables);
     availableDataRange.setFormulasR1C1(availables);
     timeEnd();
+    return;
 
     // SCOPED HELPER FUNCTIONS
     function _getRowsByValue(range) {
@@ -127,42 +167,42 @@ const AVAILABLE = (function(){
       return rows;
     }
 
-    function _determineCellLineFormulas(cellValue, lineFormulaType) {
-      time();
+    function _determineCellLineFormulas(cellValue) {
       const formulas = [];
       const cellLines = cellValue.toString().trim().split(/ *[\n;] */);
       for (let j = 0; j < cellLines.length; j++) {
-        let line = cellLines[j].trim();
+        const line = cellLines[j].trim();
         if (!line) continue;
-  
-        const lineSplit = lineFormulaType.splitter(line);
-  
-        const lineFormulas = [];        
-        for (let k = 0; k < lineSplit.length; k++) {
-          line = lineSplit[k];
-          const multipleCheck = MULTI_REGEX.exec(line);
-          if (multipleCheck) {
-            const multiFormula = _handleMulti(sheet, multipleCheck);
-            lineFormulas.push(multiFormula);
-          // end multi
-          } else {
-          // single item
-            if (itemRowsByColumn.item[line]) {
-              for (let cellIndex = 0; cellIndex < itemRowsByColumn.item[line].length; cellIndex++) {
-                let formula = "R" + itemRowsByColumn.item[line][cellIndex] + "C" + columns.check;
-                lineFormulas.push(formula);
-              }
-            } else {
-              lineFormulas.push("ERROR: Cannot find item " + line);
-            }
-          }
-        }
-        let formula = lineFormulaType.generator(lineFormulas);
+        const formula = _determineFormula(line);
         formulas.push(formula);
       }
-      timeEnd();
       return formulas;
     }
+    function _determineFormula(text) {
+      for (const formulaTranslationHelper of [BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR, BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND, BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT]) {
+        // Recursively handle boolean operators
+        if (formulaTranslationHelper.identify(text)) {
+          const operands = formulaTranslationHelper.parseOperands(text);
+          const operandFormulas = operands.map(_determineFormula);
+          return formulaTranslationHelper.generateFormula(operandFormulas);
+        }
+      }
+      text = text.trim();
+      const multipleCheck = MULTI_REGEX.exec(text);
+      if (multipleCheck) {
+        return _handleMulti(multipleCheck);
+      } else if (itemRowsByColumn.item[text]) {
+        // Should only have 1 since they should be unique; handles multiple, just in case
+        const formulas = [];
+        for (let cellIndex = 0; cellIndex < itemRowsByColumn.item[text].length; cellIndex++) {
+          formulas.push( "R" + itemRowsByColumn.item[text][cellIndex] + "C" + columns.check);
+        }
+        return BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND.generateFormula(formulas);
+      } else {
+        return "ERROR: Cannot find item " + text;
+      }
+    }
+    
 
     function _handleMulti(multipleCheck) {
       time();
@@ -216,6 +256,7 @@ const AVAILABLE = (function(){
       timeEnd();
       return formula + numNeeded;
     }
+    
   }
 
   return {
