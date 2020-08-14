@@ -30,6 +30,11 @@ function onEdit(e) {
       QUICK_FILTER.onChange(sheet, range, e);
     }
 
+    if ((e.value == "reset" || e.value == "meta") && range.getA1Notation() == "A1") {
+      e.value == "reset" ? RESET.reset() : META.ProcessMeta();
+      return;
+    }
+
     time("2.5");
     const filter = sheet.getFilter();
     timeEnd("2.5");

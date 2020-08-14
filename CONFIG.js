@@ -18,6 +18,7 @@ const CONFIG = (function(){
     disabled: "#d9d9d9",
     checkedBackground: "#f3f3f3",
     checkedText: "#666666",
+    missable: "#990000",
   };
 
   const ROW_HEADERS = {
@@ -73,7 +74,7 @@ const CONFIG = (function(){
       let row;
       for (row = 1; row <= configValues.length; row++) {
         const existingConfigValue = configValues[row-1][0];
-        let [key] = existingConfigValue.split("=");
+        const [key] = existingConfigValue.split("=");
         if (key == configType) break; // found cell with setting
         if (!existingConfigValue) break; // found first empty cell
       }
