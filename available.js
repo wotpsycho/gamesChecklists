@@ -67,8 +67,8 @@ const AVAILABLE = (function(){
   }
 
   const BOOLEAN_FORMULA_TRANSLATION_HELPERS = {
-    AND: new FlexibleBinaryBooleanFormulaTranslationHelper(/ *(.+) *&& *(.+) */,"AND"),
-    OR: new FlexibleBinaryBooleanFormulaTranslationHelper(/ *(.+) *\|\|? *(.+) */,"OR"),
+    AND: new FlexibleBinaryBooleanFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/,"AND"),
+    OR: new FlexibleBinaryBooleanFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/,"OR"),
     NOT: new BooleanFormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
   };
 
