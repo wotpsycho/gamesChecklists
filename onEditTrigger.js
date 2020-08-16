@@ -1,24 +1,26 @@
 /* exported onEdit */
 
-function onEdit(e) {
+function onEdit(event) {
   time();
   try {
+    time("bla");SpreadsheetApp.getActiveSheet();timeEnd("bla");
     time("1");
-    const range = e.range;
+    const range = event.range;
     timeEnd("1");
     
     time("2");
     const sheet = range.getSheet();
+    UTIL.setSheet(sheet);
     timeEnd("2");
     
     
-    if (!UTIL.getHeaderRow(sheet)) return; // Non checklist
+    if (!UTIL.getHeaderRow()) return; // Non checklist
     
     time("3");
-    const columns = UTIL.getColumns(sheet);
+    const columns = UTIL.getColumns();
     timeEnd("3");
     time("4");
-    const rows = UTIL.getRows(sheet);
+    const rows = UTIL.getRows();
     timeEnd("4");
     time("5");
     Logger.log("edit: ", range.getA1Notation());
@@ -27,11 +29,11 @@ function onEdit(e) {
     //QUICK DEBUG:  try { SETTINGS.resetSettings(sheet); } catch (e) { sheet.getRange("F1").setValue(e.message);} finally { return;  }
     
     if (UTIL.isRowInRange(rows.quickFilter,range)) {
-      QUICK_FILTER.onChange(sheet, range, e);
+      QUICK_FILTER.onChange(sheet, range, event);
     }
 
-    if ((e.value == "reset" || e.value == "meta") && range.getA1Notation() == "A1") {
-      e.value == "reset" ? RESET.reset() : META.ProcessMeta();
+    if ((event.value == "reset" || event.value == "meta") && range.getA1Notation() == "A1") {
+      event.value == "reset" ? RESET.reset() : META.ProcessMeta();
       TOTALS.updateTotals(sheet);
       return;
     }
@@ -61,10 +63,8 @@ function onEdit(e) {
     timeEnd("6.5");
     
     time("7");
-    if (UTIL.isColumnInRange(columns.item, range)) {
-      AVAILABLE.populateAvailable(sheet);
-    } else if (UTIL.isColumnInRange(columns.preReq, range) || UTIL.isColumnInRange(columns.missed, range) || UTIL.isColumnInRange(columns.available, range)) {
-      AVAILABLE.populateAvailable(sheet, range);
+    if (UTIL.isColumnInRange([columns.preReq, columns.missed, columns.available], range)) {
+      AVAILABLE.populateAvailable(sheet, event);
     }
     timeEnd("7");
     
@@ -87,6 +87,7 @@ function onEdit(e) {
     }
     timeEnd("10");
   } finally {
+    UTIL.clearSheet();
     timeEnd();
   }
 }

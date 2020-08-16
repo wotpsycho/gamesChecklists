@@ -189,11 +189,11 @@ const RESET = (function(){
     const availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
     const checkboxDataCellA1 = checkboxData.getCell(1,1).getA1Notation();
     const missedDataCellA1 = missedData.getCell(1,1).getA1Notation();
-    const notAvailableFormula = "=NOT(OR(ISBLANK($" + availableDataCellA1 + "),$" + availableDataCellA1 + "))";
-    const availableErrorFormula = "=ERROR.TYPE($" + availableDataCellA1 + ")=8";
-    const checkboxDisableFormula = "=OR(ISBLANK($"+ itemDataCellA1 +"),$" + availableDataCellA1 + "=FALSE)";
-    const crossthroughCheckedFormula = "=$" + checkboxDataCellA1 + "=TRUE";
-    const missableFormula = "=NOT(ISBLANK(" + missedDataCellA1 + "))";
+    const notAvailableFormula = `=NOT(OR(ISBLANK($${availableDataCellA1}),$${availableDataCellA1}))`;
+    const availableErrorFormula = `=IF(ISERROR($${availableDataCellA1}),TRUE,REGEXMATCH(""&$${availableDataCellA1},"ERROR"))`;
+    const checkboxDisableFormula = `=OR(ISBLANK($${itemDataCellA1}),$${availableDataCellA1}=FALSE)`;
+    const crossthroughCheckedFormula = `=$${checkboxDataCellA1}=TRUE`;
+    const missableFormula = `=NOT(ISBLANK(${missedDataCellA1}))`;
     
     time("available rules");
     let existingRules = sheet.getConditionalFormatRules();
@@ -264,7 +264,7 @@ const RESET = (function(){
     missableRule.whenFormulaSatisfied(missableFormula);
     missableRule.setRanges([itemDataRange]);
   
-    sheet.setConditionalFormatRules([crossthroughCheckedRule,checkboxDisableRule,missableRule].concat(existingRules,[availableErrorRule,notAvailableRule]));
+    sheet.setConditionalFormatRules([availableErrorRule,crossthroughCheckedRule,checkboxDisableRule,missableRule,notAvailableRule]);//.concat(existingRules,[notAvailableRule]));
   
     timeEnd("available rules");
     timeEnd("available");

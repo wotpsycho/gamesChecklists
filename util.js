@@ -3,7 +3,7 @@
 const UTIL = (function(){
   // Helpers to get various columns/rows/config
   let headerRowCache;
-  function getHeaderRow(sheet = SpreadsheetApp.getActiveSheet()) {
+  function getHeaderRow(sheet = getSheet()) {
     if (headerRowCache) {
       return headerRowCache;
     }
@@ -25,12 +25,19 @@ const UTIL = (function(){
     return headerRowCache;
   }
 
-  function getQuickFilterRow(sheet = SpreadsheetApp.getActiveSheet()) {
+  function getQuickFilterRow(sheet = getSheet()) {
     return  getRows(sheet).quickFilter;
   }
 
+  // If array is passed, returns true if any are in range
   function isColumnInRange(column,range) {
     if (!column || !range) return false;
+    if (Array.isArray(column)) {
+      for (const col of column) {
+        if (col >= range.getColumn() && col <= range.getLastColumn()) return true;
+      }
+      return false;
+    }
     return column >= range.getColumn() && column <= range.getLastColumn();
   }
 
@@ -40,7 +47,7 @@ const UTIL = (function(){
   }
 
   let columnsCache;
-  function getColumns(sheet = SpreadsheetApp.getActiveSheet(), _extraHeaders) {
+  function getColumns(sheet = getSheet(), _extraHeaders) {
     if (columnsCache && !_extraHeaders) {
       const columns =  Object.assign({},columnsCache);
       columns.byHeader = Object.assign({}, columns.byHeader);
@@ -85,7 +92,7 @@ const UTIL = (function(){
   }
 
   let rowsCache;
-  function getRows(sheet = SpreadsheetApp.getActiveSheet()) {
+  function getRows(sheet = getSheet()) {
     if (rowsCache) return rowsCache;
     time();
     const headerRow = getHeaderRow(sheet);
@@ -106,11 +113,11 @@ const UTIL = (function(){
     return rowsCache;
   }
 
-  function getColumnRange(sheet = SpreadsheetApp.getActiveSheet(), _columnIndex = undefined) {
+  function getColumnRange(sheet = getSheet(), _columnIndex = undefined) {
     return getColumnRangeFromRow(sheet, _columnIndex, 1);
   }
 
-  function getColumnDataRange(sheet = SpreadsheetApp.getActiveSheet(), _columnIndex = undefined) {
+  function getColumnDataRange(sheet = getSheet(), _columnIndex = undefined) {
     return getColumnRangeFromRow(sheet, _columnIndex, getHeaderRow(sheet)+1);
   }
 
@@ -222,6 +229,17 @@ const UTIL = (function(){
     }
   }
 
+  let _sheet = SpreadsheetApp.getActiveSheet();
+  function setSheet(sheet) {
+    _sheet = sheet;
+  }
+  function getSheet() {
+    return _sheet;
+  }
+  function clearSheet() {
+    _sheet = SpreadsheetApp.getActiveSheet();
+  }
+
   return {
     a1ToAbsolute,
     a1ToR1C1Absolute,
@@ -240,6 +258,10 @@ const UTIL = (function(){
 
     time,
     timeEnd,
+
+    setSheet,
+    getSheet,
+    clearSheet,
 
     resetCache,
   };
