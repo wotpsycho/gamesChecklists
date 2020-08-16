@@ -32,6 +32,7 @@ function onEdit(e) {
 
     if ((e.value == "reset" || e.value == "meta") && range.getA1Notation() == "A1") {
       e.value == "reset" ? RESET.reset() : META.ProcessMeta();
+      TOTALS.updateTotals(sheet);
       return;
     }
 
@@ -81,7 +82,7 @@ function onEdit(e) {
     timeEnd("9");
     
     time("10");
-    if (UTIL.isColumnInRange(columns.check,range)) {
+    if (UTIL.isColumnInRange(columns.check,range) || UTIL.isColumnInRange(columns.item,range)) {
       TOTALS.updateTotals(sheet);
     }
     timeEnd("10");
