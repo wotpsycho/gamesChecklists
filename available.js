@@ -91,6 +91,7 @@ const AVAILABLE = (function(){
     let _allPreReqValues;
     let UID_Counter = 0;
     const getParenPlaceholder = () =>  `PPH_${UID_Counter++}_PPH`;
+    const getQuotePlaeholder = () => `QPH_${UID_Counter++}_QPH`;
     const isParenPlaceholder = value => value.match(/^ *PPH_\d+_PPH *$/);
 
     const getR1C1DataRange = col => `R${rows.header+1}C${col}:C${col}`;
@@ -138,13 +139,13 @@ const AVAILABLE = (function(){
         // Allow direct formulas, just use reference
         andFormulas.push("R" + (i+rangeRow) + "C" + columns.preReq);
       } else if (preReqValues[i][0]) {
-        const calculatedPreReqFormulas = _determineCellLineFormulas(preReqValues[i][0], BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR);
+        const calculatedPreReqFormulas = _determineCellLineFormulas(preReqValues[i][0], true);
         andFormulas.push(...calculatedPreReqFormulas);
       }
       if (missedFormulas && missedFormulas[i][0]) {
         andFormulas.push(BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT.generateFormula("R" + (i+rangeRow) + "C" + columns.missed));
       } else if (missedValues && missedValues[i][0]) {
-        const calculatedMissedFormulas = _determineCellLineFormulas(missedValues[i][0], BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND);
+        const calculatedMissedFormulas = _determineCellLineFormulas(missedValues[i][0]);
         andFormulas.push(BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT.generateFormula(BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR.generateFormula(calculatedMissedFormulas)));
       }
     
@@ -163,46 +164,71 @@ const AVAILABLE = (function(){
     return;
 
     // SCOPED HELPER FUNCTIONS
-    function _determineCellLineFormulas(cellValue) {
+    function _determineCellLineFormulas(cellValue,_allowUses) {
       const formulas = [];
       const cellLines = _splitCellValue(cellValue);
       for (let j = 0; j < cellLines.length; j++) {
         const line = cellLines[j].trim();
         if (!line) continue;
-        const formula = _determineBooleanFormula(line);
+        const formula = _determineBooleanFormula(line, false, _allowUses);
         formulas.push(formula);
       }
       return formulas;
     }
 
     function _splitCellValue(cellValue) {
-      return cellValue.toString().trim().split(/ *[\n;] */);
+      const lines = cellValue.toString().trim().split(/ *[\n;] */).map(line => line.replace(/"([^"]+)"/g, (match,text) => {
+        const placeholder = getQuotePlaeholder();
+        _parseValueCache[placeholder] = _parseValue(text);
+        console.log("[match,text]",[match,text,_parseValue(text)]);
+        return placeholder;
+      }));
+      console.log(lines);
+      return lines;
+      
     }
 
     function _parseValue(text) {
-      const cacheValue = _parseValueCache[text];
-      if (cacheValue) return cacheValue;
-      const rawParsed = /^(USES? +)?(?:(\d+)[*x]|[*x](\d+) +)? *((?:(.*)!)?(.+))$/.exec(text);
-      if (rawParsed) {
-        return _parseValueCache[text] = {
-          uses: !!rawParsed[1],
-          numNeeded: rawParsed[2] || rawParsed[3] || 1,
-          isMulti: !!(rawParsed[2] > 0 || rawParsed[3] > 0),
-          key: rawParsed[4] + ":" + !!rawParsed[1],
-          altColumnName: rawParsed[5],
-          id: rawParsed[6],
-        };
+      let cacheValue = _parseValueCache[text];
+      if (!cacheValue) {
+        const rawParsed = /^(USES? +)?(?:(\d+)[*x]|[*x](\d+) +)? *((?:(.*)!)?(.+?)) *$/.exec(text);
+        if (rawParsed) {
+          cacheValue = {
+            uses: !!rawParsed[1],
+            numNeeded: rawParsed[2] || rawParsed[3] || 1,
+            isMulti: !!(rawParsed[2] > 0 || rawParsed[3] > 0),
+            key: rawParsed[4] + ":" + !!rawParsed[1],
+            altColumnName: rawParsed[5],
+            id: rawParsed[6],
+          };
+          if (cacheValue.isMulti || (!cacheValue.altColumnName && cacheValue.id.indexOf("*") == -1) || cacheValue.uses) {
+            // If it is multi, or it uses, or it is a non-wildcard item, this is a boolean
+            cacheValue.type = Boolean;
+          } else {
+            // Non multi, non-using, alt column or wildcard match
+            cacheValue.type = Number;
+          }
+          _parseValueCache[text] = cacheValue;
+        }
       }
+      //console.log(cacheValue);
+      return cacheValue;
     }
-    function _determineBooleanFormula(text, _nonLeaf) {
+    function _determineBooleanFormula(text, _nonLeaf, _allowUses) {
       if (isParenPlaceholder(text)) return text;
       if (PAREN_HELPER.identify(text)) {
         const [lOuter, inner, rOuter] = PAREN_HELPER.parseOperands(text);
         const placeholder = getParenPlaceholder();
+        const outerFormula = _determineBooleanFormula(`${lOuter} ${placeholder} ${rOuter}`);
+        
         let innerFormula = _determineBooleanFormula(inner, true);
         if (!innerFormula) innerFormula = _determineNumericFormula(inner, true);
-        if (!innerFormula) innerFormula = "#ERROR!&\"Parentheses must contain operator inside\"";
-        const outerFormula = _determineBooleanFormula(`${lOuter} ${placeholder} ${rOuter}`);
+        if (!innerFormula) {
+          const info = _parseValue(inner);
+          if (info && info.type == Number) innerFormula = _determineNumericFormula(inner);
+          else if (info && info.type == Boolean) innerFormula = _determineBooleanFormula(inner);
+          else innerFormula = "#ERROR!&\"Could not determine parenthetical: " + inner + "\"";
+        }
         const newInner = PAREN_HELPER.generateFormula(innerFormula);
         const formula = outerFormula.replace(placeholder, newInner);
         return formula;
@@ -242,8 +268,10 @@ const AVAILABLE = (function(){
       const valueInfo = _parseValue(text);
       if (!valueInfo) {
         return `#VALUE!&"Not a valid formula: ${text}"`;
+      } else if (valueInfo.type !== Boolean) {
+        return `#VALUE!&"Expected boolean formula, found numeric: ${text}"`;
       }
-      let formula = _determineNumericValueFormula(valueInfo);
+      let formula = _determineNumericValueFormula(valueInfo, _allowUses);
 
       formula +=  " >= " + valueInfo.numNeeded;
       return formula;
@@ -264,12 +292,22 @@ const AVAILABLE = (function(){
           return comparisonFormulaTranslationHelper.generateFormula(operandValues);
         }
       }
+       
       if (_nonLeaf) return;
       if (Number(text) || text === 0) return Number(text);
+      const valueInfo = _parseValue(text);
+      if (valueInfo.type != Number) {
+        return `#VALUE!&"Expected numeric formula, found boolean: ${text}"`;
+      }
+
       return _determineNumericValueFormula(_parseValue(text));
     }
 
-    function _determineNumericValueFormula(valueInfo) {
+    function _determineNumericValueFormula(valueInfo, _allowUses) {
+      if (valueInfo.uses && !_allowUses) {
+        return "#ERROR!&\"Can only use USE/USES on its own Pre-Reqs line\"";
+      }
+        
       let cacheResult = formulaCache[valueInfo.key];
       
       if (!cacheResult) {
@@ -322,6 +360,7 @@ const AVAILABLE = (function(){
           if (rowMultiInfo && rowMultiInfo.uses) {
             if (!useCache[rowMultiInfo.key]) useCache[rowMultiInfo.key] = {};
             useCache[rowMultiInfo.key][row] = rowMultiInfo.numNeeded;
+            console.log("useCache",useCache,rowMultiInfo);
           }
         });
       }

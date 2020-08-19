@@ -63,7 +63,9 @@ function onEdit(event) {
     timeEnd("6.5");
     
     time("7");
-    if (UTIL.isColumnInRange([columns.preReq, columns.missed, columns.available], range)) {
+    if (UTIL.isColumnInRange([columns.preReq, columns.missed, columns.available], range)
+       || (UTIL.isColumnInRange(columns.item,range) && (!event.value || !event.oldValue))
+    ) {
       AVAILABLE.populateAvailable(sheet, event);
     }
     timeEnd("7");
