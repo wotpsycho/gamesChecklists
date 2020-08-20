@@ -93,7 +93,7 @@ function handleEdit(event) {
 }
 
 function handleChange(event) {
-  console.log("changeEvent",event.changeType);
+  console.log("changeEvent",event.changeType,event);
   // TODO validate/update metadata when implemented
 }
 
@@ -108,17 +108,24 @@ function onOpen(event) {
     .addToUi();
 
   const triggers = ScriptApp.getProjectTriggers();
-  const hasTrigger = (type, handlerName) => 
-    triggers.filter(trigger => 
+  const getTrigger = (type, handlerName) => {
+    const myTriggers = triggers.filter(trigger => 
       trigger.getEventType() == type
         && trigger.getHandlerFunction() == handlerName 
         && trigger.getTriggerSourceId() == event.source.getId()
-    ).length > 0;
+    );
+    return myTriggers && myTriggers.length > 0 && myTriggers[0];
+  };
 
-  if (!hasTrigger(ScriptApp.EventType.ON_CHANGE, "handleChange")) {
-    ScriptApp.newTrigger("handleChange").forSpreadsheet(event.source).onChange().create();
+  let trigger = getTrigger(ScriptApp.EventType.ON_CHANGE, "handleChange");
+  // Disabled for now until we have content
+  if (!trigger) {
+    // ScriptApp.newTrigger("handleChange").forSpreadsheet(event.source).onChange().create();
+  } else {
+    ScriptApp.deleteTrigger(trigger);
   }
-  if (!hasTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit")) {
+  trigger = getTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit");
+  if (!trigger) {
     ScriptApp.newTrigger("handleEdit").forSpreadsheet(event.source).onEdit().create();
   }  
     
