@@ -1,9 +1,7 @@
-/* exported onEdit */
-
-function onEdit(event) {
+/* exported onOpen, handleEdit, handleChange */
+function handleEdit(event) {
   time();
   try {
-    time("bla");SpreadsheetApp.getActiveSheet();timeEnd("bla");
     time("1");
     const range = event.range;
     timeEnd("1");
@@ -92,4 +90,36 @@ function onEdit(event) {
     UTIL.clearSheet();
     timeEnd();
   }
+}
+
+function handleChange(event) {
+  console.log("changeEvent",event.changeType);
+  // TODO validate/update metadata when implemented
+}
+
+/**
+ * Menu items and triggers need authorization; to try to prevent need for auth, will put controls in-sheet to trigger instead.
+ * Will disable later.
+ */
+function onOpen(event) {
+  SpreadsheetApp.getUi().createAddonMenu()
+    .addItem("Refresh Sheet...", "ResetChecklist")
+    .addItem("Sync With Meta Sheet", "ProcessMeta")
+    .addToUi();
+
+  const triggers = ScriptApp.getProjectTriggers();
+  const hasTrigger = (type, handlerName) => 
+    triggers.filter(trigger => 
+      trigger.getEventType() == type
+        && trigger.getHandlerFunction() == handlerName 
+        && trigger.getTriggerSourceId() == event.source.getId()
+    ).length > 0;
+
+  if (!hasTrigger(ScriptApp.EventType.ON_CHANGE, "handleChange")) {
+    ScriptApp.newTrigger("handleChange").forSpreadsheet(event.source).onChange().create();
+  }
+  if (!hasTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit")) {
+    ScriptApp.newTrigger("handleEdit").forSpreadsheet(event.source).onEdit().create();
+  }  
+    
 }

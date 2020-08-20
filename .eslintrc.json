@@ -12,10 +12,6 @@
             "error",
             2
         ],
-        "linebreak-style": [
-            "error",
-            "unix"
-        ],
         "quotes": [
             "error",
             "double"
@@ -29,6 +25,7 @@
     },
     "globals": {
         "SpreadsheetApp": false,
+        "ScriptApp": false,
         "Logger": false,
 
         "AVAILABLE": false,
