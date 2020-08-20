@@ -5,13 +5,7 @@
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "sheets": {
-    "macros": [{
-      "menuName": "ResetChecklist",
-      "functionName": "ResetChecklist"
-    }, {
-      "menuName": "ProcessMeta",
-      "functionName": "ProcessMeta"
-    }]
+    "macros": []
   },
   "executionApi": {
     "access": "ANYONE"
