@@ -18,7 +18,23 @@ const TOTALS = (function(){
     notes.push(counts._total.checked + "/" + counts._total.total + " Total");
     const totalCell = sheet.getRange("A1");
     totalCell.setNote(notes.join("\n"));
-    totalCell.setFormulaR1C1(`=CONCATENATE(COUNTIF(R${rows.header + 1}C${columns.check}:C${columns.check},TRUE), "/", COUNTA(R${rows.header+1}C${columns.item}:C${columns.item}))`);
+    const firstRow = rows.header+1;
+
+    const total       = `R${firstRow}C${columns.item}:C${columns.item}, "<>"`;
+    const checked     = `R${firstRow}C${columns.check}:C${columns.check},TRUE,${total}`;
+    const missed      = `R${firstRow}C${columns.available}:C${columns.available},"MISSED",${total}`;
+    const prUsed      = `R${firstRow}C${columns.available}:C${columns.available},"PR_USED",${total}`;
+    const available   = `R${firstRow}C${columns.available}:C${columns.available},"TRUE",${total}`;
+    const unavailable = `R${firstRow}C${columns.available}:C${columns.available},"FALSE",${total}`;
+    
+    const formula = "=CONCATENATE("
+    +`IF(OR(COUNTIFS(${missed}) > 0, COUNTIFS(${prUsed}) > 0), "M: "&COUNTIFS(${missed})&IF(COUNTIFS(${prUsed}) > 0," ("&COUNTIFS(${prUsed})&")","")&CHAR(10),""),`
+    +`"R: ",COUNTIFS(${available}) + COUNTIFS(${unavailable}),CHAR(10),`
+    +`COUNTIFS(${checked}),"/",COUNTIFS(${total}),`
+    +")";
+    if (totalCell.getFormulaR1C1() !== formula) {
+      totalCell.setFormulaR1C1(formula);
+    }
     timeEnd();
   }
 

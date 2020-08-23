@@ -121,6 +121,18 @@ const UTIL = (function(){
     return getColumnRangeFromRow(sheet, _columnIndex, getHeaderRow(sheet)+1);
   }
 
+  function getColumnDataRangeFromRange(sheet = getSheet(), columnIndex, range) {
+    const firstDataRow = getHeaderRow(sheet) + 1;
+    let firstRow = firstDataRow;
+    let lastRow;
+    if (range) {
+      if (range.getLastRow() < firstDataRow) return; // Not in data range, no range
+      if (range.getRow() > firstRow) firstRow = range.getRow();
+      lastRow = range.getLastRow();
+    }
+    return getColumnRangeFromRow(sheet, columnIndex, firstRow, lastRow && (lastRow-firstRow+1));
+  }
+
   const A1_REGEX = /^\$?([A-Z]+)?\$?([0-9]+)(?::\$?([A-Z]+)?([0-9]+)?)?$/;
   // This intentionally has column before row because A1 does that :(
   function a1ToAbsolute(a1, columnAbsolute, rowAbsolute, endColumnAbsolute, endRowAbsolute) {
@@ -247,6 +259,7 @@ const UTIL = (function(){
 
     getColumnDataRange,
     getColumnRange,
+    getColumnDataRangeFromRange,
     getColumnRangeFromRow,
     getColumns,
     getHeaderRow,

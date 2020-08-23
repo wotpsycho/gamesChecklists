@@ -46,9 +46,9 @@ const SETTINGS = (function(){
     },
     "Unavailable": {
       options: {
-        Hide: _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE"], ["FALSE"]),
+        Hide: _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE"], ["FALSE","MISSED","PR_USED"]),
         Show: [
-          _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE","FALSE"]),
+          _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE","FALSE","MISSED","PR_USED"]),
           _generateSetSettingHelperFunction("Pre-Reqs", "Show")
         ],
       },
@@ -65,12 +65,12 @@ const SETTINGS = (function(){
       options: {
         "Hide": [
           _generateSetColumnVisibilityFunction("preReq",false),
-          _generateSetColumnVisibilityFunction("missed",false),
-          _generateSetSettingHelperFunction("Unavailable","Hide")
+          // _generateSetColumnVisibilityFunction("missed",false),
+          _generateSetSettingHelperFunction("Unavailable","Hide"),
         ],
         "Show": [
           _generateSetColumnVisibilityFunction("preReq",true),
-          _generateSetColumnVisibilityFunction("missed",true),
+          // _generateSetColumnVisibilityFunction("missed",true),
         ],
       },
       determiner: _generateColumnVisibilityDeterminer("preReq", "Show", "Hide"),
@@ -160,12 +160,12 @@ const SETTINGS = (function(){
     return getSettings(sheet)[setting];
   }
 
-  function getSettings(sheet) {
+  function getSettings(sheet = UTIL.getSheet()) {
     return Object.fromEntries(Object.entries(getSettingsObject(sheet)).map(([setting, settingInfo]) => [setting, settingInfo.value]));
   }
 
   let settingsCache;
-  function getSettingsObject(sheet) {
+  function getSettingsObject(sheet = UTIL.getSheet()) {
     if (settingsCache) return Object.assign({},settingsCache);
     time();
     
@@ -220,7 +220,7 @@ const SETTINGS = (function(){
     return settingsCache = settings;
   }
 
-  function resetSettings(sheet, _mode) {
+  function resetSettings(sheet = UTIL.getSheet(), _mode) {
     time();
     _populateEmptyDataValidation(sheet);
     if (_mode) {
@@ -396,7 +396,7 @@ const SETTINGS = (function(){
       const rows = UTIL.getRows(sheet);
       const columns = UTIL.getColumns(sheet);
       const preReqColumnRange = UTIL.getColumnDataRange(sheet, columns.preReq);
-      const missedColumnRange = UTIL.getColumnDataRange(sheet, columns.missed);
+      //const missedColumnRange = UTIL.getColumnDataRange(sheet, columns.missed);
       
       // Remove old protection either way; was hitting race condition with deleting quickFilter row
       const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
@@ -423,7 +423,7 @@ const SETTINGS = (function(){
         console.log("Set Editable: [unprotect.length, rows, columns]",[unprotected.length, rows, columns]);
         // Remove validation
         preReqColumnRange.clearDataValidations();
-        missedColumnRange.clearDataValidations();
+        //missedColumnRange.clearDataValidations();
         META.removeDataValidation(sheet);
       } else {
         // Remove protection
@@ -436,7 +436,7 @@ const SETTINGS = (function(){
           .build();
         // Add Pre-Req validation
         preReqColumnRange.setDataValidation(validation);
-        missedColumnRange.setDataValidation(validation);
+        // missedColumnRange.setDataValidation(validation);
         META.setDataValidation(sheet);
       }
       timeEnd();
@@ -531,6 +531,7 @@ const SETTINGS = (function(){
     setSetting: setSetting,
     setSettings: setSettings,
     updateSettings: updateSettings,
+    isEditable: (_sheet = UTIL.getSheet()) => getSetting(_sheet, "Editable") == "Yes",
 
     resetCache: resetCache,
   };

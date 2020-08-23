@@ -14,7 +14,9 @@ const CONFIG = (function(){
 
   const COLORS = {
     error: "#ff0000",
-    notAvailable: "#f4cccc",
+    notAvailable: "#fce5cd",
+    missed: "#f4cccc",
+    used: "#d5a6bd",
     disabled: "#d9d9d9",
     checkedBackground: "#f3f3f3",
     checkedText: "#666666",

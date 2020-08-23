@@ -1,4 +1,4 @@
-/* exported onOpen, handleEdit, handleChange */
+/* exported onOpen, onSelectionChange, handleEdit, handleChange */
 function handleEdit(event) {
   time();
   try {
@@ -61,7 +61,7 @@ function handleEdit(event) {
     timeEnd("6.5");
     
     time("7");
-    if (UTIL.isColumnInRange([columns.preReq, columns.missed, columns.available], range)
+    if (UTIL.isColumnInRange([columns.preReq, /* TODO  remove deprecated */columns.missed, columns.available], range)
        || (UTIL.isColumnInRange(columns.item,range) && (!event.value || !event.oldValue))
     ) {
       AVAILABLE.populateAvailable(sheet, event);
@@ -81,6 +81,12 @@ function handleEdit(event) {
     }
     timeEnd("9");
     
+    time("9.5");
+    if (!(UTIL.isColumnInRange(columns.check, range) && range.getNumColumns() == 1)) {
+      // Edits that did more than just check/uncheck could change error state of preReqs, so verify
+      AVAILABLE.checkErrors(); 
+    }
+    timeEnd("9.5");
     time("10");
     if (UTIL.isColumnInRange(columns.check,range) || UTIL.isColumnInRange(columns.item,range)) {
       TOTALS.updateTotals(sheet);
@@ -130,3 +136,28 @@ function onOpen(event) {
   }  
     
 }
+
+// Currently disabled
+/* 
+function onSelectionChange(event) {
+  time();
+  const range = event.range;
+  const sheet = range.getSheet();
+  console.log("onSelectionChange", range);
+  UTIL.setSheet(sheet);
+  //AVAILABLE.checkErrors(event.range);
+  const columns = UTIL.getColumns();
+  const rows = UTIL.getRows();
+   
+  // if (SETTINGS.isEditable(sheet)) {
+  //   UTIL.getColumnDataRange(sheet,columns.preReq).clearDataValidations();
+  //   const nearbyPreReqs = sheet.getRange(Math.max(rows.header+1, range.getRow()-1), columns.preReq, range.getNumRows()+2);
+  //   const validation = SpreadsheetApp
+  //     .newDataValidation()
+  //     .requireValueInRange(UTIL.getColumnDataRange(sheet, columns.item), true)
+  //     .setAllowInvalid(true)
+  //     .build();
+  //   nearbyPreReqs.setDataValidation(validation);
+  // } 
+  timeEnd();
+}  */

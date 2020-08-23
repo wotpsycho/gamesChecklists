@@ -103,13 +103,14 @@ const RESET = (function(){
       columns = UTIL.getColumns(sheet);
       lastSheetColumn = sheet.getLastColumn();
     }
-    if (!columns.missed) {
-      sheet.insertColumnAfter(columns.preReq);
-      sheet.getRange(rows.header, columns.preReq+1).setValue(CONFIG.COLUMN_HEADERS.missed);
-      UTIL.resetCache();
-      columns = UTIL.getColumns(sheet);
-      lastSheetColumn = sheet.getLastColumn();
-    }
+    // Missed is deprecated
+    // if (!columns.missed) {
+    //   sheet.insertColumnAfter(columns.preReq);
+    //   sheet.getRange(rows.header, columns.preReq+1).setValue(CONFIG.COLUMN_HEADERS.missed);
+    //   UTIL.resetCache();
+    //   columns = UTIL.getColumns(sheet);
+    //   lastSheetColumn = sheet.getLastColumn();
+    // }
     if (!columns.CONFIG) {
       sheet.insertColumnAfter(lastSheetColumn);
       sheet.getRange(rows.header, lastSheetColumn+1).setValue(CONFIG.COLUMN_HEADERS.CONFIG);
@@ -164,6 +165,25 @@ const RESET = (function(){
     if (columns.item && columns.notes) {
       NOTES.moveNotes(UTIL.getColumnDataRange(sheet, columns.notes));
     }
+    
+    if (columns.missed) {
+      // Handle deprecated column
+      const preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
+      const missedDataValues = UTIL.getColumnDataRange(sheet, columns.missed).getValues();
+      const preReqDataValues = preReqData.getValues();
+      for (let i = 0; i < missedDataValues.length; i++) {
+        missedDataValues[i][0].toString().split(/[\n\r]+/).forEach(line => {
+          if (!line) return;
+          preReqDataValues[i][0] = (preReqDataValues[i][0] || "") + "\nMISSED " + line;
+          console.log("moving " + line);
+        });
+      }
+
+      preReqData.setValues(preReqDataValues);
+      sheet.deleteColumns(columns.missed);
+      UTIL.resetCache();
+      columns = UTIL.getColumns();
+    }
   
     // Set Item validation
     const itemDataRange = sheet.getRange("R" + (rows.header+1) + "C" + columns.item + ":C" + columns.item);
@@ -176,7 +196,6 @@ const RESET = (function(){
     itemDataRange.setDataValidation(itemDataValidation);
   
     const preReqData = UTIL.getColumnDataRange(sheet, columns.preReq);
-    const missedData = UTIL.getColumnDataRange(sheet, columns.missed);
     const availableData = UTIL.getColumnDataRange(sheet, columns.available);
     const checkboxData = UTIL.getColumnDataRange(sheet, columns.check);
     availableData.setDataValidation(null);
@@ -188,12 +207,14 @@ const RESET = (function(){
     // Add conditional formatting rules
     const availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
     const checkboxDataCellA1 = checkboxData.getCell(1,1).getA1Notation();
-    const missedDataCellA1 = missedData.getCell(1,1).getA1Notation();
+    const missedDataCellA1 = preReqData.getCell(1,1).getA1Notation();
     const notAvailableFormula = `=NOT(OR(ISBLANK($${availableDataCellA1}),$${availableDataCellA1}))`;
+    const missedFormula = `=$${availableDataCellA1}="MISSED"`;
+    const usedFormula = `=$${availableDataCellA1}="PR_USED"`;
     const availableErrorFormula = `=IF(ISERROR($${availableDataCellA1}),TRUE,REGEXMATCH(""&$${availableDataCellA1},"ERROR"))`;
-    const checkboxDisableFormula = `=OR(ISBLANK($${itemDataCellA1}),$${availableDataCellA1}=FALSE)`;
+    const checkboxDisableFormula = `=OR(ISBLANK($${itemDataCellA1}),NOT($${availableDataCellA1}=TRUE))`;
     const crossthroughCheckedFormula = `=$${checkboxDataCellA1}=TRUE`;
-    const missableFormula = `=NOT(ISBLANK(${missedDataCellA1}))`;
+    const missableFormula = `=REGEXMATCH(${missedDataCellA1},"(^|\\n)MISSED ")`;
     
     time("available rules");
     let existingRules = sheet.getConditionalFormatRules();
@@ -222,7 +243,7 @@ const RESET = (function(){
         if (UTIL.isColumnInRange(columns.check, ranges[j])) {
           remove = values[0] == checkboxDisableFormula || values[0] == crossthroughCheckedFormula;
         }
-        if (!remove && UTIL.isColumnInRange(columns.preReq, ranges[j]) || UTIL.isColumnInRange(columns.missed)) {
+        if (!remove && UTIL.isColumnInRange(columns.preReq, ranges[j])) {
           remove = values[0] == notAvailableFormula || values[0] == availableErrorFormula;
         }
         if (!remove && UTIL.isColumnInRange(columns.item, ranges[j])) {
@@ -237,12 +258,23 @@ const RESET = (function(){
     const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
     availableErrorRule.setBackground(CONFIG.COLORS.error);
     availableErrorRule.whenFormulaSatisfied(availableErrorFormula);
-    availableErrorRule.setRanges([preReqData,missedData,availableData]);
+    availableErrorRule.setRanges([preReqData,availableData]);
 
     const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
     notAvailableRule.setBackground(CONFIG.COLORS.notAvailable);
     notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
-    notAvailableRule.setRanges([preReqData,missedData,availableData]);
+    notAvailableRule.setRanges([preReqData,availableData]);
+
+    const missedRule = SpreadsheetApp.newConditionalFormatRule();
+    missedRule.setBackground(CONFIG.COLORS.missed);
+    missedRule.whenFormulaSatisfied(missedFormula);
+    missedRule.setRanges([preReqData,availableData]);
+    notAvailableRule.setRanges([preReqData,availableData]);
+
+    const usedRule = SpreadsheetApp.newConditionalFormatRule();
+    usedRule.setBackground(CONFIG.COLORS.used);
+    usedRule.whenFormulaSatisfied(usedFormula);
+    usedRule.setRanges([preReqData,availableData]);
   
     const crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
     crossthroughCheckedRule.setStrikethrough(true);
@@ -264,7 +296,7 @@ const RESET = (function(){
     missableRule.whenFormulaSatisfied(missableFormula);
     missableRule.setRanges([itemDataRange]);
   
-    sheet.setConditionalFormatRules([availableErrorRule,crossthroughCheckedRule,checkboxDisableRule,missableRule,notAvailableRule]);//.concat(existingRules,[notAvailableRule]));
+    sheet.setConditionalFormatRules([availableErrorRule,crossthroughCheckedRule,checkboxDisableRule,missableRule,missedRule,usedRule,notAvailableRule]);//.concat(existingRules,[notAvailableRule]));
   
     timeEnd("available rules");
     timeEnd("available");
