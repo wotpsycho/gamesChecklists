@@ -85,7 +85,55 @@ const AVAILABLE = (function(){
       }
     }
   }
+  
 
+  const STATUS = {
+    CHECKED: "\"CHECKED\"",
+    AVAILABLE: "TRUE",
+    MISSED: "\"MISSED\"",
+    PR_USED: "\"PR_USED\"",
+    PR_NOT_MET: "FALSE",
+    UNKNOWN: "\"UNKNOWN\"",
+    ERROR: "\"ERROR\"",
+  };
+
+  const FORMULA = _helpersToGenerateFunctions({
+    AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/,"AND"),
+    OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/,"OR"),
+    NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
+    IF: new SimpleFormulaHelper("IF"),
+    IFS: new SimpleFormulaHelper("IFS"),
+    IFERROR: new SimpleFormulaHelper("IFERROR"),
+      
+    EQ: new FormulaTranslationHelper(/^ *(.+?) *== *(.+?) *$/, "EQ"),
+    NE: new FormulaTranslationHelper(/^ *(.+?) *!= *(.+?) *$/, "NE"),
+    GT: new InlineFormulaTranslationHelper(/^ *(.+?) *> *(.+?) *$/, ">"),
+    GTE: new InlineFormulaTranslationHelper(/^ *(.+?) *>= *(.+?) *$/, ">="),
+    LT: new InlineFormulaTranslationHelper(/^ *(.+?) *< *(.+?) *$/, "<"),
+    LTE: new InlineFormulaTranslationHelper(/^ *(.+?) *<= *(.+?) *$/, "<="),
+      
+    MULT: new InlineFormulaTranslationHelper(/^ *(.+?) +\* +(.+?) *$/, "*"),
+    DIV: new FormulaTranslationHelper(/^ *(.+?) *\/ *(.+?) *$/, "DIVIDE"),
+    MINUS: new InlineFormulaTranslationHelper(/^ *(.+?) +- +(.+?) *$/, "-"),
+    ADD: new InlineFormulaTranslationHelper(/^ *(.+?) +\+ +(.+?) *$/, "+"),
+
+    COUNTIF: new SimpleFormulaHelper("COUNTIF"),
+    COUNTIFS: new SimpleFormulaHelper("COUNTIFS"),
+    ERRORTYPE: new SimpleFormulaHelper("ERROR.TYPE"),
+  });
+  
+
+  function _helpersToGenerateFunctions(helpers) {
+    const toFuncs = {};
+    Object.entries(helpers).forEach(([key,helper]) => {
+      const generate = Object.assign((...args) => helper.generateFormula(...args),helper);
+      generate.identify = (...args) => helper.identify(...args);
+      generate.parseOperands = (...args) => helper.parseOperands(...args);
+      generate.generateFormula = generate;
+      toFuncs[key] = generate;
+    });
+    return toFuncs;
+  }
 
   // CLASS DEFINITION
   function _getCellFormulaParser(sheet) {
@@ -101,10 +149,21 @@ const AVAILABLE = (function(){
     const getQuotePlaeholder = () => `QPH_${UID_Counter++}_QPH`;
     const _quoteMapping = {};
     const _parentheticalMapping = {};
-    const columnR1C1 = (column) => {
+    const columnR1C1s = (column,_excludeRow) => {
       column = columns[column] || columns.byHeader[column] || column;
-      return `R${rows.header + 1}C${column}:C${column}`;
+      const r1C1s = [];
+      let startRow = rows.header + 1;
+      if (_excludeRow) {
+        if (_excludeRow == startRow) startRow++;
+        else if (_excludeRow > startRow) {
+          r1C1s.push(`R${startRow}C${column}:R${_excludeRow-1}C${column}`);
+          startRow = _excludeRow+1;
+        }
+      }
+      r1C1s.push(`R${startRow}C${column}:C${column}`);
+      return r1C1s;
     };
+    const columnR1C1 = column => columnR1C1s(column)[0];
     const cellR1C1 = (row, column) => {
       column = columns[column] || columns.byHeader[column] || column;
       return `R${row}C${column}`;
@@ -149,12 +208,15 @@ const AVAILABLE = (function(){
       timeEnd("getColumnValues " + column);
       return valueToRows;
     };
+
+    const parsersByRow = {};
     class CellFormulaParser {
       constructor(cellValue,row) {
         this.missed = [];
         this.uses = [];
         this.children = [];
         this.row = row;
+        parsersByRow[row] = this;
 
         const lines = [];
         cellValue.toString().split(/ *[\n;] */).forEach((line,i) => {
@@ -205,7 +267,7 @@ const AVAILABLE = (function(){
       }
 
       toFormula() {
-        const availableFormula = this.children.length == 0 ? "TRUE" : CellFormulaParser.FORMULAS.AND.generateFormula(this.children.map(child => child.toAvailableFormula()),prettyPrint);
+        const availableFormula = this.children.length == 0 ? "TRUE" : FORMULA.AND(this.children.map(child => child.toAvailableFormula()),prettyPrint);
         const errorConditions  = this.children.reduce((errors, child) => {
           Object.entries(child.getErrors()).forEach(([errorFormula, errorMessages]) => {
             if (errors[errorFormula]) {
@@ -217,29 +279,59 @@ const AVAILABLE = (function(){
           return errors;
         }, {});
         const ifsArguments = [];
+        // ERRORs
         Object.entries(errorConditions).forEach(([errorFormula, errorMessages]) => {
-          ifsArguments.push(errorFormula, "\"ERROR: " + [...errorMessages].join("; ") + "\"");
+          ifsArguments.push(errorFormula, "\"ERROR: " + [...errorMessages].map(message => message.replace(/"/g,"\"&CHAR(34)&\"")).join("; ") + "\"");
         });
+        // STATUS.CHECKED
         const checkedFormula = cellR1C1(this.row,"check");
-        ifsArguments.push(checkedFormula, "\"CHECKED\"");
-        const prNotUsedFormulaArguments = this.children.map(child => child.toPRNotUsedFormula()).filter(value => value != "FALSE");
-        if (prNotUsedFormulaArguments.length > 0) {
-          const prUsedFormula = CellFormulaParser.FORMULAS.NOT.generateFormula(CellFormulaParser.FORMULAS.AND.generateFormula(prNotUsedFormulaArguments,prettyPrint),prettyPrint);
-          ifsArguments.push(prUsedFormula, "\"PR_USED\"");
+        ifsArguments.push(checkedFormula, STATUS.CHECKED);
+        // STATUS.AVAILABLE
+        ifsArguments.push(availableFormula,STATUS.AVAILABLE);
+        
+        // STATUS.UNKNOWN (circular dependence so MISSED/USED is unknown); also gives the actual formula errors if present
+        // if (false) {
+        if (this.hasCircularDependency()) {
+          ifsArguments.push("TRUE",STATUS.UNKNOWN);
+        } else {
+          // STATUS.PR_USED (ignore errors)
+          const prNotUsedFormulaArguments = this.children.map(child => child.toPRNotUsedFormula()).filter(value => value != "FALSE");
+          if (prNotUsedFormulaArguments.length > 0) {
+            const prUsedFormula = FORMULA.NOT(FORMULA.AND(prNotUsedFormulaArguments,prettyPrint),prettyPrint);
+            ifsArguments.push(prUsedFormula, STATUS.PR_USED);
+          }
+          // STATUS.MISSED (ignore errors)
+          const notMissedFormulaArguments = this.children.map(child => child.toNotMissedFormula()).filter(value => value != "FALSE");
+          if (notMissedFormulaArguments.length > 0) {
+            const missedFormula = FORMULA.NOT(FORMULA.AND(notMissedFormulaArguments,prettyPrint),prettyPrint);
+            ifsArguments.push(missedFormula, STATUS.MISSED);
+          }
+          // STATUS.PR_NOT_MET (Fallback; we know it's not checked, available, missed or pre-reqs used, so just pre-reqs)
+          ifsArguments.push("TRUE",STATUS.PR_NOT_MET);
         }
-        const notMissedFormulaArguments = this.children.map(child => child.toNotMissedFormula()).filter(value => value != "FALSE");
-        if (notMissedFormulaArguments.length > 0) {
-          const missedFormula = CellFormulaParser.FORMULAS.NOT.generateFormula(CellFormulaParser.FORMULAS.AND.generateFormula(notMissedFormulaArguments,prettyPrint),prettyPrint);
-          ifsArguments.push(missedFormula, "\"MISSED\"");
-        }
-        ifsArguments.push("TRUE",availableFormula);
+
+        
         //console.log([this.row,notMissedFormulaArguments,prNotUsedFormulaArguments]);
-        return CellFormulaParser.FORMULAS.IFS.generateFormula(ifsArguments,prettyPrint);
+        return FORMULA.IFS(ifsArguments,prettyPrint);
       }
 
-      static get FORMULAS() {
-        return Object.assign({},CellFormulaParser.BooleanFormulaNode.BOOLEAN_FORMULA_TRANSLATION_HELPERS,CellFormulaParser.BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS,CellFormulaParser.NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS);
+      
+
+      hasCircularDependency() {
+        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
+        if (this._lockCircular) {
+          this._isCircular = true;
+        } else {
+          this._lockCircular = true;
+          const result = this.children.reduce((v,child) => child.hasCircularDependency() || v,false);
+          this._lockCircular = false;
+          
+          if (!this._isCircular) this._isCircular = result;
+        }
+        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
+        return this._isCircular;
       }
+
     }
 
     CellFormulaParser.FormulaNode = class FormulaNode {
@@ -317,6 +409,21 @@ const AVAILABLE = (function(){
         }
         return formula;
       }
+
+      hasCircularDependency() {
+        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
+        if (this._lockCircular) {
+          this._isCircular = true;
+        } else {
+          this._lockCircular = true;
+          const result = this.children.reduce((v,child) => child.hasCircularDependency() || v,false);
+          this._lockCircular = false;
+          
+          if (!this._isCircular) this._isCircular = result;
+        }
+        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
+        return this._isCircular;
+      }
     };
 
     CellFormulaParser.BooleanFormulaNode = class BooleanFormulaNode extends CellFormulaParser.FormulaNode {
@@ -324,9 +431,9 @@ const AVAILABLE = (function(){
         super(text,row);
       
         for (const booleanFormulaTranslationHelper of [
-          BooleanFormulaNode.BOOLEAN_FORMULA_TRANSLATION_HELPERS.OR, 
-          BooleanFormulaNode.BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND, 
-          BooleanFormulaNode.BOOLEAN_FORMULA_TRANSLATION_HELPERS.NOT
+          FORMULA.OR, 
+          FORMULA.AND, 
+          FORMULA.NOT
         ]) {
         // Recursively handle boolean operators
           if (booleanFormulaTranslationHelper.identify(this.text)) {
@@ -337,12 +444,12 @@ const AVAILABLE = (function(){
           }
         }
         for (const comparisonFormulaTranslationHelper of [
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.EQ, 
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.NE, 
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.GTE,
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.GT,
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.LTE,
-          BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.LT
+          FORMULA.EQ, 
+          FORMULA.NE, 
+          FORMULA.GTE,
+          FORMULA.GT,
+          FORMULA.LTE,
+          FORMULA.LT
         ]) {
         // Recursively handle comparison operators
           if (comparisonFormulaTranslationHelper.identify(this.text)) {
@@ -353,30 +460,9 @@ const AVAILABLE = (function(){
           }
         } 
 
-        this.type = BooleanFormulaNode.BOOLEAN_FORMULA_TRANSLATION_HELPERS.AND;
+        this.type = FORMULA.AND;
         this.children.push(new CellFormulaParser.BooleanFormulaValueNode(this.text,this.row));
       }
-    
-      static get BOOLEAN_FORMULA_TRANSLATION_HELPERS() {
-        return  {
-          AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/,"AND"),
-          OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/,"OR"),
-          NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
-          IF: new SimpleFormulaHelper("IF"),
-          IFS: new SimpleFormulaHelper("IFS"),
-        };
-      }
-      static get COMPARISON_FORMULA_TRANSLATION_HELPERS() {
-        return {
-          EQ: new FormulaTranslationHelper(/^ *(.+?) *== *(.+?) *$/, "EQ"),
-          NE: new FormulaTranslationHelper(/^ *(.+?) *!= *(.+?) *$/, "NE"),
-          GT: new InlineFormulaTranslationHelper(/^ *(.+?) *> *(.+?) *$/, ">"),
-          GTE: new InlineFormulaTranslationHelper(/^ *(.+?) *>= *(.+?) *$/, ">="),
-          LT: new InlineFormulaTranslationHelper(/^ *(.+?) *< *(.+?) *$/, "<"),
-          LTE: new InlineFormulaTranslationHelper(/^ *(.+?) *<= *(.+?) *$/, "<="),
-        };
-      }
-
     };
 
     CellFormulaParser.NumberFormulaNode = class NumberFormulaNode extends CellFormulaParser.FormulaNode {
@@ -385,10 +471,10 @@ const AVAILABLE = (function(){
         super(text,row);
       
         for (const arithmeticFormulaTranslationHelper of [
-          NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.ADD,
-          NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.MINUS,
-          NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.MULT,
-          NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.DIV,
+          FORMULA.ADD,
+          FORMULA.MINUS,
+          FORMULA.MULT,
+          FORMULA.DIV,
         ]) {
         // Recursively handle comparison operators
           if (arithmeticFormulaTranslationHelper.identify(this.text)) {
@@ -398,19 +484,8 @@ const AVAILABLE = (function(){
             return;
           }
         }
-        this.type = NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.ADD;
+        this.type = FORMULA.ADD;
         this.children.push(new CellFormulaParser.NumberFormulaValueNode(text,this.row));
-      }
-
-      static get ARITHMETIC_FORMULA_TRANSLATION_HELPERS() { 
-        return  {
-          MULT: new InlineFormulaTranslationHelper(/^ *(.+?) +\* +(.+?) *$/, "*"),
-          DIV: new FormulaTranslationHelper(/^ *(.+?) *\/ *(.+?) *$/, "DIVIDE"),
-          MINUS: new InlineFormulaTranslationHelper(/^ *(.+?) +- +(.+?) *$/, "-"),
-          ADD: new InlineFormulaTranslationHelper(/^ *(.+?) +\+ +(.+?) *$/, "+"),
-          COUNTIF: new SimpleFormulaHelper("COUNTIF"),
-          COUNTIFS: new SimpleFormulaHelper("COUNTIFS"),
-        };
       }
     };
 
@@ -430,7 +505,7 @@ const AVAILABLE = (function(){
           if (rawParsed) {
             valueInfo = {
               numNeeded: rawParsed[1] || rawParsed[2] || 1,
-              isMulti: !!(rawParsed[1] > 0 || rawParsed[2] > 0),
+              isMulti: !!(rawParsed[1] > 0 || rawParsed[2] > 0 || rawParsed[5].indexOf("*") >= 0),
               key: rawParsed[3],
               altColumnName: rawParsed[4],
               id: rawParsed[5],
@@ -462,7 +537,7 @@ const AVAILABLE = (function(){
                 });
               }
             } else {
-              this.addError("TRUE","Could not find column " + valueInfo.altColumnName);
+              this.addError("TRUE",`Could not find column "${valueInfo.altColumnName}"`);
             }
             valueInfo.rows = rows;
             
@@ -470,7 +545,13 @@ const AVAILABLE = (function(){
           }
         }
         valueInfo = Object.assign({},valueInfo);
-        valueInfo.rows = valueInfo.rows.filter(row => !this.row || this.row != row);
+        valueInfo.rows = [...valueInfo.rows];
+
+        const rowIndex = valueInfo.rows.indexOf(this.row);
+        if (rowIndex >= 0) {
+          valueInfo.rows.splice(rowIndex,1);
+          valueInfo.wasSelfReferential = true;
+        }
         this.valueInfo = valueInfo;
       }
       _getCountIfsArguments(additionalArguments) {
@@ -481,6 +562,21 @@ const AVAILABLE = (function(){
           return countIfArguments;
         }
       }
+
+      hasCircularDependency() {
+        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
+        if (this._lockCircular) {
+          this._isCircular = true;
+        } else {
+          this._lockCircular = true;
+          const result = this.valueInfo.rows.reduce((v,row) => parsersByRow[row].hasCircularDependency() || v,false);
+          this._lockCircular = false;
+          
+          if (!this._isCircular) this._isCircular = result;
+        }
+        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
+        return this._isCircular;
+      }
     };
 
     CellFormulaParser.BooleanFormulaValueNode = class BooleanFormulaValueNode extends CellFormulaParser.FormulaValueNode {
@@ -490,18 +586,22 @@ const AVAILABLE = (function(){
           this.value = this.text.toString().toUpperCase();
         } else {
         // CHECKED > NEEDED
-          this.type = CellFormulaParser.BooleanFormulaNode.COMPARISON_FORMULA_TRANSLATION_HELPERS.GTE;
+          this.type = FORMULA.GTE;
           this.children = [new CellFormulaParser.NumberFormulaValueNode(this.text,this.row), new CellFormulaParser.NumberFormulaValueNode(this.valueInfo.numNeeded,this.row)];
         }
       }
 
       getErrors() {
         if (this.valueInfo.isMulti) {
-          const notEnoughFormula = CellFormulaParser.FORMULAS.LT.generateFormula([
-            CellFormulaParser.FORMULAS.COUNTIF.generateFormula(this._getCountIfsArguments(),prettyPrint),
+          const notEnoughFormula = FORMULA.LT([
+            FORMULA.COUNTIF(this._getCountIfsArguments(),prettyPrint),
             this.valueInfo.numNeeded
           ],prettyPrint);
-          this.addError(notEnoughFormula, `There are not ${this.valueInfo.numNeeded} of ${this.valueInfo.altColumnName ? this.valueInfo.altColumnName + "!" : ""}${this.valueInfo.id}`);
+          this.addError(notEnoughFormula, `There are not ${this.valueInfo.numNeeded} of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
+          if (this.valueInfo.rows.length < this.valueInfo.numNeeded) {
+            console.log("errRows<",this.valueInfo,valueInfoCache[this.text]);
+            this.addError("TRUE", `There are not ${this.valueInfo.numNeeded} of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding this row)" : ""}`);
+          }
         }
         return super.getErrors();
       }
@@ -517,14 +617,19 @@ const AVAILABLE = (function(){
 
       getErrors() {
         if (!(typeof this.value == "number")) {
-          const notFoundFormula = CellFormulaParser.FORMULAS.LT.generateFormula([
-            CellFormulaParser.FORMULAS.COUNTIF.generateFormula(this._getCountIfsArguments(),prettyPrint),
+          const notFoundFormula = FORMULA.LT([
+            FORMULA.COUNTIF(this._getCountIfsArguments(),prettyPrint),
             1
           ],prettyPrint);
-          this.addError(notFoundFormula, `Could not find ${this.valueInfo.altColumnName || "Item"} ${this.valueInfo.id}`);
-          
+          this.addError(notFoundFormula, `Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
           if (this.valueInfo.rows.length == 0) {
-            this.addError("TRUE","Could not find " + (this.valueInfo.altColumnName || "item") + " " + this.valueInfo.id);
+            console.log("errRows0",this.valueInfo,valueInfoCache[this.text]);
+            if (this.valueInfo.wasSelfReferential) {
+              // If it is the only one and isMulti, will have a "Not Enough" error
+              this.addError("TRUE", "Cannot have a pre-req of itself");
+            } else {
+              this.addError("TRUE",`Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
+            }
           }
         }
         return super.getErrors();
@@ -536,7 +641,7 @@ const AVAILABLE = (function(){
       toAvailableFormula() { 
         return this._generateFormula([
           columnR1C1("check")
-          ,"\"=TRUE\""
+          ,"TRUE"
         ]);
       }
 
@@ -552,9 +657,9 @@ const AVAILABLE = (function(){
         if (!rows) return this.value;
         const missedCells = [];
         rowsR1C1(rows, "available").forEach(rangeR1C1 => {
-          missedCells.push(CellFormulaParser.FORMULAS.COUNTIF.generateFormula([rangeR1C1,"\"MISSED\""]), CellFormulaParser.FORMULAS.COUNTIF.generateFormula([rangeR1C1,"\"PR_USED\""]));
+          missedCells.push(FORMULA.COUNTIF([rangeR1C1,"\"MISSED\""]), FORMULA.COUNTIF([rangeR1C1,"\"PR_USED\""]));
         });
-        return CellFormulaParser.FORMULAS.MINUS.generateFormula([rows.length,...missedCells],true);
+        return FORMULA.MINUS([rows.length,...missedCells],true);
       }
       toPRNotUsedFormula() {
         if (typeof this.value == "number") {
@@ -564,9 +669,9 @@ const AVAILABLE = (function(){
         if (!rows) return this.value;
         const missedCells = [];
         rowsR1C1(rows, "available").forEach(rangeR1C1 => {
-          missedCells.push(CellFormulaParser.FORMULAS.COUNTIF.generateFormula([rangeR1C1,"\"PR_USED\""]));
+          missedCells.push(FORMULA.COUNTIF([rangeR1C1,"\"PR_USED\""]));
         });
-        return CellFormulaParser.FORMULAS.MINUS.generateFormula([rows.length,...missedCells],true);     
+        return FORMULA.MINUS([rows.length,...missedCells],true);     
       }
 
       _generateFormula(additionalCountIfsValues) {
@@ -581,7 +686,7 @@ const AVAILABLE = (function(){
             }
           }
           const countIfsValues = this._getCountIfsArguments(additionalCountIfsValues);
-          return CellFormulaParser.NumberFormulaNode.ARITHMETIC_FORMULA_TRANSLATION_HELPERS.COUNTIFS.generateFormula(countIfsValues, prettyPrint);
+          return FORMULA.COUNTIFS(countIfsValues, prettyPrint);
         }
       }
 
@@ -605,14 +710,14 @@ const AVAILABLE = (function(){
         // (TOTAL - USED) >= NEEDED
         const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
         const totalFormula = this.children[0].toTotalFormula();
-        const amountLeftFormula = CellFormulaParser.FORMULAS.MINUS.generateFormula([totalFormula, usedAmountFormula], prettyPrint);
-        const usedFormula =  CellFormulaParser.FORMULAS.GTE.generateFormula([amountLeftFormula,this.valueInfo.numNeeded],prettyPrint);
+        const amountLeftFormula = FORMULA.MINUS([totalFormula, usedAmountFormula], prettyPrint);
+        const usedFormula =  FORMULA.GTE([amountLeftFormula,this.valueInfo.numNeeded],prettyPrint);
         return usedFormula;
       }
 
       static _getPRUsedAmountFormula(key) {
-        const usedAmoutArguments = Object.entries(usesInfo[key]).map(([row,numUsed]) => CellFormulaParser.FORMULAS.IF.generateFormula([cellR1C1(row,"check"),numUsed]));
-        return CellFormulaParser.FORMULAS.ADD.generateFormula(usedAmoutArguments, true);
+        const usedAmoutArguments = Object.entries(usesInfo[key]).map(([row,numUsed]) => FORMULA.IF([cellR1C1(row,"check"),numUsed]));
+        return FORMULA.ADD(usedAmoutArguments, true);
       }
 
       toAvailableFormula() {
@@ -620,7 +725,7 @@ const AVAILABLE = (function(){
         // This   => (CHECKED - USED) >= NEEDED
         const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
         const checkedFormula = this.children[0].toAvailableFormula();
-        const availableAmountFormula = CellFormulaParser.FORMULAS.MINUS.generateFormula([checkedFormula,usedAmountFormula]);
+        const availableAmountFormula = FORMULA.MINUS([checkedFormula,usedAmountFormula]);
         const numNeededFormula = this.children[1].toAvailableFormula();
         return this.type.generateFormula([availableAmountFormula, numNeededFormula],true);
       }
@@ -630,7 +735,7 @@ const AVAILABLE = (function(){
     CellFormulaParser.MissedFormulaNode = class MissedFormulaNode extends CellFormulaParser.FormulaNode {
       constructor(text,row) {
         super(text,row);
-        this.type = CellFormulaParser.FORMULAS.NOT;
+        this.type = FORMULA.NOT;
         this.children.push(new CellFormulaParser.BooleanFormulaNode(this.text,this.row));
       }
 

@@ -46,9 +46,9 @@ const SETTINGS = (function(){
     },
     "Unavailable": {
       options: {
-        Hide: _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE"], ["FALSE","MISSED","PR_USED"]),
+        Hide: _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE"], ["FALSE","MISSED","PR_USED","UNKNOWN"]),
         Show: [
-          _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE","FALSE","MISSED","PR_USED"]),
+          _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE","FALSE","MISSED","PR_USED","UNKNOWN"]),
           _generateSetSettingHelperFunction("Pre-Reqs", "Show")
         ],
       },
