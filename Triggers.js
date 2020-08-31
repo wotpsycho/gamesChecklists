@@ -30,8 +30,12 @@ function handleEdit(event) {
       QUICK_FILTER.onChange(sheet, range, event);
     }
 
-    if ((event.value == "reset" || event.value == "meta") && range.getA1Notation() == "A1") {
-      event.value == "reset" ? RESET.reset() : META.ProcessMeta();
+    if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
+      switch (event.value){
+        case "reset":  RESET.reset(); break;
+        case "meta": META.ProcessMeta(); break;
+        case "FULL RESET": RESET.reset(sheet,true); break;
+      }
       TOTALS.updateTotals(sheet);
       return;
     }
@@ -61,9 +65,7 @@ function handleEdit(event) {
     timeEnd("6.5");
     
     time("7");
-    if (UTIL.isColumnInRange([columns.preReq, /* TODO  remove deprecated */columns.missed, columns.available], range)
-       || (UTIL.isColumnInRange(columns.item,range) && (!event.value || !event.oldValue))
-    ) {
+    if (UTIL.isColumnInRange([columns.preReq, /* TODO  remove deprecated */columns.item, columns.available], range)) {
       AVAILABLE.populateAvailable(sheet, event);
     }
     timeEnd("7");
@@ -81,12 +83,6 @@ function handleEdit(event) {
     }
     timeEnd("9");
     
-    time("9.5");
-    if (!(UTIL.isColumnInRange(columns.check, range) && range.getNumColumns() == 1)) {
-      // Edits that did more than just check/uncheck could change error state of preReqs, so verify
-      AVAILABLE.checkErrors(); 
-    }
-    timeEnd("9.5");
     time("10");
     if (UTIL.isColumnInRange(columns.check,range) || UTIL.isColumnInRange(columns.item,range)) {
       TOTALS.updateTotals(sheet);

@@ -84,17 +84,16 @@ const AVAILABLE = (function(){
         return "(" + innerResult  + ")";
       }
     }
-  }
-  
+  }  
 
   const STATUS = {
-    CHECKED: "\"CHECKED\"",
+    CHECKED: "CHECKED",
     AVAILABLE: "TRUE",
-    MISSED: "\"MISSED\"",
-    PR_USED: "\"PR_USED\"",
+    MISSED: "MISSED",
+    PR_USED: "PR_USED",
     PR_NOT_MET: "FALSE",
-    UNKNOWN: "\"UNKNOWN\"",
-    ERROR: "\"ERROR\"",
+    UNKNOWN: "UNKNOWN",
+    ERROR: "ERROR",
   };
 
   const FORMULA = _helpersToGenerateFunctions({
@@ -120,6 +119,8 @@ const AVAILABLE = (function(){
     COUNTIF: new SimpleFormulaHelper("COUNTIF"),
     COUNTIFS: new SimpleFormulaHelper("COUNTIFS"),
     ERRORTYPE: new SimpleFormulaHelper("ERROR.TYPE"),
+
+    CONCAT: new SimpleFormulaHelper("CONCATENATE"),
   });
   
 
@@ -140,7 +141,7 @@ const AVAILABLE = (function(){
     
     time();
     const columns = UTIL.getColumns(sheet);
-    const rows = UTIL.getRows(sheet);
+    //const rows = UTIL.getRows(sheet);
     const columnToValueToRows = {};
     const prettyPrint = true; // TODO extract to config/setting
     // Essentially static defs
@@ -149,21 +150,6 @@ const AVAILABLE = (function(){
     const getQuotePlaeholder = () => `QPH_${UID_Counter++}_QPH`;
     const _quoteMapping = {};
     const _parentheticalMapping = {};
-    const columnR1C1s = (column,_excludeRow) => {
-      column = columns[column] || columns.byHeader[column] || column;
-      const r1C1s = [];
-      let startRow = rows.header + 1;
-      if (_excludeRow) {
-        if (_excludeRow == startRow) startRow++;
-        else if (_excludeRow > startRow) {
-          r1C1s.push(`R${startRow}C${column}:R${_excludeRow-1}C${column}`);
-          startRow = _excludeRow+1;
-        }
-      }
-      r1C1s.push(`R${startRow}C${column}:C${column}`);
-      return r1C1s;
-    };
-    const columnR1C1 = column => columnR1C1s(column)[0];
     const cellR1C1 = (row, column) => {
       column = columns[column] || columns.byHeader[column] || column;
       return `R${row}C${column}`;
@@ -187,7 +173,7 @@ const AVAILABLE = (function(){
     };
     const getColumnValues = (column) => {
       if (columnToValueToRows[column]) return columnToValueToRows[column];
-      time("getColumnValues " + column);
+      time(column);
       const columnIndex = columns[column] || columns.byHeader[column];
       if (!columnIndex) return;
       const valueToRows = {};
@@ -205,16 +191,23 @@ const AVAILABLE = (function(){
       });
       columnToValueToRows[column] = valueToRows;
       valueToRows._entries = Object.entries(valueToRows);
-      timeEnd("getColumnValues " + column);
+      timeEnd(column);
       return valueToRows;
     };
 
     const parsersByRow = {};
+    const getParserByRow = (row) =>{
+      if (parsersByRow[row]) {
+        return parsersByRow[row];
+      } else {
+        const cellValue = sheet.getRange(row,columns.preReq).getValue();
+        return new CellFormulaParser(cellValue,row);
+      }
+    };
     class CellFormulaParser {
       constructor(cellValue,row) {
         this.missed = [];
         this.uses = [];
-        this.children = [];
         this.row = row;
         parsersByRow[row] = this;
 
@@ -227,6 +220,7 @@ const AVAILABLE = (function(){
           }
         });
 
+        const children = [];
         for (let j = 0; j < lines.length; j++) {
           let line = lines[j].trim();
           if (!line) continue;
@@ -252,95 +246,78 @@ const AVAILABLE = (function(){
           if (prefixCheck) { 
             const content = line.substring(line.indexOf(" ")).trim();
             switch (prefixCheck[1].toUpperCase()) {
-            case "USES":
-              childFormula = new CellFormulaParser.UsesFormulaNode(content,row);
-              break;
-            case "MISSED":
-              childFormula = new CellFormulaParser.MissedFormulaNode(content,row);
-              break;
+              case "USES":
+                childFormula = new CellFormulaParser.UsesFormulaNode(content,row);
+                break;
+              case "MISSED":
+                childFormula = new CellFormulaParser.MissedFormulaNode(content,row);
+                break;
             }
           } else {
             childFormula = new CellFormulaParser.BooleanFormulaNode(line,row);
           }
-          this.children.push(childFormula);
+          children.push(childFormula);
         }
+        this.rootNode = new CellFormulaParser.RootNode(children,row);
       }
 
       toFormula() {
-        const availableFormula = this.children.length == 0 ? "TRUE" : FORMULA.AND(this.children.map(child => child.toAvailableFormula()),prettyPrint);
-        const errorConditions  = this.children.reduce((errors, child) => {
-          Object.entries(child.getErrors()).forEach(([errorFormula, errorMessages]) => {
-            if (errors[errorFormula]) {
-              errors[errorFormula].add(...errorMessages);
-            } else {
-              errors[errorFormula] = errorMessages;
-            }
-          });
-          return errors;
-        }, {});
-        const ifsArguments = [];
-        // ERRORs
-        Object.entries(errorConditions).forEach(([errorFormula, errorMessages]) => {
-          ifsArguments.push(errorFormula, "\"ERROR: " + [...errorMessages].map(message => message.replace(/"/g,"\"&CHAR(34)&\"")).join("; ") + "\"");
-        });
-        // STATUS.CHECKED
-        const checkedFormula = cellR1C1(this.row,"check");
-        ifsArguments.push(checkedFormula, STATUS.CHECKED);
-        // STATUS.AVAILABLE
-        ifsArguments.push(availableFormula,STATUS.AVAILABLE);
-        
-        // STATUS.UNKNOWN (circular dependence so MISSED/USED is unknown); also gives the actual formula errors if present
-        // if (false) {
-        if (this.hasCircularDependency()) {
-          ifsArguments.push("TRUE",STATUS.UNKNOWN);
-        } else {
-          // STATUS.PR_USED (ignore errors)
-          const prNotUsedFormulaArguments = this.children.map(child => child.toPRNotUsedFormula()).filter(value => value != "FALSE");
-          if (prNotUsedFormulaArguments.length > 0) {
-            const prUsedFormula = FORMULA.NOT(FORMULA.AND(prNotUsedFormulaArguments,prettyPrint),prettyPrint);
-            ifsArguments.push(prUsedFormula, STATUS.PR_USED);
-          }
-          // STATUS.MISSED (ignore errors)
-          const notMissedFormulaArguments = this.children.map(child => child.toNotMissedFormula()).filter(value => value != "FALSE");
-          if (notMissedFormulaArguments.length > 0) {
-            const missedFormula = FORMULA.NOT(FORMULA.AND(notMissedFormulaArguments,prettyPrint),prettyPrint);
-            ifsArguments.push(missedFormula, STATUS.MISSED);
-          }
-          // STATUS.PR_NOT_MET (Fallback; we know it's not checked, available, missed or pre-reqs used, so just pre-reqs)
-          ifsArguments.push("TRUE",STATUS.PR_NOT_MET);
-        }
-
-        
-        //console.log([this.row,notMissedFormulaArguments,prNotUsedFormulaArguments]);
-        return FORMULA.IFS(ifsArguments,prettyPrint);
+        return this.toStatusFormula();
       }
 
+      hasErrors() {
+        return this.getErrors().size > 0;//this.children.reduce((hasError, child) => hasError || child.hasErrors(), false);
+      }
+
+      getErrors() {
+        return this.rootNode.getErrors();
+      }
+      isInCircularDependency() {
+        return this.getCircularDependencies().has(this.row);
+      }
       
-
-      hasCircularDependency() {
-        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
+      getCircularDependencies(previous = []) {
+        if (this._circularDependencies) return this._circularDependencies;
+        const circularDependencies = new Set();
         if (this._lockCircular) {
-          this._isCircular = true;
+          previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
         } else {
+          previous.push(this.row);
           this._lockCircular = true;
-          const result = this.children.reduce((v,child) => child.hasCircularDependency() || v,false);
+          this.rootNode.getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
           this._lockCircular = false;
-          
-          if (!this._isCircular) this._isCircular = result;
         }
-        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
-        return this._isCircular;
+        if (circularDependencies.has(this.row)) this._isCircular = true;
+        this._circularDependencies = circularDependencies;
+        return this._circularDependencies;
       }
-
+      toAvailableFormula() {
+        return this.rootNode.toAvailableFormula();
+      }
+      toRawMissedFormula() {
+        return this.rootNode.toRawMissedFormula();
+      }
+      toMissedFormula() {
+        return this.rootNode.toMissedFormula();
+      }
+      toPRUsedFormula() {
+        return this.rootNode.toPRUsedFormula();
+      }
+      toUnknownFormula() {
+        return this.rootNode.toUnknownFormula();
+      }
+      toStatusFormula() {
+        return this.rootNode.toStatusFormula();
+      }
     }
 
     CellFormulaParser.FormulaNode = class FormulaNode {
     
       constructor(text,row) {
-        this.errors = {};
+        this.errors = new Set();
         this.children = [];
         this.value = undefined;
-        this.type = undefined;
+        this.formulaType = undefined;
         this.text = text.toString().trim();
         this.row = row;
 
@@ -352,116 +329,328 @@ const AVAILABLE = (function(){
         }
       }
 
-      addError(conditionFormula, message) {
-        if (!this.errors[conditionFormula]) {
-          this.errors[conditionFormula] = new Set();
-        }
-        this.errors[conditionFormula].add(message);
+      addError(message) {
+        // console.log("Adding error [text,error]", this.text, message);
+        this.errors.add(message);
       }
 
       addErrors(errors) {
-        for (const errorFormula in errors) {
-          for (const message of errors[errorFormula]) {
-            this.addError(errorFormula, message);
-          }
+        for (const message of errors) {
+          this.addError(message);
         }
+      }
+
+      checkErrors() {
       }
 
       getErrors() {
-        this.children.forEach(childFormula => this.addErrors(childFormula.getErrors()));
+        this.checkErrors();
+        this.children.forEach(child => this.addErrors(child.getErrors()));
         return this.errors;
       }
 
+      hasErrors() {
+        // console.log("hasErrors: [row,text,size]", this.row, this.text, this.getErrors().size);
+        return this.getErrors().size > 0;
+      }
+
+      hasValue() {
+        return typeof this.value !== "undefined";
+      }
+
+      _toFormula(formulaFunctionName) {
+        // console.log(formulaFunctionName,"row,type,formulaType,numChildren,value,text",this.row,this.constructor.name,this.formulaType && this.formulaType.formulaName,this.children.length,this.value,this.text);
+        let formula;
+        if (this.formulaType) {
+          formula = this.formulaType.generateFormula(this.children.map(child => child[formulaFunctionName]()),prettyPrint);
+        } else if (this.children.length === 1) {
+          formula = this.children[0][formulaFunctionName]();
+        } else if (this.hasValue()) {
+          formula = this.value;
+        } else {
+          this.addError("Could not determine formula");
+        }
+        return formula;
+      }
+
+
       toAvailableFormula() {
-        let formula;
-        if (this.type) {
-          formula = this.type.generateFormula(this.children.map(childFormula => childFormula.toAvailableFormula()),prettyPrint);
-        } else if (this.value !== undefined) {
-          formula =  this.value;
-        } else {
-          formula = this.text;
-        }
-        // console.log(this);
-        // console.log(`${this.constructor.name}.toAvailableFormula(${this.text}): ${formula}`);
-        return formula;
+        return this._toFormula(this.toAvailableFormula.name);
       }
 
-      toNotMissedFormula() {
-        let formula;
-        if (this.type) {
-          formula = this.type.generateFormula(this.children.map(childFormula => childFormula.toNotMissedFormula()),prettyPrint);
-        } else if (this.value !== undefined) {
-          formula =  this.value;
-        } else {
-          formula = this.text;
-        }
-        return formula;
+
+      toPRUsedFormula() {
+        throw new Error(`AbstractMethod ${this.constructor.name}.${this.toPRUsedFormula.name}`);
       }
 
-      toPRNotUsedFormula() {
-        let formula;
-        if (this.type) {
-          formula = this.type.generateFormula(this.children.map(childFormula => childFormula.toPRNotUsedFormula()),prettyPrint);
-        } else if (this.value !== undefined) {
-          formula =  this.value;
-        } else {
-          formula = this.text;
-        }
-        return formula;
+      toRawMissedFormula() {
+        throw new Error(`AbstractMethod ${this.constructor.name}.${this.toRawMissedFormula.name}`);
       }
 
-      hasCircularDependency() {
-        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
+      toMissedFormula() {
+        throw new Error(`AbstractMethod ${this.constructor.name}.${this.toMissedFormula.name}`);
+      }
+
+      toUnknownFormula() {
+        throw `${new Error("AbstractMethod " + this.constructor.name)}.${this.toUnknownFormula.name}`;
+      }
+      isInCircularDependency() {
+        return this.getCircularDependencies().has(this.row);
+      }
+
+      getCircularDependencies(previous = []) {
+        if (this._circularDependencies) return this._circularDependencies;
+        const circularDependencies = new Set();
         if (this._lockCircular) {
-          this._isCircular = true;
+          previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
         } else {
+          previous.push(this.row);
           this._lockCircular = true;
-          const result = this.children.reduce((v,child) => child.hasCircularDependency() || v,false);
+          this.children.forEach(child => {
+            child.getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+          });
           this._lockCircular = false;
-          
-          if (!this._isCircular) this._isCircular = result;
         }
-        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
-        return this._isCircular;
+        if (circularDependencies.has(this.row)) this._isCircular = true;
+        this._circularDependencies = circularDependencies;
+        return this._circularDependencies;
       }
     };
 
     CellFormulaParser.BooleanFormulaNode = class BooleanFormulaNode extends CellFormulaParser.FormulaNode {
       constructor(text,row) {
         super(text,row);
-      
-        for (const booleanFormulaTranslationHelper of [
-          FORMULA.OR, 
-          FORMULA.AND, 
-          FORMULA.NOT
-        ]) {
-        // Recursively handle boolean operators
-          if (booleanFormulaTranslationHelper.identify(this.text)) {
-            this.type = booleanFormulaTranslationHelper;
-            const operands = booleanFormulaTranslationHelper.parseOperands(this.text);
-            this.children.push(...operands.map(operand => new BooleanFormulaNode(operand,this.row)));
-            return;
+        if (this.text) {
+          for (const booleanFormulaTranslationHelper of [
+            FORMULA.OR, 
+            FORMULA.AND, 
+            FORMULA.NOT
+          ]) {
+            // Recursively handle boolean operators
+            if (booleanFormulaTranslationHelper.identify(this.text)) {
+              this.formulaType = booleanFormulaTranslationHelper;
+              const operands = booleanFormulaTranslationHelper.parseOperands(this.text);
+              this.children.push(...operands.map(operand => new BooleanFormulaNode(operand,this.row)));
+              return;
+            }
+          }
+          for (const comparisonFormulaTranslationHelper of [
+            FORMULA.EQ, 
+            FORMULA.NE, 
+            FORMULA.GTE,
+            FORMULA.GT,
+            FORMULA.LTE,
+            FORMULA.LT
+          ]) {
+            // Recursively handle comparison operators
+            if (comparisonFormulaTranslationHelper.identify(this.text)) {
+              this.children.push(new CellFormulaParser.ComparisonFormulaNode(this.text,this.row,comparisonFormulaTranslationHelper));
+              return;
+            }
+          } 
+          this.children.push(new CellFormulaParser.BooleanFormulaValueNode(this.text,this.row));
+        } else {
+          this.value = "TRUE";
+        }
+      }
+
+      toPRUsedFormula() {
+        if (this.hasValue()) return "FALSE";
+        if (this.isInCircularDependency()) return "FALSE";
+        if (!this.formulaType) return this.children[0].toPRUsedFormula();
+        switch (this.formulaType) {
+          case FORMULA.AND: {
+            return FORMULA.OR(
+              this.children.map(child => FORMULA.AND([
+                FORMULA.NOT(child.toRawMissedFormula(),prettyPrint),
+                child.toPRUsedFormula()
+              ],prettyPrint)),prettyPrint);
+          }
+          case FORMULA.OR: {
+            return FORMULA.AND(
+              this.children.map(child => FORMULA.AND([
+                FORMULA.NOT(child.toRawMissedFormula(),prettyPrint),
+                child.toPRUsedFormula()
+              ],prettyPrint)),prettyPrint);
+          }
+          case FORMULA.NOT: {
+            return this.children[0].toPRUsedFormula(); // TODO ???
           }
         }
-        for (const comparisonFormulaTranslationHelper of [
-          FORMULA.EQ, 
-          FORMULA.NE, 
-          FORMULA.GTE,
-          FORMULA.GT,
-          FORMULA.LTE,
-          FORMULA.LT
-        ]) {
-        // Recursively handle comparison operators
-          if (comparisonFormulaTranslationHelper.identify(this.text)) {
-            this.type = comparisonFormulaTranslationHelper;
-            const operands = comparisonFormulaTranslationHelper.parseOperands(this.text);
-            this.children.push(...operands.map(operand => new CellFormulaParser.NumberFormulaNode(operand,this.row)));
-            return;
-          }
-        } 
+      }
 
-        this.type = FORMULA.AND;
-        this.children.push(new CellFormulaParser.BooleanFormulaValueNode(this.text,this.row));
+      toRawMissedFormula() {
+        if (this.hasValue()) return "FALSE";
+        if (this.isInCircularDependency()) return "FALSE";
+        if (!this.formulaType) return this.children[0].toRawMissedFormula();
+        switch (this.formulaType) {
+          case FORMULA.AND: {
+            return FORMULA.OR(this.children.map(child => child.toRawMissedFormula()),prettyPrint);
+          }
+          case FORMULA.OR: {
+            return FORMULA.AND(this.children.map(child => child.toRawMissedFormula()),prettyPrint);
+          }
+          case FORMULA.NOT: {
+            return this.children[0].toRawMissedFormula(); // TODO ???
+          }
+        }
+      }
+
+      toMissedFormula() {
+        if (this.hasValue()) return "FALSE";
+        if (this.isInCircularDependency()) return "FALSE";
+        if (!this.formulaType) return this.children[0].toMissedFormula();
+        switch (this.formulaType) {
+          case FORMULA.AND: {
+            return FORMULA.OR(this.children.map(child => child.toMissedFormula()),prettyPrint);
+          }
+          case FORMULA.OR: {
+            return FORMULA.AND(this.children.map(child => child.toMissedFormula()),prettyPrint);
+          }
+          case FORMULA.NOT: {
+            return this.children[0].toMissedFormula(); // TODO ???
+          }
+        }
+      }
+
+      toUnknownFormula() {
+        if (this.hasValue()) return "FALSE";
+        if (this.isInCircularDependency()) return "TRUE";
+        if (!this.formulaType) return this.children[0].toUnknownFormula();
+        switch (this.formulaType) {
+          case FORMULA.AND: {
+            return FORMULA.AND(
+              this.children.map(child => FORMULA.NOT(child.toRawMissedFormula()))
+                .concat(
+                  FORMULA.OR(this.children.map(child => child.toUnknownFormula()),prettyPrint)
+                )
+              ,prettyPrint);
+          }
+          case FORMULA.OR: {
+            return FORMULA.AND([
+              FORMULA.OR(this.children.map(child => child.toUnknownFormula()),prettyPrint),
+              ...this.children.map(child => FORMULA.OR([child.toUnknownFormula(),child.toMissedFormula()],prettyPrint))
+            ],prettyPrint);
+          }
+          case FORMULA.NOT: {
+            return this.children[0].toUnknownFormula(); // TODO ???
+          }
+        }
+      }
+    };
+
+    CellFormulaParser.RootNode = class RootNode extends CellFormulaParser.BooleanFormulaNode {
+      constructor(children,row) {
+        super("",row);
+        if (children.length > 0) {
+          this.children = children;
+          this.value = undefined;
+          this.formulaType = FORMULA.AND;
+        } else {
+          this.value = "TRUE";
+        }
+      }
+      toStatusFormula() {
+        let formula;
+        if (this.hasErrors()) formula = `"${STATUS.ERROR}"`;
+        else 
+          formula = FORMULA.IFS([
+            `R${this.row}C${columns.check}`,`"${STATUS.CHECKED}"`,
+            this.toAvailableFormula(),`${STATUS.AVAILABLE}`,
+            this.toUnknownFormula(), `"${STATUS.UNKNOWN}"`,
+            this.toRawMissedFormula(), `"${STATUS.MISSED}"`,
+            this.toPRUsedFormula(), `"${STATUS.PR_USED}"`,
+            this.toMissedFormula(), `"${STATUS.MISSED}"`,
+            "TRUE", `${STATUS.PR_NOT_MET}`
+          ]);
+        
+        return formula;
+      }
+    };
+
+    CellFormulaParser.ComparisonFormulaNode = class ComparisonFormulaNode extends CellFormulaParser.FormulaNode {
+      constructor(text,row,formulaType) {
+        super(text,row);
+        
+        this.formulaType = formulaType;
+        const operands = formulaType.parseOperands(this.text);
+        this.children.push(...operands.map(operand => new CellFormulaParser.NumberFormulaNode(operand,this.row)));
+      }
+
+      checkErrors() {
+        let isError;
+        switch (this.formulaType) {
+          case FORMULA.EQ:
+            isError = this.children[0].getMaxValue() < this.children[1].getMinValue() || this.children[0].getMinValue() > this.children[1].getMaxValue();
+            break;
+          case FORMULA.NE: {
+            const lMax = this.children[0].getMaxValue();
+            isError = lMax == this.children[0].getMinValue() && lMax == this.children[1].getMinValue() && lMax == this.children[1].getMaxValue();
+            break;
+          }
+          case FORMULA.GTE:
+            isError = !(this.children[0].getMaxValue() >= this.children[1].getMinValue());
+            break;
+          case FORMULA.GT:
+            isError = !(this.children[0].getMaxValue() > this.children[1].getMinValue());
+            break;
+          case FORMULA.LTE:
+            isError = !(this.children[0].getMinValue() <= this.children[1].getMaxValue());
+            break;
+          case FORMULA.LT:
+            isError = !(this.children[0].getMinValue() < this.children[1].getMaxValue());
+            break;
+        }
+        if (isError) {
+          this.addError("Formula cannot be satisfied: " + this.text);
+        }
+      }
+      toPRUsedFormula() {
+        return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.PR_USED);
+      }
+      toRawMissedFormula() {
+        return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.MISSED);
+      }
+      toMissedFormula() {
+        return this._toFormulaByNotStatus(this.toUnknownFormula.name, [STATUS.MISSED,STATUS.PR_USED]);
+      }
+      toUnknownFormula() {
+        if (this.isInCircularDependency()) return "TRUE";
+        return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.UNKNOWN);
+      }
+      _toFormulaByNotStatus(formulaTypeName,notStatusesForMax,statusesForMin = STATUS.CHECKED) {
+        if (this.hasErrors()) return "FALSE";
+        if (this.isInCircularDependency()) return "FALSE";
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0][formulaTypeName]();
+        
+        switch (this.formulaType) {
+          case FORMULA.LT: {
+            return FORMULA.GTE([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint);
+          }
+          case FORMULA.LTE: {
+            return FORMULA.GT([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint);
+          }
+          case FORMULA.GT: {
+            return FORMULA.LTE([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint);
+          }
+          case FORMULA.GTE: {
+            return FORMULA.LT([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint);
+          }
+          case FORMULA.EQ: {
+            return FORMULA.OR([
+              FORMULA.LT([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint),
+              FORMULA.GT([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint)
+            ],prettyPrint);
+          }
+          case FORMULA.NE: {
+            return FORMULA.AND([
+              FORMULA.EQ([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[0].toFormulaByStatus(statusesForMin)],prettyPrint),
+              FORMULA.EQ([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint),
+              FORMULA.EQ([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint)
+            ],prettyPrint);
+          }
+        }
       }
     };
 
@@ -478,17 +667,74 @@ const AVAILABLE = (function(){
         ]) {
         // Recursively handle comparison operators
           if (arithmeticFormulaTranslationHelper.identify(this.text)) {
-            this.type = arithmeticFormulaTranslationHelper;
+            this.formulaType = arithmeticFormulaTranslationHelper;
             const operands = arithmeticFormulaTranslationHelper.parseOperands(this.text);
             this.children.push(...operands.map(operand => new NumberFormulaNode(operand,this.row)));
             return;
           }
         }
-        this.type = FORMULA.ADD;
         this.children.push(new CellFormulaParser.NumberFormulaValueNode(text,this.row));
       }
+
+      getMinValue() {
+        if (this.hasValue()) return this.value();
+        if (!this.formulaType) {
+          return this.children[0].getMinValue();
+        } else switch(this.formulaType) {
+          case FORMULA.ADD: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min + childMin);
+          case FORMULA.MINUS: return this.children[0].getMinValue() - this.children.slice(1).map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
+          case FORMULA.MULT: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min * childMin);
+          case FORMULA.DIV: return this.children[0].getMinValue() / (this.children[1].getMaxValue() || 1);
+        }
+      }
+
+      getMaxValue() {
+        if (this.hasValue()) return this.value();
+        if (!this.formulaType) {
+          return this.children[0].getMaxValue();
+        } else switch(this.formulaType) {
+          case FORMULA.ADD: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
+          case FORMULA.MINUS: return this.children[0].getMaxValue() - this.children.map(child => child.getMinValue()).slice(1).reduce((min, childMin) => min + childMin);
+          case FORMULA.MULT: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max * childMax);
+          case FORMULA.DIV: return this.children[0].getMaxValue() / (this.children[1].getMinValue() || 1);
+        }
+      }
+
+      toFormulaByStatus(statuses) {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toFormulaByStatus(statuses);
+        return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(statuses)));
+      }
+      toFormulaByNotStatus(statuses) {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toFormulaByNotStatus(statuses);
+        return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(statuses)));
+      }
+      toRawNotMissedFormula() {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toRawNotMissedFormula();
+        return this.formulaType.generateFormula(this.children.map(child => child.toRawNotMissedFormula()));
+      }
+      toRawMissedFormula() {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toRawMissedFormula();
+        return this.formulaType.generateFormula(this.children.map(child => child.toRawMissedFormula()));
+      }
+      toUnknownFormula() {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toUnknownFormula();
+        return this.formulaType.generateFormula(this.children.map(child => child.toUnknownFormula()));
+      }
+      
+      toNotUnknownFormula() {
+        if (this.hasValue()) return this.value;
+        if (!this.formulaType) return this.children[0].toNotUnknownFormula();
+        return this.formulaType.generateFormula(this.children.map(child => child.toNotUnknownFormula()));
+      }
+      
     };
 
+    // Abstract intermediate class
     const valueInfoCache = {};
     CellFormulaParser.FormulaValueNode = class FormulaValueNode extends CellFormulaParser.FormulaNode {
       constructor(text,row) {
@@ -529,7 +775,7 @@ const AVAILABLE = (function(){
                   rows.push(...(valuesToRows[valueInfo.id]));
                 }
               } else {
-                const search = RegExp(valueInfo.id.replace(/\*/g,".*"));
+                const search = RegExp("^" + valueInfo.id.replace(/\*/g,".*") + "$");
                 valuesToRows._entries.forEach(([value,valueRows]) => {
                   if (value.match(search)) {
                     rows.push(...valueRows);
@@ -537,46 +783,60 @@ const AVAILABLE = (function(){
                 });
               }
             } else {
-              this.addError("TRUE",`Could not find column "${valueInfo.altColumnName}"`);
+              this.addError(`Could not find column "${valueInfo.altColumnName}"`);
             }
             valueInfo.rows = rows;
             
             valueInfoCache[text] = valueInfo;
           }
         }
-        valueInfo = Object.assign({},valueInfo);
-        valueInfo.rows = [...valueInfo.rows];
-
-        const rowIndex = valueInfo.rows.indexOf(this.row);
-        if (rowIndex >= 0) {
-          valueInfo.rows.splice(rowIndex,1);
-          valueInfo.wasSelfReferential = true;
+        // Copy cached object
+        if (valueInfo) {
+          valueInfo = Object.assign({},valueInfo);
+          if (valueInfo.rows) {
+            valueInfo.rows = [...valueInfo.rows];
+            // Remove self reference (simplest dependency resolution, v0)
+            const rowIndex = valueInfo.rows.indexOf(this.row);
+            if (rowIndex >= 0) {
+              valueInfo.rows.splice(rowIndex,1);
+              valueInfo.wasSelfReferential = true;
+            }
+          }
         }
+
         this.valueInfo = valueInfo;
       }
-      _getCountIfsArguments(additionalArguments) {
-        const countIfArguments = [columnR1C1(this.valueInfo.altColumnName || "item"),`"${this.valueInfo.id}"`];
-        if (additionalArguments) {
-          return [...countIfArguments,...additionalArguments];
-        } else {
-          return countIfArguments;
+
+      checkErrors() {
+        if (!this.hasValue()) {
+          if (!this.valueInfo) {
+            this.addError(`Could not find "${this.text}"`);
+          } else if (this.valueInfo.rows.length == 0) {
+            this.addError(`Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (except itself)" : ""}`);
+          } else if (this.valueInfo.rows.length < this.valueInfo.numNeeded) {
+            this.addError(`There are only ${this.valueInfo.rows.length}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding itself)" : ""}`);
+          }
         }
+      }
+      
+      getCircularDependencies(previous = []) {
+        if (this._circularDependencies) return this._circularDependencies;
+        const circularDependencies = new Set();
+        if (this._lockCircular) {
+          previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
+        } else {
+          previous.push(this.row);
+          this._lockCircular = true;
+          this.valueInfo.rows.forEach(row => {
+            getParserByRow(row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+          });
+          this._lockCircular = false;
+        }
+        if (circularDependencies.has(this.row)) this._isCircular = true;
+        this._circularDependencies = circularDependencies;
+        return this._circularDependencies;
       }
 
-      hasCircularDependency() {
-        if (this._isCircular === true || this._isCircular === false) return this._isCircular;
-        if (this._lockCircular) {
-          this._isCircular = true;
-        } else {
-          this._lockCircular = true;
-          const result = this.valueInfo.rows.reduce((v,row) => parsersByRow[row].hasCircularDependency() || v,false);
-          this._lockCircular = false;
-          
-          if (!this._isCircular) this._isCircular = result;
-        }
-        // console.log("row,ic,type,text",this.row,this._isCircular,this.constructor.name,this.text);
-        return this._isCircular;
-      }
     };
 
     CellFormulaParser.BooleanFormulaValueNode = class BooleanFormulaValueNode extends CellFormulaParser.FormulaValueNode {
@@ -584,26 +844,36 @@ const AVAILABLE = (function(){
         super(text,row);
         if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
           this.value = this.text.toString().toUpperCase();
+        } else if (this.hasErrors()) {
+          this.value = "FALSE";
         } else {
-        // CHECKED > NEEDED
-          this.type = FORMULA.GTE;
-          this.children = [new CellFormulaParser.NumberFormulaValueNode(this.text,this.row), new CellFormulaParser.NumberFormulaValueNode(this.valueInfo.numNeeded,this.row)];
+          // CHECKED > NEEDED
+          this.formulaType = FORMULA.GTE;
+          this.children = [new CellFormulaParser.NumberFormulaValueNode(this.text,this.row), new CellFormulaParser.NumberFormulaValueNode(this.valueInfo.numNeeded,this.row)]; 
         }
       }
+      toPRUsedFormula() {
+        if (this.hasValue()) return "FALSE";
+        return FORMULA.AND([
+          FORMULA.GTE([FORMULA.MINUS([this.children[0].toTotalFormula(),this.children[0].toRawMissedFormula()]),this.valueInfo.numNeeded],prettyPrint),
+          FORMULA.LT([this.children[0].toPRNotUsedFormula(),this.valueInfo.numNeeded],prettyPrint)
+        ],prettyPrint);
+      }
+      toRawMissedFormula() {
+        if (this.hasValue()) return "FALSE";
+        return FORMULA.LT([this.children[0].toRawNotMissedFormula(),this.valueInfo.numNeeded],prettyPrint);
 
-      getErrors() {
-        if (this.valueInfo.isMulti) {
-          const notEnoughFormula = FORMULA.LT([
-            FORMULA.COUNTIF(this._getCountIfsArguments(),prettyPrint),
-            this.valueInfo.numNeeded
-          ],prettyPrint);
-          this.addError(notEnoughFormula, `There are not ${this.valueInfo.numNeeded} of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
-          if (this.valueInfo.rows.length < this.valueInfo.numNeeded) {
-            console.log("errRows<",this.valueInfo,valueInfoCache[this.text]);
-            this.addError("TRUE", `There are not ${this.valueInfo.numNeeded} of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding this row)" : ""}`);
-          }
-        }
-        return super.getErrors();
+      }
+      toMissedFormula() {
+        if (this.hasValue()) return "FALSE";
+        return FORMULA.LT([this.children[0].toNotMissedFormula(),this.valueInfo.numNeeded],prettyPrint);
+      }
+      toUnknownFormula() {
+        if (this.hasValue()) return "FALSE";
+        return FORMULA.AND([
+          FORMULA.NOT(this.toMissedFormula()),
+          FORMULA.LT([FORMULA.MINUS([this.children[0].toTotalFormula(),this.children[0].toMissedFormula(),this.children[0].toUnknownFormula()]),this.valueInfo.numNeeded],prettyPrint)
+        ], prettyPrint);
       }
     };
   
@@ -612,87 +882,125 @@ const AVAILABLE = (function(){
         super(text,row);
         if (Number(this.text) || this.text === 0 || this.text === "0") {
           this.value = Number(this.text);
+        } else if (this.hasErrors()) {
+          this.value = -1;
         }
       }
 
-      getErrors() {
-        if (!(typeof this.value == "number")) {
-          const notFoundFormula = FORMULA.LT([
-            FORMULA.COUNTIF(this._getCountIfsArguments(),prettyPrint),
-            1
-          ],prettyPrint);
-          this.addError(notFoundFormula, `Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
-          if (this.valueInfo.rows.length == 0) {
-            console.log("errRows0",this.valueInfo,valueInfoCache[this.text]);
-            if (this.valueInfo.wasSelfReferential) {
-              // If it is the only one and isMulti, will have a "Not Enough" error
-              this.addError("TRUE", "Cannot have a pre-req of itself");
-            } else {
-              this.addError("TRUE",`Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"`);
-            }
-          }
-        }
-        return super.getErrors();
+      /**
+       * Total number of rows matching dependency
+       */
+      toTotalFormula() {
+        if (this.hasValue()) return this.value;
+        return this.valueInfo.rows.length;
+      }
+
+      toFormulaByStatus(statuses) {
+        return this._generateFormula(statuses);
+      }
+
+      toFormulaByNotStatus(statuses) {
+        return FORMULA.MINUS([this.toTotalFormula(), this.toFormulaByStatus(statuses)],prettyPrint);
       }
 
       /**
        * Number that have been checked
        */
       toAvailableFormula() { 
-        return this._generateFormula([
-          columnR1C1("check")
-          ,"TRUE"
-        ]);
+        // console.log(this.toAvailableFormula.name,"row,type,formulaType,numChildren,value,text",this.row,this.constructor.name,this.formulaType && this.formulaType.formulaName,this.children.length,this.value,this.text);
+
+        // Available should look directly at "check" column only to prevent circular references
+        return this._generateFormula("TRUE","check");
       }
 
+      /**
+       * 
+       */
+      toPRNotMetFormula() {
+        return FORMULA.MINUS([this.toTotalFormula(), this.toAvailableFormula()],prettyPrint);
+      }
+
+
+      /**
+       * Number of dependencies that have been missed OR used
+       */
+      toMissedFormula() {
+        return this.toFormulaByStatus([STATUS.MISSED,STATUS.PR_USED]);
+      }
+      toRawMissedFormula() {
+        return this.toFormulaByStatus(STATUS.MISSED);
+      }
+      toRawNotMissedFormula() {
+        return this.toFormulaByNotStatus(STATUS.MISSED);
+      }
+
+      toUnknownFormula() {
+        return this.toFormulaByStatus(STATUS.UNKNOWN);
+      }
+      toNotUnknownFormula() {
+        return this.toFormulaByNotStatus(STATUS.UNKNOWN);
+      }
       /**
        * Number that have NOT been MISSED or PR_USED
        */
       toNotMissedFormula() {
         // console.log("NMV text,value,valueInfo",this.text,this.value,this.valueInfo);
-        if (typeof this.value == "number") {
-          return this.value;
-        }
-        const rows = this.valueInfo.rows;
-        if (!rows) return this.value;
-        const missedCells = [];
-        rowsR1C1(rows, "available").forEach(rangeR1C1 => {
-          missedCells.push(FORMULA.COUNTIF([rangeR1C1,"\"MISSED\""]), FORMULA.COUNTIF([rangeR1C1,"\"PR_USED\""]));
-        });
-        return FORMULA.MINUS([rows.length,...missedCells],true);
+        return this.toFormulaByNotStatus([STATUS.MISSED,STATUS.PR_USED],prettyPrint);
       }
+      /**
+       * Number of dependencies that have had their Pre-Reqs used
+       */
+      toPRUsedFormula() {
+        if (this.hasValue()) return this.value;
+        return this._generateFormula(STATUS.PR_USED);
+      }
+      /**
+       * Number of dependencies that have NOT had their Pre-Reqs used
+       */
       toPRNotUsedFormula() {
-        if (typeof this.value == "number") {
+        if (this.hasValue()) {
           return this.value;
         }
-        const rows = this.valueInfo.rows;
-        if (!rows) return this.value;
-        const missedCells = [];
-        rowsR1C1(rows, "available").forEach(rangeR1C1 => {
-          missedCells.push(FORMULA.COUNTIF([rangeR1C1,"\"PR_USED\""]));
-        });
-        return FORMULA.MINUS([rows.length,...missedCells],true);     
+        return FORMULA.MINUS([this.toTotalFormula(), this.toPRUsedFormula()],prettyPrint);
+      }
+      toMinCheckedFormula() {
+        return this.toFormulaByStatus(STATUS.CHECKED);
+      }
+      toMaxCheckedFormula() {
+        return this.toFormulaByNotStatus([STATUS.MISSED,STATUS.PR_USED]);
       }
 
-      _generateFormula(additionalCountIfsValues) {
-        if (typeof this.value == "number") {
+      /**
+       * Minimum value, regardless of status
+       */
+      getMinValue() {
+        if (this.hasValue()) return this.value;
+        return 0;
+      }
+
+      /**
+       * Maximum value, regardless of status
+       */
+      getMaxValue() {
+        if (this.hasValue()) return this.value;
+        return this.toTotalFormula();
+      }
+
+      _generateFormula(statuses = [], column = "available") {
+        if (this.hasValue()) {
           return this.value;
+        } else if (!statuses || statuses.length == 0) {
+          return 0;
         } else {
+          if (!Array.isArray(statuses)) statuses = [statuses];
+          const counts = rowsR1C1(this.valueInfo.rows, column).reduce((counts,range) => {
+            statuses.forEach(status => counts.push(FORMULA.COUNTIF([range, status === "TRUE" || status === "FALSE" ? status : `"${status}"`])));
+            return counts;
+          },[]);
           // NUM_CHECKED
-          if (this.valueInfo.altColumnName) {
-            if (!UTIL.getColumns().byHeader[this.valueInfo.altColumnName]) {
-              this.addError("TRUE", `Cannot find column ${this.valueInfo.altColumnName}`);
-              return -1;
-            }
-          }
-          const countIfsValues = this._getCountIfsArguments(additionalCountIfsValues);
-          return FORMULA.COUNTIFS(countIfsValues, prettyPrint);
+          //const countIfsValues = this._getCountIfsArguments(additionalCountIfsValues);
+          return FORMULA.ADD(counts, prettyPrint);
         }
-      }
-
-      // Total number matching
-      toTotalFormula() {
-        return this._generateFormula();
       }
     };
 
@@ -706,13 +1014,17 @@ const AVAILABLE = (function(){
         usesInfo[this.valueInfo.key][this.row] = this.valueInfo.numNeeded;
       }
 
-      toPRNotUsedFormula() {
-        // (TOTAL - USED) >= NEEDED
-        const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
-        const totalFormula = this.children[0].toTotalFormula();
-        const amountLeftFormula = FORMULA.MINUS([totalFormula, usedAmountFormula], prettyPrint);
-        const usedFormula =  FORMULA.GTE([amountLeftFormula,this.valueInfo.numNeeded],prettyPrint);
-        return usedFormula;
+      toPRUsedFormula() {
+        return FORMULA.OR([
+          FORMULA.LT([
+            FORMULA.MINUS([
+              this.children[0].toTotalFormula(),
+              CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key)
+            ],prettyPrint),
+            this.valueInfo.numNeeded
+          ],prettyPrint),
+          this.children[0].toPRUsedFormula()
+        ],prettyPrint);
       }
 
       static _getPRUsedAmountFormula(key) {
@@ -721,13 +1033,15 @@ const AVAILABLE = (function(){
       }
 
       toAvailableFormula() {
+        // console.log(this.toAvailableFormula.name,"row,type,formulaType,numChildren,value,text",this.row,this.constructor.name,this.formulaType && this.formulaType.formulaName,this.children.length,this.value,this.text);
+
         // Parent => CHECKED >= NEEDED
         // This   => (CHECKED - USED) >= NEEDED
         const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
         const checkedFormula = this.children[0].toAvailableFormula();
         const availableAmountFormula = FORMULA.MINUS([checkedFormula,usedAmountFormula]);
         const numNeededFormula = this.children[1].toAvailableFormula();
-        return this.type.generateFormula([availableAmountFormula, numNeededFormula],true);
+        return this.formulaType.generateFormula([availableAmountFormula, numNeededFormula],true);
       }
 
     };
@@ -735,15 +1049,21 @@ const AVAILABLE = (function(){
     CellFormulaParser.MissedFormulaNode = class MissedFormulaNode extends CellFormulaParser.FormulaNode {
       constructor(text,row) {
         super(text,row);
-        this.type = FORMULA.NOT;
+        this.formulaType = FORMULA.NOT;
         this.children.push(new CellFormulaParser.BooleanFormulaNode(this.text,this.row));
-      }
+      } 
 
-      toNotMissedFormula() {
-        return this.toAvailableFormula();
+      toMissedFormula() {
+        return this.children[0].toAvailableFormula();
       }
-      toPRNotUsedFormula() {
-        return "FALSE";
+      toRawMissedFormula() {
+        return this.children[0].toAvailableFormula();
+      }
+      toPRUsedFormula() {
+        return this.children[0].toPRUsedFormula();
+      }
+      toUnknownFormula() {
+        return this.children[0].toUnknownFormula();
       }
     };
 
@@ -759,13 +1079,14 @@ const AVAILABLE = (function(){
     let filteredRange;
     if (event
       && event.range
+      && UTIL.isColumnInRange([columns.preReq,columns.available],event.range)
       && (event.value || event.oldValue) // Single cell update
       && event.range.getRow() > rows.header // In data range
       && (!event.value || !event.value.toString().match(/USES/i))  // NOT uses
       && (!event.oldValue || !event.oldValue.toString().match(/USES/i)) // WASN'T uses
     ) {
       // If it's a single, non-"USES" cell, only update it
-      // filteredRange = event.range;
+      filteredRange = event.range;
     }
   
     // Must have required columns
@@ -787,7 +1108,9 @@ const AVAILABLE = (function(){
   
     // will be overwriting these
     const availables = availableDataRange.getValues();
+    const notes = [];
 
+    time("parseCells");
     for (let i = 0; i < preReqValues.length; i++) {
       if (preReqFormulas[i][0]) {
         // Allow direct formulas, just use reference
@@ -796,13 +1119,55 @@ const AVAILABLE = (function(){
         availables[i][0] = new CellFormulaParser(preReqValues[i][0],i+firstRow);
       }
     }
-    availables.forEach(availableArray => {
-      if (availableArray[0].toFormula) {
-        availableArray[0] = availableArray[0].toFormula();
+    timeEnd("parseCells");
+    const debugColumns = {
+      "isAvailable": {
+        formulaFunc: CellFormulaParser.prototype.toAvailableFormula,
+      },
+      "isRawMissed": {
+        formulaFunc: CellFormulaParser.prototype.toRawMissedFormula,
+      },
+      "isMissed": {
+        formulaFunc: CellFormulaParser.prototype.toMissedFormula,
+      },
+      "isUsed": {
+        formulaFunc: CellFormulaParser.prototype.toPRUsedFormula,
+      },
+      "isUnknown": {
+        formulaFunc: CellFormulaParser.prototype.toUnknownFormula,
+      },
+      "isError": {
+        formulaFunc: function(){ return this.hasErrors() ? "TRUE" : "FALSE";},
+      },
+    };
+    Object.keys(debugColumns).forEach(debugColumn =>{
+      if (columns.byHeader[debugColumn]) {
+        const range = UTIL.getColumnDataRangeFromRange(sheet,columns.byHeader[debugColumn],preReqRange);
+        debugColumns[debugColumn].range = range;
+        debugColumns[debugColumn].formulas = [];
+      } else {
+        delete debugColumns[debugColumn];
       }
     });
+    time("generateFormulas");
+    availables.forEach((availableArray) => {
+      const errorNotes = [null];
+      let parser;
+      if (availableArray[0].toFormula) {
+        parser = availableArray[0];
+        availableArray[0] = parser.toFormula();
+        if (parser.hasErrors()) {
+          errorNotes[0] = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
+        }
+      }
+      Object.values(debugColumns).forEach(value => value.formulas.push([parser ? value.formulaFunc.call(parser) : null]));
+      notes.push(errorNotes);
+    });
+    timeEnd("generateFormulas");
   
     availableDataRange.setFormulasR1C1(availables);
+    Object.values(debugColumns).forEach(value => value.range.setFormulasR1C1(value.formulas));
+    preReqRange.setNotes(notes);
 
     //checkErrors(availableDataRange);
     //console.log(availables);
@@ -810,36 +1175,8 @@ const AVAILABLE = (function(){
     return;
   }
 
-  function checkErrors(range) {
-    time();
-    const sheet = range && range.getSheet() || UTIL.getSheet();
-    const columns = UTIL.getColumns(sheet);
-    const preReqRange = UTIL.getColumnDataRangeFromRange(sheet, columns.preReq, range);
-    const availableRange = UTIL.getColumnDataRangeFromRange(sheet, columns.available, range);
-    const notes = [];
-    if (!preReqRange || !availableRange) return;
-    const availableValues = availableRange.getValues();
-    availableValues.forEach((value,i) => {
-      let note = null;
-      // console.log("value",value);
-      if (value[0] && value[0].toString().indexOf("ERROR:") == 0) {
-        // Is Error, find the possible error messages
-        note = value[0];
-      } else if (value[0] && value[0][0] == "#") {
-        note = "Resulted in a " + value[0] + " type error.";
-        if (value[0] == "#REF!") {
-          note += "\nThis is most likely due to a circular depandency. DO NOT TURN ON ITERATIVE CALCULATIONS, this can have unexpected side effects!";
-        }
-        note += "\nCheck the hidden \"Availability\" column for possibly more info.";
-      }
-      notes[i] = [note];
-    });
-    preReqRange.setNotes(notes);
-    timeEnd();
-  }
 
   return {
     populateAvailable,
-    checkErrors,
   };
 })();
