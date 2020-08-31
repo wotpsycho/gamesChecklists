@@ -130,9 +130,10 @@ const RESET = (function(){
     timeEnd("column existence");
 
     if (!rows.settings) {
-      sheet.insertRowBefore(rows.quickFilter);
-      sheet.getRange(rows.quickFilter,1).setValue(CONFIG.ROW_HEADERS.settings);
-      sheet.getRange(rows.quickFilter,2).setValue("Mode");
+      const newSettingsRow = rows.quickFilter || rows.header;
+      sheet.insertRowBefore(newSettingsRow);
+      sheet.getRange(newSettingsRow,1).setValue(CONFIG.ROW_HEADERS.settings);
+      sheet.getRange(newSettingsRow,2).setValue("Mode");
       previousMode = "Create";
       UTIL.resetCache();
       rows = UTIL.getRows(sheet);
