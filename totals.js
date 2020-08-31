@@ -6,18 +6,19 @@ const TOTALS = (function(){
     time();
     const columns = UTIL.getColumns(sheet);
     const rows = UTIL.getRows(sheet);
-    if (columns.item === columns.check+1) return; // No type/category to break down
-    const counts = _countByType(sheet, columns.check+1);
-    Logger.log("counts",counts);
-    if (!counts) return;
-    const notes = [];
-    counts._order.forEach((type) => {
-      notes.push(counts[type].checked + "/" + counts[type].total + " " + type);
-    });
+    // TODO determine best way for reporting
+    // if (columns.item === columns.check+1) return; // No type/category to break down
+    // const counts = _countByType(sheet, columns.check+1);
+    // Logger.log("counts",counts);
+    // if (!counts) return;
+    // const notes = [];
+    // counts._order.forEach((type) => {
+    //   notes.push(counts[type].checked + "/" + counts[type].total + " " + type);
+    // });
 
-    notes.push(counts._total.checked + "/" + counts._total.total + " Total");
+    // notes.push(counts._total.checked + "/" + counts._total.total + " Total");
     const totalCell = sheet.getRange("A1");
-    totalCell.setNote(notes.join("\n"));
+    // totalCell.setNote(notes.join("\n"));
     const firstRow = rows.header+1;
 
     const total       = `R${firstRow}C${columns.item}:C${columns.item}, "<>"`;
@@ -25,11 +26,12 @@ const TOTALS = (function(){
     const missed      = `R${firstRow}C${columns.available}:C${columns.available},"MISSED",${total}`;
     const prUsed      = `R${firstRow}C${columns.available}:C${columns.available},"PR_USED",${total}`;
     const available   = `R${firstRow}C${columns.available}:C${columns.available},"TRUE",${total}`;
+    const unknown     = `R${firstRow}C${columns.available}:C${columns.available},"UNKNOWN",${total}`;
     const unavailable = `R${firstRow}C${columns.available}:C${columns.available},"FALSE",${total}`;
     
     const formula = "=CONCATENATE("
     +`IF(OR(COUNTIFS(${missed}) > 0, COUNTIFS(${prUsed}) > 0), "M: "&COUNTIFS(${missed})&IF(COUNTIFS(${prUsed}) > 0," ("&COUNTIFS(${prUsed})&")","")&CHAR(10),""),`
-    +`"R: ",COUNTIFS(${available}) + COUNTIFS(${unavailable}),CHAR(10),`
+    +`"R: ",IF(COUNTIFS(${available})+COUNTIFS(${unavailable}) = 0,"★",COUNTIFS(${available})&"|"&COUNTIFS(${unavailable})), IF(COUNTIFS(${unknown}) > 0, " ("&COUNTIFS(${unknown})&")",""),CHAR(10),`
     +`COUNTIFS(${checked}),"/",COUNTIFS(${total}),`
     +")";
     if (totalCell.getFormulaR1C1() !== formula) {
@@ -38,7 +40,7 @@ const TOTALS = (function(){
     timeEnd();
   }
 
-  function _countByType(sheet, _typeColumn) {
+  /* function _countByType(sheet, _typeColumn) {
     time();
     const columns = UTIL.getColumns(sheet);
     const counts = {
@@ -73,7 +75,7 @@ const TOTALS = (function(){
     });
     timeEnd();
     return counts;
-  }
+  } */
 
   return {
     updateTotals: updateTotals,
