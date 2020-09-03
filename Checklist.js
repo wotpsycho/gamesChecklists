@@ -57,6 +57,7 @@ const Checklist = (function(){
       this._sheet = sheet;
     }
 
+    // APP SECTION
     static fromSheet(sheet = Checklist.getActiveSheet()) {
       const sheetId = sheet.getSheetId();
       console.log("fromSheet", sheetId, checklists[sheetId], checklists[sheetId] && checklists[sheetId].sheet == sheet);
@@ -106,6 +107,9 @@ const Checklist = (function(){
       return this.sheet.getFilter();
     }
 
+    // END APP SECTION
+
+    // PROPERTIES SECTION
     get rows() {
       if (!this._rows) {
         time("get rows");
@@ -160,6 +164,22 @@ const Checklist = (function(){
       return !!this.headerRow;
     }
 
+    get headerRow() {
+      return this.rows[ROW_TYPES.HEADERS];
+    }
+
+    get firstDataRow() {
+      return this.headerRow && (this.headerRow + 1);
+    }
+
+    get lastColumn() {
+      return this.sheet.getLastColumn();
+    }
+
+    get lastRow() {
+      return this.sheet.getLastRow();
+    }
+
     get metaSheet() {
       if (!this.isChecklist) return undefined;
       if (typeof this._metaSheet == "undefined") {
@@ -204,21 +224,9 @@ const Checklist = (function(){
       timeEnd("set metaSheet");
     }
 
-    get headerRow() {
-      return this.rows[ROW_TYPES.HEADERS];
-    }
+    // PROPERTY SECTIONS
 
-    get firstDataRow() {
-      return this.headerRow && (this.headerRow + 1);
-    }
-
-    get lastColumn() {
-      return this.sheet.getLastColumn();
-    }
-
-    get lastRow() {
-      return this.sheet.getLastRow();
-    }
+    // RANGE/DATA SECTION
 
     _checkRow(row,_allowMissingRow = false) {
       if (!Number(row)) {
@@ -387,6 +395,120 @@ const Checklist = (function(){
       return false;
     }
 
+    // END RANGE/DATA SECTION
+
+    // NOTES SECTION
+
+    syncNotes(range) {
+      time("syncNotes");
+      const itemRange = this.getColumnDataRangeFromRange(COLUMN.ITEM,range);
+      const notesRange = this.getColumnDataRangeFromRange(COLUMN.NOTES,range);
+      if (itemRange && notesRange) {
+        itemRange.setNotes(notesRange.getValues());
+      }
+      timeEnd("syncNotes");
+    }
+
+    // NOTES SECTION
+
+    // RESET/INIT/STRUCTURE SECTION
+
+    reset(_resetData = false) {
+      time();
+
+      const toastTitle = `${_resetData ? "Reset " : "Refresh "}Checklist`;
+      const toastMessage = `${_resetData ? "Resetting" : "Refreshing"}...`;
+      const previousMode = SETTINGS.getSetting(this.sheet,"Mode"); // Preserve mode
+
+      this.spreadsheet.toast(toastMessage, toastTitle, -1);
+      Logger.log("Reseting checklist ", this.sheet.getName());
+  
+      time("filter removal");
+      // Remove filter first to ensure data is available to write
+      this.removeFilter();
+      timeEnd("filter removal");
+  
+      time("row/column show");
+      // Show all rows/columns
+      this.expandAll();
+      timeEnd("row/column show");
+    
+      time("removeValidation");
+      this.removeValidations();
+      timeEnd("removeValidation");
+    
+  
+      time("row/column existence");
+      this.ensureHeaderRow();
+
+      this.ensureCheckColumn();
+      this.ensureTypeColumn();
+      this.ensureItemColumn();
+      this.ensurePreReqsColumn();
+      this.ensureNotesColumn();
+      this.ensureStatusColumn();
+      this.hideColumn(COLUMN.STATUS);
+    
+      this.ensureTitleRow();
+      this.ensureSettingsRow();
+    
+      timeEnd("row/column existence");
+
+      time("trime");
+      this.trim();
+      timeEnd("trim");
+  
+      // Reset checkboxes
+      if (_resetData) {
+        this.resetCheckmarks();
+      }
+  
+      // Update all notes
+      time("notes");
+      this.syncNotes();
+      timeEnd("notes");
+    
+  
+      time("dataValidation");
+      this.resetDataValidation(true);
+      timeEnd("dataValidation");
+
+      AVAILABLE.populateAvailable(this);
+  
+      time("available rules");
+      //Add conditional formatting rules
+      this.resetConditionalFormatting(true);
+      timeEnd("available rules");
+  
+  
+      time("quickFilter");
+      this.clearQuickFilter();
+      timeEnd("quickFilter");
+  
+      if (this.metaSheet) {
+        META.ProcessMeta(this.sheet);
+      }
+  
+      // Create new filter
+      time("filterCreate");
+      this.createFilter();
+      timeEnd("filterCreate");
+  
+      time("totals");
+      TOTALS.updateTotals(this.sheet);
+      timeEnd("totals");
+
+      time("settings");
+      SETTINGS.resetSettings(this.sheet, previousMode || "Edit");
+      timeEnd("settings");
+
+      this.spreadsheet.toast("Done!", toastTitle,5);
+      timeEnd();
+
+    }
+
+    // STRUCTURE UTILITIES
+
     ensureColumn(columnType, columnIndex = this.lastColumn+1) {
       console.log("ensureColumn [columnType,columnIndex,columns[columnType],_columns]",columnType,columnIndex,this.columns[columnType],this._columns);
       
@@ -491,11 +613,6 @@ const Checklist = (function(){
       }
     }
 
-    // ensureQuickFilterRow() {
-    //   this.ensureHeaderRow();
-    //   this.ensureRow(ROW.QUICK_FILTER);
-    // }
-
     ensureHeaderRow() {
       this.ensureRow(ROW.HEADERS, this._determineLastRow(ROW.TITLE,ROW.SETTINGS,ROW.QUICK_FILTER) + 1);
     }
@@ -522,6 +639,15 @@ const Checklist = (function(){
     }
 
 
+    expandAll() {
+      if (this.lastRow > 1) {
+        this.sheet.showRows(1,this.lastRow);
+      }
+      if (this.lastColumn > 1) {
+        this.sheet.showColumns(1,this.lastColumn);
+      }
+    }
+
 
     trim() {
       time("trim checklist");
@@ -543,6 +669,13 @@ const Checklist = (function(){
       timeEnd("trim checklist");
     }
 
+    // END STRUCTURE UTILITIES
+
+    resetCheckmarks() {
+      this.getColumnDataRange(COLUMN.CHECK).uncheck();
+    }
+
+    // DATA VALIDATION UTILITIES
     removeValidations() {
       this.getRange(1,1,this.sheet.getMaxRows(),this.sheet.getMaxColumns()).setDataValidation(null);
     }
@@ -580,7 +713,9 @@ const Checklist = (function(){
       // return itemDataValidationFormula;
       timeEnd("checklist resetDataValidation");
     }
+    // END DATA VALIDATION UTILITIES
 
+    // CONDITIONAL FORMATTING UTILITIES
     resetConditionalFormatting(_skipMeta = false) {
       time("checklist resetConditionalFormatting");
       const {NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = FORMULA;
@@ -626,40 +761,6 @@ const Checklist = (function(){
       const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
       
       FORMULA.togglePrettyPrint(prettyPrint);
-      // return missableFormula;
-      // const existingRules = this.sheet.getConditionalFormatRules();
-      // const removedRules = []; // not doing anything with these...yet!
-      
-      // for (let i = existingRules.length-1; i >= 0; i--) {
-      //   const condition = existingRules[i].getBooleanCondition();
-      //   if (condition.getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) continue;
-        
-      //   const values = condition.getCriteriaValues();
-      //   if (!values || values.length !== 1) continue;
-        
-      //   if (values[0].match("#REF!")) {
-      //     // Logger.log("Found conditional format rule with reference error, removing: ", values[0]);
-      //     removedRules.push(existingRules.splice(i,1));
-      //     continue;
-      //   }
-        
-      //   const ranges = existingRules[i].getRanges();
-      //   let remove = false;
-      //   for (let j = 0; j < ranges.length && !remove; j++) {
-      //     if (this.isColumnInRange(COLUMN.CHECK, ranges[j])) {
-      //       remove = values[0] == checkboxDisableFormula || values[0] == crossthroughCheckedFormula;
-      //     }
-      //     if (!remove && this.isColumnInRange(COLUMN.PRE_REQS, ranges[j])) {
-      //       remove = values[0] == notAvailableFormula || values[0] == availableErrorFormula;
-      //     }
-      //     if (!remove && this.isColumnInRange(COLUMN.ITEM, ranges[j])) {
-      //       remove = values[0] == missableFormula;
-      //     }
-      //   }
-      //   if (remove) {
-      //     removedRules.push(existingRules.splice(i,1)[0]);
-      //   }
-      // }
       
       const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
       availableErrorRule.setBackground(COLORS.ERROR);
@@ -670,7 +771,6 @@ const Checklist = (function(){
       missedRule.setBackground(COLORS.MISSED);
       missedRule.whenFormulaSatisfied(missedFormula);
       missedRule.setRanges([preReqDataRange,statusDataRange]);
-      notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
       
       const usedRule = SpreadsheetApp.newConditionalFormatRule();
       usedRule.setBackground(COLORS.USED);
@@ -708,16 +808,10 @@ const Checklist = (function(){
       }
       timeEnd("checklist resetConditionalFormatting");
     }
-    
-    clearQuickFilter() {
-      time("QUICK_FILTER clear");
-      if (this.hasRow(ROW.QUICK_FILTER)) {
-        const quickFilterCells = this.getRowRange(ROW.QUICK_FILTER, 2);
-        quickFilterCells.clearContent();
-      }
-      timeEnd("QUICK_FILTER clear");
-    }
+    // END CONDITIONAL FORMATTING UTILITIES
+    // RESET/INIT/STRUCTURE SECTION
 
+    // FILTER SECTION
     removeFilter() {
       if (this.filter) this.filter.remove();
     }
@@ -744,29 +838,18 @@ const Checklist = (function(){
       const filterRange = this.getRange(`R${this.headerRow}C1:C${this.lastColumn}`);//,1,this.sheet.getMaxRows()-this.headerRow+1,this.lastColumn);
       filterRange.createFilter();
     }
+    // END FILTER SECTION
 
-    expandAll() {
-      if (this.lastRow > 1) {
-        this.sheet.showRows(1,this.lastRow);
+    // QUICK FILTER SECTION
+    clearQuickFilter() {
+      time("QUICK_FILTER clear");
+      if (this.hasRow(ROW.QUICK_FILTER)) {
+        const quickFilterCells = this.getRowRange(ROW.QUICK_FILTER, 2);
+        quickFilterCells.clearContent();
       }
-      if (this.lastColumn > 1) {
-        this.sheet.showColumns(1,this.lastColumn);
-      }
+      timeEnd("QUICK_FILTER clear");
     }
-
-    resetCheckmarks() {
-      this.getColumnDataRange(COLUMN.CHECK).uncheck();
-    }
-
-    syncNotes(range) {
-      time("syncNotes");
-      const itemRange = this.getColumnDataRangeFromRange(COLUMN.ITEM,range);
-      const notesRange = this.getColumnDataRangeFromRange(COLUMN.NOTES,range);
-      if (itemRange && notesRange) {
-        itemRange.setNotes(notesRange.getValues());
-      }
-      timeEnd("syncNotes");
-    }
+    // END QUICK FILTER SECTION
     
   }
 
@@ -790,42 +873,6 @@ function testChecklist() {
   const sheet = Checklist.getActiveSheet();
   console.log(sheet.getName());
   // return Checklist.fromSheet(sheet).resetDataValidation();
-  return Checklist.fromSheet(sheet).resetConditionalFormatting();
+  // return Checklist.fromSheet(sheet).resetConditionalFormatting();
   return;
-  // time(["createFinder","startMetadata"]);
-  // const finder = sheet.createDeveloperMetadataFinder();
-  // timeEnd("createFinder");
-  // time("findMeta");
-  // const meta = finder.withKey("column.CHECK").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-  // timeEnd(["findMeta","startMetadata"])
-  // time("logMeta");
-  // console.log(meta);
-  // timeEnd("logMeta");
-  // time("getMetaLocation");
-  // const metaLocation = meta[0].getLocation();
-  // timeEnd("getMetaLocation");
-  // time("getMetaRange");
-  // const r = metaLocation.getColumn();
-  // timeEnd("getMetaRange");
-  // time("logMetaRange");
-  // console.log(r);
-  // timeEnd("logMetaRange");
-  // time("getAndLogMetaRangeColumn");
-  // console.log(r.getColumn());
-  // timeEnd("getAndLogMetaRangeColumn");
-
-  // const checkr = sheet.getRange("C1:C[0]");
-  // // checkr.addDeveloperMetadata("column.CHECK",SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-  // console.log(sheet.getDeveloperMetadata());
-  console.time("createChecklist");
-  const cl = new Checklist(sheet);
-  console.timeEnd("createChecklist");
-  console.time("determine");
-  // cl.determineAndGenerateMetadata();
-  console.timeEnd("determine");
-  time("retVal");
-  const retVal = [cl, cl.columns, cl.rows, cl.columnsByHeader, cl.firstDataRow, cl.headerRow, cl.metaSheet && cl.metaSheet.getName()];
-  timeEnd("retVal");
-  timeEnd();
-  return retVal;
 }

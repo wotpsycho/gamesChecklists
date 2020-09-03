@@ -35,23 +35,13 @@ function handleEdit(event) {
 
     if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
       switch (event.value){
-        case "reset":  RESET.reset(checklist); break;
+        case "reset":  checklist.reset(); break;
         case "meta": META.ProcessMeta(sheet); break;
-        case "FULL RESET": RESET.reset(checklist,true); break;
+        case "FULL RESET": checklist.reset(true); break;
       }
       TOTALS.updateTotals(sheet);
       return;
     }
-    
-    // time("reapplyFilter quick");
-    // if (checklist.isRowInRange(ROW.QUICK_FILTER,range) && range.getNumRows() == 1) {
-    //   //FILTER.reapplyFilter(filter);
-    //   checklist.refreshFilter();
-    //   timeEnd("reapplyFilter quick");
-      
-    //   return;
-    // }
-    // timeEnd("reapplyFilter quick");
     
     time("updateSettings");
     if (checklist.isRowInRange(ROW.SETTINGS, range)) {
