@@ -3,18 +3,45 @@
 const Checklist = (function(){
 
   const COLUMN_TYPES = Object.freeze({
-    CHECK: "check",
-    TYPE: "type",
-    ITEM: "item",
-    NOTES: "notes",
-    PRE_REQS: "preReq",
-    STATUS: "available",
+    CHECK: "CHECK",
+    TYPE: "TYPE",
+    ITEM: "ITEM",
+    NOTES: "NOTES",
+    PRE_REQS: "PRE_REQS",
+    STATUS: "STATUS",
   });
   const ROW_TYPES = Object.freeze({
-    TITLE: "title",
-    SETTINGS: "settings",
-    QUICK_FILTER: "quickFilter",
-    HEADERS: "headers",
+    TITLE: "TITLE",
+    SETTINGS: "SETTINGS",
+    QUICK_FILTER: "QUICK_FILTER",
+    HEADERS: "HEADERS",
+  });
+  
+  const COLUMN_HEADERS = Object.freeze({
+    CHECK: "✓",
+    TYPE: "Type",
+    ITEM: "Item",
+    PRE_REQS: "Pre-Reqs",
+    STATUS: "Available",
+    NOTES: "Notes",
+  });
+
+  const COLORS = Object.freeze({
+    ERROR: "#ff0000",
+    UNAVAILABLE: "#fce5cd",
+    MISSED: "#f4cccc",
+    USED: "#d5a6bd",
+    DISABLED: "#d9d9d9",
+    CHECKED_BG: "#f3f3f3",
+    CHECKED_TEXT: "#666666",
+    MISSABLE: "#990000",
+    WHITE: "white",
+  });
+
+  const ROW_HEADERS = Object.freeze({
+    QUICK_FILTER: "Filter",
+    SETTINGS: "⚙",
+    HEADERS: "✓",
   });
 
   const MAX_EMPTY_ROWS = 100;
@@ -91,7 +118,7 @@ const Checklist = (function(){
           Object.values(ROW_TYPES).forEach(type => {
           // console.log("type,value",rowType,rowHeaders[i]);
           
-            if (rowHeaders[i] && rowHeaders[i] == CONFIG.ROW_HEADERS[type]) {
+            if (rowHeaders[i] && rowHeaders[i] == ROW_HEADERS[type]) {
               rowType = type;
             }
           });
@@ -116,7 +143,7 @@ const Checklist = (function(){
           this._columnsByHeader[header] = column;
         });
         Object.values(COLUMN).forEach(columnType => {
-          const column = this._columnsByHeader[CONFIG.COLUMN_HEADERS[columnType]];
+          const column = this._columnsByHeader[COLUMN_HEADERS[columnType]];
           if (column) {
             this._columns[columnType] = column;
           }
@@ -261,6 +288,10 @@ const Checklist = (function(){
       return this.getRange(row, column, _numRows, _numColumns).getValues();
     }
 
+    getValue(row, column) {
+      return this.getRange(row,column).getValue();
+    }
+
     setValues(row, column, values) {
       if (!values || !Array.isArray(values) || values.length == 0 || !Array.isArray(values[0]) || values[0].length == 0) {
         throw new ChecklistError("Cannot set values without a two dimensional values array");
@@ -367,8 +398,8 @@ const Checklist = (function(){
           columnIndex = this.lastColumn+1;
           this.sheet.insertColumnAfter(this.lastColumn);
         }
-        if (CONFIG.COLUMN_HEADERS[columnType]) {
-          this.setValue(this.headerRow,columnIndex,CONFIG.COLUMN_HEADERS[columnType]);
+        if (COLUMN_HEADERS[columnType]) {
+          this.setValue(this.headerRow,columnIndex,COLUMN_HEADERS[columnType]);
         }
         Object.keys(this._columns).forEach(_columnType => {
           if (this._columns[_columnType] >= columnIndex) {
@@ -428,8 +459,8 @@ const Checklist = (function(){
           this.rowIndex = this.lastRow+1;
           this.sheet.insertRowAfter(this.lastRow);
         }
-        if (CONFIG.ROW_HEADERS[rowType]) {
-          this.setValue(rowIndex,1,CONFIG.ROW_HEADERS[rowType]);
+        if (ROW_HEADERS[rowType]) {
+          this.setValue(rowIndex,1,ROW_HEADERS[rowType]);
         }
         Object.keys(this._rows).forEach(_rowType => {
           if (this._rows[_rowType] >= rowIndex) {
@@ -518,119 +549,156 @@ const Checklist = (function(){
 
     resetDataValidation(_skipMeta = false) {
       time("checklist resetDataValidation");
+      const {COUNTIF,A1,CONCAT,VALUE,LT} = FORMULA;
       const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       checks.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
       // Set Item validation
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
-      const itemDataRangeA1 = itemDataRange.getA1Notation();
-      const itemDataCellA1 = itemDataRange.getCell(1,1).getA1Notation();
-      const itemDataValidationFormula = "=COUNTIF(" + UTIL.a1ToAbsolute(itemDataRangeA1,true,true,true,false) + ",\"=\"&"+ UTIL.a1ToAbsolute(itemDataCellA1,false,false) +") < 2";
+      const prettyPrint = FORMULA.togglePrettyPrint(false);
+      const itemDataValidationFormula = FORMULA(
+        LT(
+          COUNTIF(
+            A1(itemDataRange),
+            CONCAT(
+              VALUE("="),
+              A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true)
+            )
+          ),
+          VALUE(2)
+        )
+      );
+      FORMULA.togglePrettyPrint(prettyPrint);
+      // console.log(itemDataValidationFormula);
       const itemDataValidation = SpreadsheetApp.newDataValidation();
       itemDataValidation.setAllowInvalid(true);
       itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
       itemDataRange.setDataValidation(itemDataValidation);
       
       if (this.metaSheet && !_skipMeta) {
-        META.setDataValidation(this.sheet);
+        // META.setDataValidation(this.sheet);
       }
+      // return itemDataValidationFormula;
       timeEnd("checklist resetDataValidation");
     }
 
     resetConditionalFormatting(_skipMeta = false) {
       time("checklist resetConditionalFormatting");
-      const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
-      
+      const {NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = FORMULA;
+      const {STATUS} = AVAILABLE;
+      const prettyPrint = FORMULA.togglePrettyPrint(false);
+
+      const checkboxDataRange = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
-      
-      const itemDataCellA1 = itemDataRange.getCell(1,1).getA1Notation();
-      const preReqData = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
-      
+      const statusDataRange = this.getUnboundedColumnDataRange(COLUMN.STATUS);
+      const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
       const allDataRange = this.getRange(`R${this.firstDataRow}C1:C${this.lastColumn}`);
-      const availableData = this.getUnboundedColumnDataRange(COLUMN.STATUS);
       
-      const availableDataCellA1 = (availableData.getCell(1,1).getA1Notation());
-      const checkboxDataCellA1 = checks.getCell(1,1).getA1Notation();
-      const missedDataCellA1 = preReqData.getCell(1,1).getA1Notation();
-      const notAvailableFormula = `=NOT(OR(ISBLANK($${availableDataCellA1}),$${availableDataCellA1}))`;
-      const missedFormula = `=$${availableDataCellA1}="MISSED"`;
-      const usedFormula = `=$${availableDataCellA1}="PR_USED"`;
-      const availableErrorFormula = `=IF(ISERROR($${availableDataCellA1}),TRUE,REGEXMATCH(""&$${availableDataCellA1},"ERROR"))`;
-      const checkboxDisableFormula = `=OR(ISBLANK($${itemDataCellA1}),NOT($${availableDataCellA1}=TRUE))`;
-      const crossthroughCheckedFormula = `=$${checkboxDataCellA1}=TRUE`;
-      const missableFormula = `=REGEXMATCH(${missedDataCellA1},"(^|\\n)MISSED ")`;
       
-      const existingRules = this.sheet.getConditionalFormatRules();
-      const removedRules = []; // not doing anything with these...yet!
+      const relativeCheckboxCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.CHECK),true);
+      const relativeItemCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true);
+      const relativePreReqCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.PRE_REQS),true);
+      const relativeStatusCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.STATUS),true);
       
-      for (let i = existingRules.length-1; i >= 0; i--) {
-        const condition = existingRules[i].getBooleanCondition();
-        if (condition.getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) continue;
+      const notAvailableFormula = FORMULA(
+        NOT(
+          OR(
+            ISBLANK(relativeStatusCell),
+            EQ(relativeStatusCell,VALUE(STATUS.AVAILABLE))
+          )
+        )
+      );
+      const missedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.MISSED)));
+      const usedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.PR_USED)));
+      const statusErrorFormula = FORMULA(
+        IF(
+          ISERROR(relativeStatusCell),
+          VALUE.TRUE,
+          REGEXMATCH(CONCAT(VALUE.EMPTYSTRING,relativeStatusCell),VALUE(STATUS.ERROR))
+        )
+      );
+      const checkboxDisableFormula = FORMULA(
+        OR(
+          ISBLANK(relativeItemCell),
+          NE(relativeStatusCell,VALUE(STATUS.AVAILABLE))
+        )
+      );
+      const crossthroughCheckedFormula = FORMULA(EQ(relativeCheckboxCell,VALUE.TRUE));
+      const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
+      
+      FORMULA.togglePrettyPrint(prettyPrint);
+      // return missableFormula;
+      // const existingRules = this.sheet.getConditionalFormatRules();
+      // const removedRules = []; // not doing anything with these...yet!
+      
+      // for (let i = existingRules.length-1; i >= 0; i--) {
+      //   const condition = existingRules[i].getBooleanCondition();
+      //   if (condition.getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) continue;
         
-        const values = condition.getCriteriaValues();
-        if (!values || values.length !== 1) continue;
+      //   const values = condition.getCriteriaValues();
+      //   if (!values || values.length !== 1) continue;
         
-        if (values[0].match("#REF!")) {
-          // Logger.log("Found conditional format rule with reference error, removing: ", values[0]);
-          removedRules.push(existingRules.splice(i,1));
-          continue;
-        }
+      //   if (values[0].match("#REF!")) {
+      //     // Logger.log("Found conditional format rule with reference error, removing: ", values[0]);
+      //     removedRules.push(existingRules.splice(i,1));
+      //     continue;
+      //   }
         
-        const ranges = existingRules[i].getRanges();
-        let remove = false;
-        for (let j = 0; j < ranges.length && !remove; j++) {
-          if (this.isColumnInRange(COLUMN.CHECK, ranges[j])) {
-            remove = values[0] == checkboxDisableFormula || values[0] == crossthroughCheckedFormula;
-          }
-          if (!remove && this.isColumnInRange(COLUMN.PRE_REQS, ranges[j])) {
-            remove = values[0] == notAvailableFormula || values[0] == availableErrorFormula;
-          }
-          if (!remove && this.isColumnInRange(COLUMN.ITEM, ranges[j])) {
-            remove = values[0] == missableFormula;
-          }
-        }
-        if (remove) {
-          removedRules.push(existingRules.splice(i,1)[0]);
-        }
-      }
+      //   const ranges = existingRules[i].getRanges();
+      //   let remove = false;
+      //   for (let j = 0; j < ranges.length && !remove; j++) {
+      //     if (this.isColumnInRange(COLUMN.CHECK, ranges[j])) {
+      //       remove = values[0] == checkboxDisableFormula || values[0] == crossthroughCheckedFormula;
+      //     }
+      //     if (!remove && this.isColumnInRange(COLUMN.PRE_REQS, ranges[j])) {
+      //       remove = values[0] == notAvailableFormula || values[0] == availableErrorFormula;
+      //     }
+      //     if (!remove && this.isColumnInRange(COLUMN.ITEM, ranges[j])) {
+      //       remove = values[0] == missableFormula;
+      //     }
+      //   }
+      //   if (remove) {
+      //     removedRules.push(existingRules.splice(i,1)[0]);
+      //   }
+      // }
       
       const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
-      availableErrorRule.setBackground(CONFIG.COLORS.error);
-      availableErrorRule.whenFormulaSatisfied(availableErrorFormula);
-      availableErrorRule.setRanges([preReqData,availableData]);
+      availableErrorRule.setBackground(COLORS.ERROR);
+      availableErrorRule.whenFormulaSatisfied(statusErrorFormula);
+      availableErrorRule.setRanges([preReqDataRange,statusDataRange]);
       
-      const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
-      notAvailableRule.setBackground(CONFIG.COLORS.notAvailable);
-      notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
-      notAvailableRule.setRanges([preReqData,availableData]);
-  
       const missedRule = SpreadsheetApp.newConditionalFormatRule();
-      missedRule.setBackground(CONFIG.COLORS.missed);
+      missedRule.setBackground(COLORS.MISSED);
       missedRule.whenFormulaSatisfied(missedFormula);
-      missedRule.setRanges([preReqData,availableData]);
-      notAvailableRule.setRanges([preReqData,availableData]);
+      missedRule.setRanges([preReqDataRange,statusDataRange]);
+      notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
       
       const usedRule = SpreadsheetApp.newConditionalFormatRule();
-      usedRule.setBackground(CONFIG.COLORS.used);
+      usedRule.setBackground(COLORS.USED);
       usedRule.whenFormulaSatisfied(usedFormula);
-      usedRule.setRanges([preReqData,availableData]);
+      usedRule.setRanges([preReqDataRange,statusDataRange]);
+      
+      const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
+      notAvailableRule.setBackground(COLORS.UNAVAILABLE);
+      notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
+      notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
       
       const crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
       crossthroughCheckedRule.setStrikethrough(true);
-      crossthroughCheckedRule.setBackground(CONFIG.COLORS.checkedBackground);
-      crossthroughCheckedRule.setFontColor(CONFIG.COLORS.checkedText);
+      crossthroughCheckedRule.setBackground(COLORS.CHECKED_BG);
+      crossthroughCheckedRule.setFontColor(COLORS.CHECKED_TEXT);
       crossthroughCheckedRule.whenFormulaSatisfied(crossthroughCheckedFormula);
       crossthroughCheckedRule.setRanges([allDataRange]);
       
       
       const checkboxDisableRule = SpreadsheetApp.newConditionalFormatRule();
-      checkboxDisableRule.setBackground(CONFIG.COLORS.disabled);
-      checkboxDisableRule.setFontColor(CONFIG.COLORS.disabled);
+      checkboxDisableRule.setBackground(COLORS.DISABLED);
+      checkboxDisableRule.setFontColor(COLORS.DISABLED);
       checkboxDisableRule.whenFormulaSatisfied(checkboxDisableFormula);
-      checkboxDisableRule.setRanges([checks]);
+      checkboxDisableRule.setRanges([checkboxDataRange]);
       
       const missableRule = SpreadsheetApp.newConditionalFormatRule();
-      missableRule.setBackground(CONFIG.COLORS.missable);
-      missableRule.setFontColor("white");
+      missableRule.setBackground(COLORS.MISSABLE);
+      missableRule.setFontColor(COLORS.WHITE);
       missableRule.whenFormulaSatisfied(missableFormula);
       missableRule.setRanges([itemDataRange]);
       
@@ -642,12 +710,12 @@ const Checklist = (function(){
     }
     
     clearQuickFilter() {
-      time("quickFilter clear");
+      time("QUICK_FILTER clear");
       if (this.hasRow(ROW.QUICK_FILTER)) {
         const quickFilterCells = this.getRowRange(ROW.QUICK_FILTER, 2);
         quickFilterCells.clearContent();
       }
-      timeEnd("quickFilter clear");
+      timeEnd("QUICK_FILTER clear");
     }
 
     removeFilter() {
@@ -700,187 +768,6 @@ const Checklist = (function(){
       timeEnd("syncNotes");
     }
     
-    /* _processMetadata() {
-      time("processCLMeta");
-      const columnMetaFinder = this.sheet.createDeveloperMetadataFinder().withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).withKey("column");
-      const rowMetaFinder = this.sheet.createDeveloperMetadataFinder().withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).withKey("row");
-      const rawMetadata = this.sheet.getDeveloperMetadata();
-      this._checklistMeta = {};
-      rawMetadata.forEach(metadata => {
-        // console.log("sheetMetadata [key,value,visibility]",metadata.getKey(),metadata.getValue(),metadata.getVisibility().toString());
-        if (metadata.getVisibility() != SpreadsheetApp.DeveloperMetadataVisibility.PROJECT) return;
-        const key = metadata.getKey();
-        if (this._checklistMeta[key]) {
-          console.error(`Found duplicate checklist meta: sheet=${this.sheet.getName} key=${key}`);
-          this._checklistMeta[key].remove();
-        }
-        this._checklistMeta[key] = metadata;
-        
-      });
-      const rawColumnMetadata = columnMetaFinder.find();
-      this._columnsMeta = {};
-      rawColumnMetadata.forEach(metadata => {
-        // console.log("columnMetadata [key,value,visibility,column]",metadata.getKey(),metadata.getValue(),metadata.getVisibility().toString());
-        const column = metadata.getValue();
-        if (this._columnsMeta[column]) {
-          console.error(`Found duplicate column meta: sheet=${this.sheet.getName()} column=${column}`);
-          this._columnsMeta[column].remove();
-        }
-        this._columnsMeta[column] = metadata;
-      });
-      const rawRowMetadata = rowMetaFinder.find();
-      this._rowsMeta = {};
-      rawRowMetadata.forEach(metadata => {
-        // console.log("rowMetadata [key,value,visibility,row]",metadata.getKey(),metadata.getValue(),metadata.getVisibility().toString());
-        const row = metadata.getValue();
-        if (this._rowsMeta[row]) {
-          console.error(`Found duplicate row meta: sheet=${this.sheet.getName()} row=${row}`);
-          this._rowsMeta[row].remove();
-        }
-        this._rowsMeta[row] = metadata;
-      });
-      timeEnd("processCLMeta");
-      time("metaToRC");
-      time("rowMetaToRC");
-      Object.entries(this._rowsMeta).forEach(([key,value]) => {
-        time(`rowMetaToRC ${key}`);
-        this._rows[key] = value.getLocation().getRow();
-        timeEnd(`rowMetaToRC ${key}`);
-      });
-      timeEnd("rowMetaToRC");
-      time("columnMetaToRC");
-      Object.entries(this._columnsMeta).forEach(([key,value]) => {
-        time(`columnMetaToRC ${key}`);
-        this._columns[key] = value.getLocation().getColumn();
-        timeEnd(`columnMetaToRC ${key}`);
-      });
-      timeEnd("columnMetaToRC");
-      timeEnd("metaToRC");
-    }
-    
-    determineAndGenerateMetadata() {
-      try {
-        time("determineChecklistMeta");
-        const oldRowsMeta = this._rowsMeta;
-        const oldColumnsMeta = this._columnsMeta;
-        this._rowsMeta = {};
-        this._rows = {};
-        this._columns = {};
-        this._columnsMeta = {};
-        this._headerRow = undefined;
-        const numRowTypes = Object.keys(ROW_TYPES).length;
-        time("determineRowMeta");
-        const rowHeaders = this.sheet.getSheetValues(1,1,numRowTypes,1).map(row => row[0]);
-        const rowRanges = [];
-        for (let rowIndex = 1; rowIndex <= numRowTypes; rowIndex++) {
-          rowRanges.push(this.sheet.getRange(`R[${rowIndex-1}]:R[${rowIndex-1}]`));
-        }
-        for (let i = 0; i < rowRanges.length; i++) {
-          time(`determineRowMeta ${i +1}`);
-          const rowRange = rowRanges[i];
-          // console.log("row [i,range,vals]",[i,rowRange.getA1Notation(),rowHeaders[i-1]]);
-          //rowRange.getDeveloperMetadata().forEach(metadata => metadata.getVisibility() == SpreadsheetApp.DeveloperMetadataVisibility.PROJECT && metadata.remove());
-          let rowType;
-          Object.values(ROW_TYPES).forEach(type => {
-            // console.log("type,value",rowType,rowHeaders[i]);
-            
-            if (rowHeaders[i] && rowHeaders[i] == CONFIG.ROW_HEADERS[type]) {
-              rowType = type;
-            }
-          });
-          if (!rowType && i == 0) rowType = ROW_TYPES.TITLE;
-          if (rowType) {
-            this._rows[rowType] = rowRange;
-            if (oldRowsMeta[rowType]) {
-              if (oldRowsMeta[rowType].getLocation().getRow().getRow() == i+1) {
-                delete oldRowsMeta[rowType]; // Don't remove it
-              } else {
-                time("replaceRowMeta");
-                oldRowsMeta[rowType].remove();
-                rowRange.addDeveloperMetadata("row",rowType,SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);                
-                timeEnd("replaceRowMeta");
-              }
-            } else {
-              time("addRowMeta");
-              rowRange.addDeveloperMetadata("row",rowType,SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-              timeEnd("addRowMeta");
-            }
-          }
-          timeEnd(`determineRowMeta ${i+1}`);
-        }
-        timeEnd("determineRowMeta");
-        this._isChecklist = !!this._rows[ROW_TYPES.HEADERS];
-        if (this._checklistMeta.isChecklist) {
-          time("setIsMeta");
-          this._checklistMeta.isChecklist.setValue(this._isChecklist.toString());
-          timeEnd("setIsMeta");
-        } else {
-          time("addIsMeta");
-          this.sheet.addDeveloperMetadata("isChecklist",this._isChecklist.toString(),SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-          timeEnd("addIsMeta");
-        }
-        if (this._isChecklist) {
-          time("determineColumnMeta");
-          const columnHeaders = this._rows[ROW_TYPES.HEADERS].getValues()[0];
-          const columnRanges = [];
-          for (let columnIndex = 1; columnIndex <= this.sheet.getLastColumn(); columnIndex++) {
-            columnRanges.push(this.sheet.getRange(`C[${columnIndex-1}]:C[${columnIndex-1}]`));
-          }
-          for (let i = 0; i < columnRanges.length; i++) {
-            time(`determineColumnMeta ${i+1}`);
-            const columnRange = columnRanges[i];
-            //columnRange.getDeveloperMetadata().forEach(metadata => metadata.getVisibility() == SpreadsheetApp.DeveloperMetadataVisibility.PROJECT && metadata.remove());
-            if (columnHeaders[i]) {
-              if (oldColumnsMeta[columnHeaders[i]]) {
-                if (oldColumnsMeta[columnHeaders[i]].getLocation().getColumn().getColumn() == i+1) {
-                  delete oldColumnsMeta[columnHeaders[i]];
-                } else {
-                  time("replaceColumnMeta");
-                  columnRange.addDeveloperMetadata("column",columnHeaders[i],SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-                  timeEnd("replaceColumnMeta");
-                }
-                
-              } else {
-                time("addColumnMeta");
-                columnRange.addDeveloperMetadata("column",columnHeaders[i],SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-                timeEnd("addColumnMeta");
-              }
-              this._columns[columnHeaders[i]] = columnRange;
-              Object.entries(CONFIG.COLUMN_HEADERS).forEach(([key,value]) => {
-                if (columnHeaders[i] == value) {
-                  if (oldColumnsMeta[key]) {
-                    if (oldColumnsMeta[key].getLocation().getColumn().getColumn() == i+1) {
-                      delete oldColumnsMeta[key];
-                    } else {
-                      time("replaceColumnIdMeta");
-                      columnRange.addDeveloperMetadata("column",key,SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-                      timeEnd("replaceColumnIdMeta");
-                    }
-                  } else {
-                    time("addColumnIdMeta");
-                    columnRange.addDeveloperMetadata("column",key,SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
-                    timeEnd("addColumnIdMeta");
-                  }
-                  this._columns[key] = columnRange;
-                }
-              });
-            }
-            timeEnd(`determineColumnMeta ${i+1}`);
-          }
-          timeEnd("determineColumnMeta");
-        }
-        time("removeOldMeta");
-        Object.values(oldRowsMeta).forEach(metadata => metadata.remove());
-        Object.values(oldColumnsMeta).forEach(metadata => metadata.remove());
-        timeEnd("removeOldMeta");
-      } finally {
-        // Since creating metadata doesn't return references (horrible), run process afterwards
-        // this._processMetadata();
-        timeEnd("determineChecklistMeta");
-      }
-    } */
-
-    
   }
 
   Object.defineProperty(Checklist,"COLUMN",{
@@ -901,11 +788,15 @@ const Checklist = (function(){
 function testChecklist() {
   time();
   const sheet = Checklist.getActiveSheet();
+  console.log(sheet.getName());
+  // return Checklist.fromSheet(sheet).resetDataValidation();
+  return Checklist.fromSheet(sheet).resetConditionalFormatting();
+  return;
   // time(["createFinder","startMetadata"]);
   // const finder = sheet.createDeveloperMetadataFinder();
   // timeEnd("createFinder");
   // time("findMeta");
-  // const meta = finder.withKey("column.check").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+  // const meta = finder.withKey("column.CHECK").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
   // timeEnd(["findMeta","startMetadata"])
   // time("logMeta");
   // console.log(meta);
@@ -924,7 +815,7 @@ function testChecklist() {
   // timeEnd("getAndLogMetaRangeColumn");
 
   // const checkr = sheet.getRange("C1:C[0]");
-  // // checkr.addDeveloperMetadata("column.check",SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
+  // // checkr.addDeveloperMetadata("column.CHECK",SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
   // console.log(sheet.getDeveloperMetadata());
   console.time("createChecklist");
   const cl = new Checklist(sheet);

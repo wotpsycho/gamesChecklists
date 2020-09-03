@@ -39,48 +39,46 @@ const SETTINGS = (function(){
   const SETTINGS_CONFIG = {
     Checked: {
       options: {
-        Hide: _generateUpdateFilterValuesVisibilityFunction("check", ["FALSE"],["TRUE"]),
-        Show: _generateUpdateFilterValuesVisibilityFunction("check", ["TRUE","FALSE"]),
+        Hide: _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.CHECK, ["FALSE"],["TRUE"]),
+        Show: _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.CHECK, ["TRUE","FALSE"]),
       },
-      determiner: _generateFilterValueVisibilityDeterminer("available","TRUE","Show","Hide"),
+      determiner: _generateFilterValueVisibilityDeterminer(Checklist.COLUMN.STATUS,"TRUE","Show","Hide"),
     },
     "Unavailable": {
       options: {
-        Hide: _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE"], ["FALSE","MISSED","PR_USED","UNKNOWN"]),
+        Hide: _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.STATUS, ["TRUE"], ["FALSE","MISSED","PR_USED","UNKNOWN"]),
         Show: [
-          _generateUpdateFilterValuesVisibilityFunction("available", ["TRUE","FALSE","MISSED","PR_USED","UNKNOWN"]),
+          _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.STATUS, ["TRUE","FALSE","MISSED","PR_USED","UNKNOWN"]),
           _generateSetSettingHelperFunction("Pre-Reqs", "Show")
         ],
       },
-      determiner: _generateFilterValueVisibilityDeterminer("available","FALSE","Show","Hide"),
+      determiner: _generateFilterValueVisibilityDeterminer(Checklist.COLUMN.STATUS,"FALSE","Show","Hide"),
     },
     Notes: {
       options: {
-        "Hover Only": _generateSetColumnVisibilityFunction("notes",false),
-        "Column+Hover": _generateSetColumnVisibilityFunction("notes",true),
+        "Hover Only": _generateSetColumnVisibilityFunction(Checklist.COLUMN.NOTES,false),
+        "Column+Hover": _generateSetColumnVisibilityFunction(Checklist.COLUMN.NOTES,true),
       },
-      determiner: _generateColumnVisibilityDeterminer("notes", "Column+Hover", "Hover Only"),
+      determiner: _generateColumnVisibilityDeterminer(Checklist.COLUMN.NOTES, "Column+Hover", "Hover Only"),
     },
     "Pre-Reqs": {
       options: {
         "Hide": [
-          _generateSetColumnVisibilityFunction("preReq",false),
-          // _generateSetColumnVisibilityFunction("missed",false),
+          _generateSetColumnVisibilityFunction(Checklist.COLUMN.PRE_REQS,false),
           _generateSetSettingHelperFunction("Unavailable","Hide"),
         ],
         "Show": [
-          _generateSetColumnVisibilityFunction("preReq",true),
-          // _generateSetColumnVisibilityFunction("missed",true),
+          _generateSetColumnVisibilityFunction(Checklist.COLUMN.PRE_REQS,true),
         ],
       },
-      determiner: _generateColumnVisibilityDeterminer("preReq", "Show", "Hide"),
+      determiner: _generateColumnVisibilityDeterminer(Checklist.COLUMN.PRE_REQS, "Show", "Hide"),
     },
     Blanks: {
       options: {
-        Show: _generateUpdateFilterValuesVisibilityFunction("item",[""],[]),
-        Hide: _generateUpdateFilterValuesVisibilityFunction("item",[],[""]),
+        Show: _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.ITEM,[""],[]),
+        Hide: _generateUpdateFilterValuesVisibilityFunction(Checklist.COLUMN.ITEM,[],[""]),
       },
-      determiner: _generateFilterValueVisibilityDeterminer("item","","Show","Hide"),
+      determiner: _generateFilterValueVisibilityDeterminer(Checklist.COLUMN.ITEM,"","Show","Hide"),
     },
     Editable: {
       options: {

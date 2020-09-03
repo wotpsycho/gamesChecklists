@@ -33,7 +33,7 @@
         "Checklist": false,
 
         "AVAILABLE": false,
-        "CONFIG": false, 
+        "FORMULA": false,
         "META": false,
         "QUICK_FILTER": false, 
         "RESET": false,

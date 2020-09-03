@@ -29,23 +29,6 @@ const META = (function(){
     timeEnd();
   }
 
-  // function removeDataValidationFromMeta(sheet) {
-  //   time();
-  //   const checklist = _getChecklistWithMetaSheet(sheet);
-  //   const headerMetadata = checklist && _getMetadata(checklist);
-  
-  
-  //   if (headerMetadata) {
-  //     Object.values(headerMetadata).forEach(function(metadata) {
-  //       if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
-  //         checklist.getColumnDataRange(metadata.column).clearDataValidations();
-  //       }
-  //     });
-  //   }
-  
-  //   timeEnd();
-  // }
-
   function setDataValidationFromMeta(sheet) {
     const checklist = _getChecklistWithMetaSheet(sheet);
     const headerMetadata = checklist && _getMetadata(checklist);
@@ -174,7 +157,7 @@ const META = (function(){
   function _determineMissingValues(checklist, headerMetadata) {
     time();
     Object.entries(checklist.columnsByHeader).forEach(([checklistColumnName, checklistColumn]) => {
-      if (checklistColumnName == CONFIG.COLUMN_HEADERS[Checklist.COLUMN.ITEM]) return; // Skip the Item column
+      if (checklistColumn == checklist.toColumnIndex(Checklist.COLUMN.ITEM)) return; // Skip the Item column
       // const checklistRange = checklist.getColumnDataRange(checklistColumn);
       const metadata = headerMetadata[checklistColumnName];
       if (metadata) {

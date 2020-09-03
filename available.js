@@ -2,90 +2,6 @@
 // eslint-disable-next-line no-redeclare
 const AVAILABLE = (function(){
 
-  // FORMULA ENUM DEFINIOTNS
-  class FormulaTranslationHelper {
-    constructor(regEx, formulaName) {
-      this.regEx = regEx;
-      this.formulaName = formulaName;
-    }
-    
-    identify(text) {
-      return !!(text && this.regEx && text.match(this.regEx));
-    }
-
-    parseOperands(text) {
-      if (!text || !this.regEx) return;
-      const match = text.match(this.regEx);
-      return (match && match.slice(1));
-    }
-
-    generateFormula(values,_prettyPrint) {
-      let result = this.formulaName + "(";
-      if (typeof values != "undefined" && values !== "" && !(Array.isArray(values) && values.length == 0)) {
-        let innerResult;
-        const joiner = _prettyPrint ? ",\n" : ",";
-        if (Array.isArray(values)) {
-          innerResult = values.join(joiner);
-        } else {
-          innerResult = values;
-        }
-        // Indent every line by 2
-        if (_prettyPrint) {
-          result += "\n  " + innerResult.replace(/\n/g, "\n  ") + "\n";
-        } else {
-          result += innerResult;
-        }
-      }
-      result += ")";
-      return result;
-    }
-  }
-  // Since certain formulas accept 0-N arguments, handle that instead of nested groups
-  class FlexibleFormulaTranslationHelper extends FormulaTranslationHelper {
-    parseOperands(text) {
-      if (!text) return;
-
-      const match = text.match(this.regEx);
-      if (!match) return;
-
-      const results = [];
-      const lMatch = match[1];
-      const lResult = this.parseOperands(lMatch);
-      if (lResult) results.push(...lResult);
-      else results.push(lMatch);
-
-      const rMatch = match[2];
-      const rResult = this.parseOperands(rMatch);
-      if (rResult) results.push(...rResult);
-      else results.push(rMatch);
-
-      return results;
-    }
-    generateFormula(values,_prettyPrint) {
-      if (!Array.isArray(values)) return values;
-      else if (values.length == 1) return values[0];
-      else return super.generateFormula(values,_prettyPrint);
-    }
-  }
-
-  class SimpleFormulaHelper extends FormulaTranslationHelper {
-    constructor(formulaName) {
-      super(undefined, formulaName);
-    }
-  }
-
-  class InlineFormulaTranslationHelper extends FormulaTranslationHelper {
-    generateFormula(values, _prettyPrint) {
-      const joiner = _prettyPrint ? "\n" + this.formulaName + "\n" : " " + this.formulaName + " ";
-      const innerResult = values.join(joiner);
-      if (_prettyPrint) {
-        return "(\n  " + innerResult.replace(/\n/g,"\n  ") + "\n)";
-      } else {
-        return "(" + innerResult  + ")";
-      }
-    }
-  }  
-
   const STATUS = Object.freeze({
     CHECKED: "CHECKED",
     AVAILABLE: "TRUE",
@@ -96,63 +12,26 @@ const AVAILABLE = (function(){
     ERROR: "ERROR",
   });
 
-  const FORMULA = Object.freeze(_helpersToGenerateFunctions({
-    AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/,"AND"),
-    OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/,"OR"),
-    NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
-    IF: new SimpleFormulaHelper("IF"),
-    IFS: new SimpleFormulaHelper("IFS"),
-    IFERROR: new SimpleFormulaHelper("IFERROR"),
-      
-    EQ: new FormulaTranslationHelper(/^ *(.+?) *== *(.+?) *$/, "EQ"),
-    NE: new FormulaTranslationHelper(/^ *(.+?) *!= *(.+?) *$/, "NE"),
-    GT: new InlineFormulaTranslationHelper(/^ *(.+?) *> *(.+?) *$/, ">"),
-    GTE: new InlineFormulaTranslationHelper(/^ *(.+?) *>= *(.+?) *$/, ">="),
-    LT: new InlineFormulaTranslationHelper(/^ *(.+?) *< *(.+?) *$/, "<"),
-    LTE: new InlineFormulaTranslationHelper(/^ *(.+?) *<= *(.+?) *$/, "<="),
-      
-    MULT: new InlineFormulaTranslationHelper(/^ *(.+?) +\* +(.+?) *$/, "*"),
-    DIV: new FormulaTranslationHelper(/^ *(.+?) *\/ *(.+?) *$/, "DIVIDE"),
-    MINUS: new InlineFormulaTranslationHelper(/^ *(.+?) +- +(.+?) *$/, "-"),
-    ADD: new InlineFormulaTranslationHelper(/^ *(.+?) +\+ +(.+?) *$/, "+"),
-
-    COUNTIF: new SimpleFormulaHelper("COUNTIF"),
-    COUNTIFS: new SimpleFormulaHelper("COUNTIFS"),
-    ERRORTYPE: new SimpleFormulaHelper("ERROR.TYPE"),
-
-    CONCAT: new SimpleFormulaHelper("CONCATENATE"),
-  }));
-  
-
-  function _helpersToGenerateFunctions(helpers) {
-    const toFuncs = {};
-    Object.entries(helpers).forEach(([key,helper]) => {
-      const generate = Object.assign((...args) => helper.generateFormula(...args),helper);
-      generate.identify = (...args) => helper.identify(...args);
-      generate.parseOperands = (...args) => helper.parseOperands(...args);
-      generate.generateFormula = generate;
-      toFuncs[key] = generate;
-    });
-    return toFuncs;
-  }
-
   // CLASS DEFINITION
   function _getCellFormulaParser(checklist) {
     time();
-    const COLUMN = Checklist.COLUMN;
+    // static imports
+    const {COLUMN} = Checklist;
+    const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
+
     const columnToValueToRows = {};
-    const prettyPrint = true; // TODO extract to config/setting
     // Essentially static defs
     let UID_Counter = 0;
     const getParenPlaceholder = () =>  `PPH_${UID_Counter++}_PPH`;
     const getQuotePlaeholder = () => `QPH_${UID_Counter++}_QPH`;
-    const _quoteMapping = {};
-    const _parentheticalMapping = {};
-    const cellR1C1 = (row, column) => {
+    const quoteMapping = {};
+    const parentheticalMapping = {};
+
+    const cellA1 = (row, column) => {
       column = checklist.toColumnIndex(column);
-      return `R${row}C${column}`;
+      return A1(row,column);
     };
-    const rowsR1C1 = (rows, column) => {
+    const rowsA1 = (rows, column) => {
       column = checklist.toColumnIndex(column);
       const ranges = [];
       if (rows.length === 0) return ranges;
@@ -160,25 +39,25 @@ const AVAILABLE = (function(){
       let lastRow = rows[0];
       for (let i = 1; i < rows.length; i++) {
         if (rows[i] != lastRow+1) {
-          ranges.push(`R${firstRow}C${column}:R${lastRow}C${column}`);
+          ranges.push(A1(firstRow,column,lastRow,column));
           firstRow = lastRow = rows[i];
         } else {
           lastRow = rows[i];
         }
       }
-      ranges.push(`R${firstRow}C${column}:R${lastRow}C${column}`);
+      ranges.push(A1(firstRow,column,lastRow,column));
       return ranges;
     };
     const getColumnValues = (column) => {
+      if (!checklist.hasColumn(column)) return;
+      column = checklist.toColumnIndex(column);
       if (columnToValueToRows[column]) return columnToValueToRows[column];
       time(column);
-      if (!checklist.hasColumn(column)) return;
       const valueToRows = {};
       
       const firstRow = checklist.firstDataRow;
       const values = checklist.getColumnDataValues(column);
       values.forEach((value,i) => {
-        // const value = valueArr[0];
         if (valueToRows[value]) {
           valueToRows[value].push(firstRow+i);
         } else {
@@ -192,18 +71,15 @@ const AVAILABLE = (function(){
     };
 
     const parsersByRow = {};
-    const getParserByRow = (row) =>{
-      if (parsersByRow[row]) {
-        return parsersByRow[row];
-      } else {
-        const cellValue = checklist.getRange(row,COLUMN.PRE_REQS).getValue();
-        return new CellFormulaParser(cellValue,row);
-      }
-    };
     class CellFormulaParser {
-      constructor(cellValue,row) {
-        this.missed = [];
-        this.uses = [];
+      static getParserForRow(row) {
+        if (parsersByRow[row]) {
+          return parsersByRow[row];
+        } else {
+          return new CellFormulaParser(row);
+        }
+      }
+      constructor(row, cellValue = checklist.getValue(row, COLUMN.PRE_REQS)) {
         this.row = row;
         parsersByRow[row] = this;
 
@@ -224,7 +100,7 @@ const AVAILABLE = (function(){
         
           line = line.replace(/"([^"]+)"/g, (_match,text) => {
             const placeholder = getQuotePlaeholder();
-            _quoteMapping[placeholder] = text;
+            quoteMapping[placeholder] = text;
             return placeholder;
           });
         
@@ -233,7 +109,7 @@ const AVAILABLE = (function(){
           // eslint-disable-next-line no-cond-assign
           while (match = line.match(parenMatcher)) {
             const placeholder = getParenPlaceholder();
-            _parentheticalMapping[placeholder] = match[1];
+            parentheticalMapping[placeholder] = match[1];
             line = line.replace(parenMatcher, placeholder);
           }
 
@@ -262,7 +138,7 @@ const AVAILABLE = (function(){
       }
 
       hasErrors() {
-        return this.getErrors().size > 0;//this.children.reduce((hasError, child) => hasError || child.hasErrors(), false);
+        return this.getErrors().size > 0;
       }
 
       getErrors() {
@@ -288,22 +164,25 @@ const AVAILABLE = (function(){
         return this._circularDependencies;
       }
       toAvailableFormula() {
-        return this.rootNode.toAvailableFormula();
+        return FORMULA(this.rootNode.toAvailableFormula());
       }
       toRawMissedFormula() {
-        return this.rootNode.toRawMissedFormula();
+        return FORMULA(this.rootNode.toRawMissedFormula());
       }
       toMissedFormula() {
-        return this.rootNode.toMissedFormula();
+        return FORMULA(this.rootNode.toMissedFormula());
       }
       toPRUsedFormula() {
-        return this.rootNode.toPRUsedFormula();
+        return FORMULA(this.rootNode.toPRUsedFormula());
       }
       toUnknownFormula() {
-        return this.rootNode.toUnknownFormula();
+        return FORMULA(this.rootNode.toUnknownFormula());
+      }
+      toErrorFormula() {
+        return FORMULA(this.rootNode.toErrorFormula());
       }
       toStatusFormula() {
-        return this.rootNode.toStatusFormula();
+        return FORMULA(this.rootNode.toStatusFormula());
       }
     }
 
@@ -317,11 +196,11 @@ const AVAILABLE = (function(){
         this.text = text.toString().trim();
         this.row = row;
 
-        if (_parentheticalMapping[this.text]) {
-          this.text = _parentheticalMapping[this.text];
+        if (parentheticalMapping[this.text]) {
+          this.text = parentheticalMapping[this.text];
         }
-        if (_quoteMapping[text]) {
-          this.text = _quoteMapping[text];
+        if (quoteMapping[text]) {
+          this.text = quoteMapping[text];
         }
       }
 
@@ -354,26 +233,29 @@ const AVAILABLE = (function(){
         return typeof this.value !== "undefined";
       }
 
-      _toFormula(formulaFunctionName) {
-        // console.log(formulaFunctionName,"row,type,formulaType,numChildren,value,text",this.row,this.constructor.name,this.formulaType && this.formulaType.formulaName,this.children.length,this.value,this.text);
-        let formula;
-        if (this.formulaType) {
-          formula = this.formulaType.generateFormula(this.children.map(child => child[formulaFunctionName]()),prettyPrint);
-        } else if (this.children.length === 1) {
-          formula = this.children[0][formulaFunctionName]();
-        } else if (this.hasValue()) {
-          formula = this.value;
-        } else {
-          this.addError("Could not determine formula");
-        }
-        return formula;
+
+      toErrorFormula() {
+        return VALUE(this.hasErrors());
+      }
+
+      toCheckedFormula() {
+        return A1(this.row, checklist.toColumnIndex(COLUMN.CHECK));
       }
 
 
       toAvailableFormula() {
-        return this._toFormula(this.toAvailableFormula.name);
+        let formula;
+        if (this.formulaType) {
+          formula = this.formulaType.generateFormula(this.children.map(child => child.toAvailableFormula()));
+        } else if (this.children.length === 1) {
+          formula = this.children[0].toAvailableFormula();
+        } else if (this.hasValue()) {
+          formula = VALUE(this.value);
+        } else {
+          this.addError(`Could not determine formula for "${this.text}"`);
+        }
+        return formula;
       }
-
 
       toPRUsedFormula() {
         throw new Error(`AbstractMethod ${this.constructor.name}.${this.toPRUsedFormula.name}`);
@@ -418,9 +300,9 @@ const AVAILABLE = (function(){
         super(text,row);
         if (this.text) {
           for (const booleanFormulaTranslationHelper of [
-            FORMULA.OR, 
-            FORMULA.AND, 
-            FORMULA.NOT
+            OR, 
+            AND, 
+            NOT
           ]) {
             // Recursively handle boolean operators
             if (booleanFormulaTranslationHelper.identify(this.text)) {
@@ -431,12 +313,12 @@ const AVAILABLE = (function(){
             }
           }
           for (const comparisonFormulaTranslationHelper of [
-            FORMULA.EQ, 
-            FORMULA.NE, 
-            FORMULA.GTE,
-            FORMULA.GT,
-            FORMULA.LTE,
-            FORMULA.LT
+            EQ, 
+            NE, 
+            GTE,
+            GT,
+            LTE,
+            LT
           ]) {
             // Recursively handle comparison operators
             if (comparisonFormulaTranslationHelper.identify(this.text)) {
@@ -446,89 +328,87 @@ const AVAILABLE = (function(){
           } 
           this.children.push(new CellFormulaParser.BooleanFormulaValueNode(this.text,this.row));
         } else {
-          this.value = "TRUE";
+          this.value = true;
         }
       }
 
       toPRUsedFormula() {
-        if (this.hasValue()) return "FALSE";
-        if (this.isInCircularDependency()) return "FALSE";
+        if (this.hasValue()) return VALUE.FALSE;
+        if (this.isInCircularDependency()) return VALUE.FALSE;
         if (!this.formulaType) return this.children[0].toPRUsedFormula();
         switch (this.formulaType) {
-          case FORMULA.AND: {
-            return FORMULA.OR(
-              this.children.map(child => FORMULA.AND([
-                FORMULA.NOT(child.toRawMissedFormula(),prettyPrint),
+          case AND: {
+            return OR(
+              this.children.map(child => AND(
+                NOT(child.toRawMissedFormula()),
                 child.toPRUsedFormula()
-              ],prettyPrint)),prettyPrint);
+              )));
           }
-          case FORMULA.OR: {
-            return FORMULA.AND(
-              this.children.map(child => FORMULA.AND([
-                FORMULA.NOT(child.toRawMissedFormula(),prettyPrint),
+          case OR: {
+            return AND(
+              this.children.map(child => AND(
+                NOT(child.toRawMissedFormula()),
                 child.toPRUsedFormula()
-              ],prettyPrint)),prettyPrint);
+              )));
           }
-          case FORMULA.NOT: {
+          case NOT: {
             return this.children[0].toPRUsedFormula(); // TODO ???
           }
         }
       }
 
       toRawMissedFormula() {
-        if (this.hasValue()) return "FALSE";
-        if (this.isInCircularDependency()) return "FALSE";
+        if (this.hasValue()) return VALUE.FALSE;
+        if (this.isInCircularDependency()) return VALUE.FALSE;
         if (!this.formulaType) return this.children[0].toRawMissedFormula();
         switch (this.formulaType) {
-          case FORMULA.AND: {
-            return FORMULA.OR(this.children.map(child => child.toRawMissedFormula()),prettyPrint);
+          case AND: {
+            return OR(this.children.map(child => child.toRawMissedFormula()));
           }
-          case FORMULA.OR: {
-            return FORMULA.AND(this.children.map(child => child.toRawMissedFormula()),prettyPrint);
+          case OR: {
+            return AND(this.children.map(child => child.toRawMissedFormula()));
           }
-          case FORMULA.NOT: {
+          case NOT: {
             return this.children[0].toRawMissedFormula(); // TODO ???
           }
         }
       }
 
       toMissedFormula() {
-        if (this.hasValue()) return "FALSE";
-        if (this.isInCircularDependency()) return "FALSE";
+        if (this.hasValue()) return VALUE.FALSE;
+        if (this.isInCircularDependency()) return VALUE.FALSE;
         if (!this.formulaType) return this.children[0].toMissedFormula();
         switch (this.formulaType) {
-          case FORMULA.AND: {
-            return FORMULA.OR(this.children.map(child => child.toMissedFormula()),prettyPrint);
+          case AND: {
+            return OR(this.children.map(child => child.toMissedFormula()));
           }
-          case FORMULA.OR: {
-            return FORMULA.AND(this.children.map(child => child.toMissedFormula()),prettyPrint);
+          case OR: {
+            return AND(this.children.map(child => child.toMissedFormula()));
           }
-          case FORMULA.NOT: {
+          case NOT: {
             return this.children[0].toMissedFormula(); // TODO ???
           }
         }
       }
 
       toUnknownFormula() {
-        if (this.hasValue()) return "FALSE";
-        if (this.isInCircularDependency()) return "TRUE";
+        if (this.hasValue()) return VALUE.FALSE;
+        if (this.isInCircularDependency()) return VALUE.TRUE;
         if (!this.formulaType) return this.children[0].toUnknownFormula();
         switch (this.formulaType) {
-          case FORMULA.AND: {
-            return FORMULA.AND(
-              this.children.map(child => FORMULA.NOT(child.toRawMissedFormula()))
-                .concat(
-                  FORMULA.OR(this.children.map(child => child.toUnknownFormula()),prettyPrint)
-                )
-              ,prettyPrint);
+          case AND: {
+            return AND(
+              this.children.map(child => NOT(child.toRawMissedFormula())),
+              OR(this.children.map(child => child.toUnknownFormula()))
+            );
           }
-          case FORMULA.OR: {
-            return FORMULA.AND([
-              FORMULA.OR(this.children.map(child => child.toUnknownFormula()),prettyPrint),
-              ...this.children.map(child => FORMULA.OR([child.toUnknownFormula(),child.toMissedFormula()],prettyPrint))
-            ],prettyPrint);
+          case OR: {
+            return AND(
+              OR(this.children.map(child => child.toUnknownFormula())),
+              this.children.map(child => OR(child.toUnknownFormula(),child.toMissedFormula()))
+            );
           }
-          case FORMULA.NOT: {
+          case NOT: {
             return this.children[0].toUnknownFormula(); // TODO ???
           }
         }
@@ -541,26 +421,32 @@ const AVAILABLE = (function(){
         if (children.length > 0) {
           this.children = children;
           this.value = undefined;
-          this.formulaType = FORMULA.AND;
+          this.formulaType = AND;
         } else {
-          this.value = "TRUE";
+          this.value = true;
         }
       }
       toStatusFormula() {
-        let formula;
-        if (this.hasErrors()) formula = `"${STATUS.ERROR}"`;
-        else 
-          formula = FORMULA.IFS([
-            `R${this.row}C${checklist.toColumnIndex(COLUMN.CHECK)}`,`"${STATUS.CHECKED}"`,
-            this.toAvailableFormula(),`${STATUS.AVAILABLE}`,
-            this.toUnknownFormula(), `"${STATUS.UNKNOWN}"`,
-            this.toRawMissedFormula(), `"${STATUS.MISSED}"`,
-            this.toPRUsedFormula(), `"${STATUS.PR_USED}"`,
-            this.toMissedFormula(), `"${STATUS.MISSED}"`,
-            "TRUE", `${STATUS.PR_NOT_MET}`
-          ]);
-        
-        return formula;
+        const ifsArgs = [];
+        const order = [
+          [STATUS.ERROR,      this.toErrorFormula],
+          [STATUS.CHECKED,    this.toCheckedFormula],
+          [STATUS.AVAILABLE,  this.toAvailableFormula],
+          [STATUS.UNKNOWN,    this.toUnknownFormula],
+          [STATUS.PR_USED,    this.toPRUsedFormula],
+          [STATUS.MISSED,     this.toMissedFormula],
+          [STATUS.PR_NOT_MET, () => VALUE.TRUE],
+        ];
+        for (const [status,formulaFunction] of order) {
+          const formula = formulaFunction.call(this);
+          if (formula != VALUE.FALSE) {
+            ifsArgs.push(formula,VALUE(status));
+          }
+          if (formula == VALUE.TRUE) {
+            break;
+          }
+        }
+        return IFS(ifsArgs);
       }
     };
 
@@ -576,24 +462,24 @@ const AVAILABLE = (function(){
       checkErrors() {
         let isError;
         switch (this.formulaType) {
-          case FORMULA.EQ:
+          case EQ:
             isError = this.children[0].getMaxValue() < this.children[1].getMinValue() || this.children[0].getMinValue() > this.children[1].getMaxValue();
             break;
-          case FORMULA.NE: {
+          case NE: {
             const lMax = this.children[0].getMaxValue();
             isError = lMax == this.children[0].getMinValue() && lMax == this.children[1].getMinValue() && lMax == this.children[1].getMaxValue();
             break;
           }
-          case FORMULA.GTE:
+          case GTE:
             isError = !(this.children[0].getMaxValue() >= this.children[1].getMinValue());
             break;
-          case FORMULA.GT:
+          case GT:
             isError = !(this.children[0].getMaxValue() > this.children[1].getMinValue());
             break;
-          case FORMULA.LTE:
+          case LTE:
             isError = !(this.children[0].getMinValue() <= this.children[1].getMaxValue());
             break;
-          case FORMULA.LT:
+          case LT:
             isError = !(this.children[0].getMinValue() < this.children[1].getMaxValue());
             break;
         }
@@ -611,40 +497,40 @@ const AVAILABLE = (function(){
         return this._toFormulaByNotStatus(this.toUnknownFormula.name, [STATUS.MISSED,STATUS.PR_USED]);
       }
       toUnknownFormula() {
-        if (this.isInCircularDependency()) return "TRUE";
+        if (this.isInCircularDependency()) return VALUE.TRUE;
         return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.UNKNOWN);
       }
       _toFormulaByNotStatus(formulaTypeName,notStatusesForMax,statusesForMin = STATUS.CHECKED) {
-        if (this.hasErrors()) return "FALSE";
-        if (this.isInCircularDependency()) return "FALSE";
-        if (this.hasValue()) return this.value;
+        if (this.hasErrors()) return VALUE.FALSE;
+        if (this.isInCircularDependency()) return VALUE.FALSE;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0][formulaTypeName]();
         
         switch (this.formulaType) {
-          case FORMULA.LT: {
-            return FORMULA.GTE([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint);
+          case LT: {
+            return GTE(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax));
           }
-          case FORMULA.LTE: {
-            return FORMULA.GT([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint);
+          case LTE: {
+            return GT(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax));
           }
-          case FORMULA.GT: {
-            return FORMULA.LTE([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint);
+          case GT: {
+            return LTE(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin));
           }
-          case FORMULA.GTE: {
-            return FORMULA.LT([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint);
+          case GTE: {
+            return LT(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin));
           }
-          case FORMULA.EQ: {
-            return FORMULA.OR([
-              FORMULA.LT([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint),
-              FORMULA.GT([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint)
-            ],prettyPrint);
+          case EQ: {
+            return OR([
+              LT(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)),
+              GT(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax))
+            ]);
           }
-          case FORMULA.NE: {
-            return FORMULA.AND([
-              FORMULA.EQ([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[0].toFormulaByStatus(statusesForMin)],prettyPrint),
-              FORMULA.EQ([this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)],prettyPrint),
-              FORMULA.EQ([this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax)],prettyPrint)
-            ],prettyPrint);
+          case NE: {
+            return AND([
+              EQ(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[0].toFormulaByStatus(statusesForMin)),
+              EQ(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)),
+              EQ(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax))
+            ]);
           }
         }
       }
@@ -656,10 +542,10 @@ const AVAILABLE = (function(){
         super(text,row);
       
         for (const arithmeticFormulaTranslationHelper of [
-          FORMULA.ADD,
-          FORMULA.MINUS,
-          FORMULA.MULT,
-          FORMULA.DIV,
+          ADD,
+          MINUS,
+          MULT,
+          DIV,
         ]) {
         // Recursively handle comparison operators
           if (arithmeticFormulaTranslationHelper.identify(this.text)) {
@@ -677,10 +563,10 @@ const AVAILABLE = (function(){
         if (!this.formulaType) {
           return this.children[0].getMinValue();
         } else switch(this.formulaType) {
-          case FORMULA.ADD: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min + childMin);
-          case FORMULA.MINUS: return this.children[0].getMinValue() - this.children.slice(1).map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
-          case FORMULA.MULT: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min * childMin);
-          case FORMULA.DIV: return this.children[0].getMinValue() / (this.children[1].getMaxValue() || 1);
+          case ADD: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min + childMin);
+          case MINUS: return this.children[0].getMinValue() - this.children.slice(1).map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
+          case MULT: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min * childMin);
+          case DIV: return this.children[0].getMinValue() / (this.children[1].getMaxValue() || 1);
         }
       }
 
@@ -689,41 +575,41 @@ const AVAILABLE = (function(){
         if (!this.formulaType) {
           return this.children[0].getMaxValue();
         } else switch(this.formulaType) {
-          case FORMULA.ADD: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
-          case FORMULA.MINUS: return this.children[0].getMaxValue() - this.children.map(child => child.getMinValue()).slice(1).reduce((min, childMin) => min + childMin);
-          case FORMULA.MULT: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max * childMax);
-          case FORMULA.DIV: return this.children[0].getMaxValue() / (this.children[1].getMinValue() || 1);
+          case ADD: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
+          case MINUS: return this.children[0].getMaxValue() - this.children.map(child => child.getMinValue()).slice(1).reduce((min, childMin) => min + childMin);
+          case MULT: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max * childMax);
+          case DIV: return this.children[0].getMaxValue() / (this.children[1].getMinValue() || 1);
         }
       }
 
       toFormulaByStatus(statuses) {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toFormulaByStatus(statuses);
         return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(statuses)));
       }
       toFormulaByNotStatus(statuses) {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toFormulaByNotStatus(statuses);
         return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(statuses)));
       }
       toRawNotMissedFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toRawNotMissedFormula();
         return this.formulaType.generateFormula(this.children.map(child => child.toRawNotMissedFormula()));
       }
       toRawMissedFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toRawMissedFormula();
         return this.formulaType.generateFormula(this.children.map(child => child.toRawMissedFormula()));
       }
       toUnknownFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toUnknownFormula();
         return this.formulaType.generateFormula(this.children.map(child => child.toUnknownFormula()));
       }
       
       toNotUnknownFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         if (!this.formulaType) return this.children[0].toNotUnknownFormula();
         return this.formulaType.generateFormula(this.children.map(child => child.toNotUnknownFormula()));
       }
@@ -753,8 +639,8 @@ const AVAILABLE = (function(){
               id: rawParsed[5],
               original: text,
             };
-            if (_quoteMapping[valueInfo.key]) {
-              const rawParsedQuote = parseRegEx.exec(_quoteMapping[valueInfo.key]);
+            if (quoteMapping[valueInfo.key]) {
+              const rawParsedQuote = parseRegEx.exec(quoteMapping[valueInfo.key]);
               valueInfo.key = rawParsedQuote[3];
               valueInfo.altColumnName = rawParsedQuote[4];
               valueInfo.id = rawParsedQuote[5];
@@ -763,7 +649,7 @@ const AVAILABLE = (function(){
             // Implicity prefix match on item for "[N]x [item]"
               valueInfo.id += "*";
             }
-            const valuesToRows = getColumnValues(valueInfo.altColumnName || "item");
+            const valuesToRows = getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
             const rows = [];
             if (valuesToRows) {
               if (valueInfo.id.indexOf("*") < 0) {
@@ -824,7 +710,7 @@ const AVAILABLE = (function(){
           previous.push(this.row);
           this._lockCircular = true;
           this.valueInfo.rows.forEach(row => {
-            getParserByRow(row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+            CellFormulaParser.getParserForRow(row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
           });
           this._lockCircular = false;
         }
@@ -839,37 +725,43 @@ const AVAILABLE = (function(){
       constructor(text,row) {
         super(text,row);
         if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
-          this.value = this.text.toString().toUpperCase();
+          this.value = this.text;
         } else if (this.hasErrors()) {
-          this.value = "FALSE";
+          this.value = false;
         } else {
           // CHECKED > NEEDED
-          this.formulaType = FORMULA.GTE;
+          this.formulaType = GTE;
           this.children = [new CellFormulaParser.NumberFormulaValueNode(this.text,this.row), new CellFormulaParser.NumberFormulaValueNode(this.valueInfo.numNeeded,this.row)]; 
         }
       }
       toPRUsedFormula() {
-        if (this.hasValue()) return "FALSE";
-        return FORMULA.AND([
-          FORMULA.GTE([FORMULA.MINUS([this.children[0].toTotalFormula(),this.children[0].toRawMissedFormula()]),this.valueInfo.numNeeded],prettyPrint),
-          FORMULA.LT([this.children[0].toPRNotUsedFormula(),this.valueInfo.numNeeded],prettyPrint)
-        ],prettyPrint);
+        if (this.hasValue()) return VALUE.FALSE;
+        return AND(
+          GTE(
+            MINUS(this.children[0].toTotalFormula(),this.children[0].toRawMissedFormula()),
+            this.valueInfo.numNeeded
+          ),
+          LT(this.children[0].toPRNotUsedFormula(),this.valueInfo.numNeeded)
+        );
       }
       toRawMissedFormula() {
-        if (this.hasValue()) return "FALSE";
-        return FORMULA.LT([this.children[0].toRawNotMissedFormula(),this.valueInfo.numNeeded],prettyPrint);
+        if (this.hasValue()) return VALUE.FALSE;
+        return LT(this.children[0].toRawNotMissedFormula(),this.valueInfo.numNeeded);
 
       }
       toMissedFormula() {
-        if (this.hasValue()) return "FALSE";
-        return FORMULA.LT([this.children[0].toNotMissedFormula(),this.valueInfo.numNeeded],prettyPrint);
+        if (this.hasValue()) return VALUE.FALSE;
+        return LT(this.children[0].toNotMissedFormula(),this.valueInfo.numNeeded);
       }
       toUnknownFormula() {
-        if (this.hasValue()) return "FALSE";
-        return FORMULA.AND([
-          FORMULA.NOT(this.toMissedFormula()),
-          FORMULA.LT([FORMULA.MINUS([this.children[0].toTotalFormula(),this.children[0].toMissedFormula(),this.children[0].toUnknownFormula()]),this.valueInfo.numNeeded],prettyPrint)
-        ], prettyPrint);
+        if (this.hasValue()) return VALUE.FALSE;
+        return AND(
+          NOT(this.toMissedFormula()),
+          LT(
+            MINUS(this.children[0].toTotalFormula(),this.children[0].toMissedFormula(),this.children[0].toUnknownFormula()),
+            this.valueInfo.numNeeded
+          )
+        );
       }
     };
   
@@ -887,33 +779,31 @@ const AVAILABLE = (function(){
        * Total number of rows matching dependency
        */
       toTotalFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         return this.valueInfo.rows.length;
       }
 
-      toFormulaByStatus(statuses) {
-        return this._generateFormula(statuses);
+      toFormulaByStatus(...statuses) {
+        return this._generateFormula(statuses.flat());
       }
 
-      toFormulaByNotStatus(statuses) {
-        return FORMULA.MINUS([this.toTotalFormula(), this.toFormulaByStatus(statuses)],prettyPrint);
+      toFormulaByNotStatus(...statuses) {
+        return MINUS(this.toTotalFormula(), this.toFormulaByStatus(statuses.flat()));
       }
 
       /**
        * Number that have been checked
        */
       toAvailableFormula() { 
-        // console.log(this.toAvailableFormula.name,"row,type,formulaType,numChildren,value,text",this.row,this.constructor.name,this.formulaType && this.formulaType.formulaName,this.children.length,this.value,this.text);
-
         // Available should look directly at "check" column only to prevent circular references
-        return this._generateFormula("TRUE","check");
+        return this._generateFormula(true,COLUMN.CHECK);
       }
 
       /**
        * 
        */
       toPRNotMetFormula() {
-        return FORMULA.MINUS([this.toTotalFormula(), this.toAvailableFormula()],prettyPrint);
+        return MINUS(this.toTotalFormula(), this.toAvailableFormula());
       }
 
 
@@ -921,7 +811,7 @@ const AVAILABLE = (function(){
        * Number of dependencies that have been missed OR used
        */
       toMissedFormula() {
-        return this.toFormulaByStatus([STATUS.MISSED,STATUS.PR_USED]);
+        return this.toFormulaByStatus(STATUS.MISSED,STATUS.PR_USED);
       }
       toRawMissedFormula() {
         return this.toFormulaByStatus(STATUS.MISSED);
@@ -941,13 +831,13 @@ const AVAILABLE = (function(){
        */
       toNotMissedFormula() {
         // console.log("NMV text,value,valueInfo",this.text,this.value,this.valueInfo);
-        return this.toFormulaByNotStatus([STATUS.MISSED,STATUS.PR_USED],prettyPrint);
+        return this.toFormulaByNotStatus(STATUS.MISSED,STATUS.PR_USED);
       }
       /**
        * Number of dependencies that have had their Pre-Reqs used
        */
       toPRUsedFormula() {
-        if (this.hasValue()) return this.value;
+        if (this.hasValue()) return VALUE(this.value);
         return this._generateFormula(STATUS.PR_USED);
       }
       /**
@@ -955,15 +845,15 @@ const AVAILABLE = (function(){
        */
       toPRNotUsedFormula() {
         if (this.hasValue()) {
-          return this.value;
+          return VALUE(this.value);
         }
-        return FORMULA.MINUS([this.toTotalFormula(), this.toPRUsedFormula()],prettyPrint);
+        return MINUS(this.toTotalFormula(), this.toPRUsedFormula());
       }
       toMinCheckedFormula() {
         return this.toFormulaByStatus(STATUS.CHECKED);
       }
       toMaxCheckedFormula() {
-        return this.toFormulaByNotStatus([STATUS.MISSED,STATUS.PR_USED]);
+        return this.toFormulaByNotStatus(STATUS.MISSED,STATUS.PR_USED);
       }
 
       /**
@@ -982,20 +872,18 @@ const AVAILABLE = (function(){
         return this.toTotalFormula();
       }
 
-      _generateFormula(statuses = [], column = "available") {
+      _generateFormula(statuses = [], column = COLUMN.STATUS) {
         if (this.hasValue()) {
-          return this.value;
+          return VALUE(this.value);
         } else if (!statuses || statuses.length == 0) {
-          return 0;
+          return VALUE.ZERO;
         } else {
           if (!Array.isArray(statuses)) statuses = [statuses];
-          const counts = rowsR1C1(this.valueInfo.rows, column).reduce((counts,range) => {
-            statuses.forEach(status => counts.push(FORMULA.COUNTIF([range, status === "TRUE" || status === "FALSE" ? status : `"${status}"`])));
+          const counts = rowsA1(this.valueInfo.rows, column).reduce((counts,range) => {
+            statuses.forEach(status => counts.push(COUNTIF(range, VALUE(status))));
             return counts;
           },[]);
-          // NUM_CHECKED
-          //const countIfsValues = this._getCountIfsArguments(additionalCountIfsValues);
-          return FORMULA.ADD(counts, prettyPrint);
+          return ADD(counts);
         }
       }
     };
@@ -1012,21 +900,21 @@ const AVAILABLE = (function(){
       }
 
       toPRUsedFormula() {
-        return FORMULA.OR([
-          FORMULA.LT([
-            FORMULA.MINUS([
+        return OR(
+          LT(
+            MINUS(
               this.children[0].toTotalFormula(),
               CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key)
-            ],prettyPrint),
+            ),
             this.valueInfo.numNeeded
-          ],prettyPrint),
+          ),
           this.children[0].toPRUsedFormula()
-        ],prettyPrint);
+        );
       }
 
       static _getPRUsedAmountFormula(key) {
-        const usedAmoutArguments = Object.entries(usesInfo[key]).map(([row,numUsed]) => FORMULA.IF([cellR1C1(row,"check"),numUsed]));
-        return FORMULA.ADD(usedAmoutArguments, true);
+        const usedAmoutArguments = Object.entries(usesInfo[key]).map(([row,numUsed]) => IF(cellA1(row,COLUMN.CHECK),numUsed));
+        return ADD(usedAmoutArguments);
       }
 
       toAvailableFormula() {
@@ -1036,9 +924,9 @@ const AVAILABLE = (function(){
         // This   => (CHECKED - USED) >= NEEDED
         const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
         const checkedFormula = this.children[0].toAvailableFormula();
-        const availableAmountFormula = FORMULA.MINUS([checkedFormula,usedAmountFormula]);
+        const availableAmountFormula = MINUS(checkedFormula,usedAmountFormula);
         const numNeededFormula = this.children[1].toAvailableFormula();
-        return this.formulaType.generateFormula([availableAmountFormula, numNeededFormula],true);
+        return this.formulaType.generateFormula(availableAmountFormula, numNeededFormula);
       }
 
     };
@@ -1046,7 +934,7 @@ const AVAILABLE = (function(){
     CellFormulaParser.MissedFormulaNode = class MissedFormulaNode extends CellFormulaParser.FormulaNode {
       constructor(text,row) {
         super(text,row);
-        this.formulaType = FORMULA.NOT;
+        this.formulaType = NOT;
         this.children.push(new CellFormulaParser.BooleanFormulaNode(this.text,this.row));
       } 
 
@@ -1103,7 +991,6 @@ const AVAILABLE = (function(){
     //const preReqValidations = preReqRange.getDataValidations(); 
   
     // will be overwriting these
-    // const availables = availableDataRange.getValues();
     const parsers = [];
     const statusFormulas = [];
     const notes = [];
@@ -1112,9 +999,9 @@ const AVAILABLE = (function(){
     for (let i = 0; i < preReqValues.length; i++) {
       if (preReqFormulas[i][0]) {
         // Allow direct formulas, just use reference
-        statusFormulas[i] = "R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
+        statusFormulas[i] = FORMULA.A1(i+firstRow, checklist.toColumnIndex(COLUMN.PRE_REQS));//"R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
       } else {
-        parsers[i] = new CellFormulaParser(preReqValues[i][0],i+firstRow);
+        parsers[i] = new CellFormulaParser(i+firstRow,preReqValues[i][0]);
       }
     }
     timeEnd("parseCells");
@@ -1135,7 +1022,7 @@ const AVAILABLE = (function(){
         formulaFunc: CellFormulaParser.prototype.toUnknownFormula,
       },
       "isError": {
-        formulaFunc: function(){ return this.hasErrors() ? "TRUE" : "FALSE";},
+        formulaFunc: CellFormulaParser.prototype.toErrorFormula,
       },
     };
     Object.keys(debugColumns).forEach(debugColumn =>{
@@ -1162,10 +1049,10 @@ const AVAILABLE = (function(){
     }
     timeEnd("generateFormulas");
   
-    availableDataRange.setFormulasR1C1(statusFormulas.map(formula => [formula]));
+    availableDataRange.setFormulas(statusFormulas.map(formula => [formula]));
     preReqRange.setNotes(notes.map(note => [note]));
     
-    Object.values(debugColumns).forEach(value => value.range.setFormulasR1C1(value.formulas));
+    Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas));
 
     timeEnd();
     return;
@@ -1174,5 +1061,6 @@ const AVAILABLE = (function(){
 
   return Object.freeze({
     populateAvailable,
+    STATUS,
   });
 })();
