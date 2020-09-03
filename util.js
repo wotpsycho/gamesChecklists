@@ -1,137 +1,7 @@
 /* exported UTIL, time, timeEnd */
 // eslint-disable-next-line no-redeclare
-const UTIL = (function(){
-  // Helpers to get various columns/rows/config
-  let headerRowCache;
-  function getHeaderRow(sheet = getSheet()) {
-    if (headerRowCache) {
-      return headerRowCache;
-    }
-    time();
-    const filter = sheet.getFilter();
-    if (filter) {
-      headerRowCache = filter.getRange().getRow();
-    } else if (sheet.getFrozenRows()) {
-      headerRowCache = sheet.getFrozenRows();
-    } else {
-      for (let row = 1; row <= sheet.getLastRow(); row++) {
-        if (sheet.getRange(row,1).getValue() == CONFIG.COLUMN_HEADERS.check) {
-          headerRowCache = row;
-          break;
-        }
-      }
-    }
-    timeEnd();
-    return headerRowCache;
-  }
-
-  function getQuickFilterRow(sheet = getSheet()) {
-    return  getRows(sheet).quickFilter;
-  }
-
-  // If array is passed, returns true if any are in range
-  function isColumnInRange(column,range) {
-    if (!column || !range) return false;
-    if (Array.isArray(column)) {
-      for (const col of column) {
-        if (col >= range.getColumn() && col <= range.getLastColumn()) return true;
-      }
-      return false;
-    }
-    return column >= range.getColumn() && column <= range.getLastColumn();
-  }
-
-  function isRowInRange(row,range) {
-    if (!row || !range) return false;
-    return row >= range.getRow() && row <= range.getLastRow();
-  }
-
-  let columnsCache;
-  function getColumns(sheet = getSheet(), _extraHeaders) {
-    if (columnsCache && !_extraHeaders) {
-      const columns =  Object.assign({},columnsCache);
-      columns.byHeader = Object.assign({}, columns.byHeader);
-      return columns;
-    }
-    time();
-
-    const headerRow = getHeaderRow(sheet);
-    if (!headerRow) return {};
-
-    const headers = sheet.getRange(headerRow,1,1,sheet.getLastColumn() || 1).getValues()[0];
-    const columns  = {
-      byHeader: {
-      }
-    };
-    for (let i = 0; i < headers.length; i++) {
-      columns.byHeader[headers[i]] = i + 1;
-    }
-    Object.entries(CONFIG.COLUMN_HEADERS).forEach(([columnId, columnHeader]) => {
-      const column = columns.byHeader[columnHeader];
-      if (column >= 0) {
-        columns[columnId] = columns.byHeader[columnHeader];
-      }
-    });
-    // TODO remove and just use byHeader instead
-    if (Array.isArray(_extraHeaders)) {
-      _extraHeaders.forEach((header) =>  {
-        const column = columns.byHeader[header];
-        if (column >= 0) {
-          columns[header] = column;
-        }
-      });
-    }
-    columnsCache = Object.assign({},columns);
-    columnsCache.byHeader = Object.assign({}, columns.byHeader);
-    timeEnd();
-    if (_extraHeaders) {
-      // until we remove the need for extraHeaders by only relying on byHeader, remove byHeader
-      delete columns.byHeader;
-    }
-    return columns;
-  }
-
-  let rowsCache;
-  function getRows(sheet = getSheet()) {
-    if (rowsCache) return rowsCache;
-    time();
-    const headerRow = getHeaderRow(sheet);
-    rowsCache = {
-      header: headerRow,
-    };
-    if (headerRow > 1) {
-      const rowHeaderValues = sheet.getRange(1,1,headerRow-1).getValues();
-      Object.entries(CONFIG.ROW_HEADERS).forEach(([row, header]) => {
-        for (let i = 0; i < rowHeaderValues.length; i++) {
-          if (rowHeaderValues[i][0] === header) {
-            rowsCache[row] = i+1;
-          }
-        }
-      });
-    }
-    timeEnd();
-    return rowsCache;
-  }
-
-  function getColumnRange(sheet = getSheet(), _columnIndex = undefined) {
-    return getColumnRangeFromRow(sheet, _columnIndex, 1);
-  }
-
-  function getColumnDataRange(sheet = getSheet(), _columnIndex = undefined) {
-    return getColumnRangeFromRow(sheet, _columnIndex, getHeaderRow(sheet)+1);
-  }
-
-  function getColumnDataRangeFromRange(sheet = getSheet(), columnIndex, range) {
-    const firstDataRow = getHeaderRow(sheet) + 1;
-    let firstRow = firstDataRow;
-    let lastRow;
-    if (range) {
-      if (range.getLastRow() < firstDataRow) return; // Not in data range, no range
-      if (range.getRow() > firstRow) firstRow = range.getRow();
-      lastRow = range.getLastRow();
-    }
-    return getColumnRangeFromRow(sheet, columnIndex, firstRow, lastRow && (lastRow-firstRow+1));
-  }
+const UTIL = (function initUtil(){
+  time();
 
   const A1_REGEX = /^\$?([A-Z]+)?\$?([0-9]+)(?::\$?([A-Z]+)?([0-9]+)?)?$/;
   // This intentionally has column before row because A1 does that :(
@@ -190,24 +60,6 @@ const UTIL = (function(){
     return result;
   }
 
-  let rangeCache = {};
-  function getColumnRangeFromRow(sheet, columnIndex, rowIndex, _numRows) {
-    const key = sheet.getName() + ":" + columnIndex + ":" + rowIndex + ":" + _numRows;
-    if (rangeCache[key]) return rangeCache[key];
-    time();
-    rangeCache[key] = sheet.getRange(rowIndex, columnIndex, _numRows || (sheet.getLastRow()-rowIndex+1) || 1);
-    timeEnd();
-    return rangeCache[key];
-  }
-
-  function resetCache() {
-    rangeCache = {};
-    columnsCache = undefined;
-    headerRowCache = undefined;
-    rowsCache = undefined;
-    SETTINGS.resetCache();
-  }
-
 
   // Without log aggregating, the _includeUnlabeled will just produce a secondary useless metric in log;
   //   including for symmetry
@@ -241,42 +93,17 @@ const UTIL = (function(){
     }
   }
 
-  let _sheet = SpreadsheetApp.getActiveSheet();
-  function setSheet(sheet) {
-    _sheet = sheet;
-  }
-  function getSheet() {
-    return _sheet;
-  }
-  function clearSheet() {
-    _sheet = SpreadsheetApp.getActiveSheet();
-  }
 
+  timeEnd();
   return {
     a1ToAbsolute,
     a1ToR1C1Absolute,
     a1ToRowAndColumn,
 
-    getColumnDataRange,
-    getColumnRange,
-    getColumnDataRangeFromRange,
-    getColumnRangeFromRow,
-    getColumns,
-    getHeaderRow,
-    getQuickFilterRow,
-    getRows,
-
-    isColumnInRange,
-    isRowInRange,
-
     time,
     timeEnd,
 
-    setSheet,
-    getSheet,
-    clearSheet,
-
-    resetCache,
+    // resetCache,
   };
 })();
 

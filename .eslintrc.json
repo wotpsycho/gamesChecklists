@@ -30,11 +30,11 @@
         "ScriptApp": false,
         "Logger": false,
 
+        "Checklist": false,
+
         "AVAILABLE": false,
         "CONFIG": false, 
-        "FILTER": false,
         "META": false,
-        "NOTES": false,
         "QUICK_FILTER": false, 
         "RESET": false,
         "SETTINGS": false,

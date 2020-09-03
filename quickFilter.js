@@ -16,32 +16,32 @@ const QUICK_FILTER = (function(){
   }
 
   function quickFilterChange(sheet, range) {
-    const rows = UTIL.getRows(sheet);
-    const filter = sheet.getFilter();
+    const checklist = Checklist.fromSheet(sheet);
 
+    const rowValueIndex = checklist.toRowIndex(Checklist.ROW.QUICK_FILTER) - range.getRow();
     const firstChangedColumn = range.getColumn();
     const lastChangedColumn = range.getLastColumn();
-    const changedValues = range.getValues()[rows.quickFilter - range.getRow()];
+    const changedValues = range.getValues()[rowValueIndex];
     for (let column = firstChangedColumn; column <= lastChangedColumn; column++) {
       if (column == 1) continue; // First column is header
       const changedValue = changedValues[column-firstChangedColumn];
-      let criteria = filter.getColumnFilterCriteria(column);
+      let criteria = checklist.filter.getColumnFilterCriteria(column);
       if (changedValue) {
         if (criteria) {
           criteria = criteria.copy();
         } else {
           criteria = SpreadsheetApp.newFilterCriteria();
         }
-        const filterRange = UTIL.getColumnDataRange(sheet, column);
+        const filterRange = checklist.getColumnDataRange(column);
         criteria.whenFormulaSatisfied("=REGEXMATCH(" + filterRange.getA1Notation() + ",\"(?mis:"+ changedValue +")\")");
-        filter.setColumnFilterCriteria(column, criteria);
+        checklist.filter.setColumnFilterCriteria(column, criteria);
       } else {
         if (criteria && criteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
         // Remove it, but don't remove the hiddenValues criteria
           if (criteria.getHiddenValues()) {
-            filter.setColumnFilterCriteria(column, SpreadsheetApp.newFilterCriteria().setHiddenValues(criteria.getHiddenValues()));
+            checklist.filter.setColumnFilterCriteria(column, SpreadsheetApp.newFilterCriteria().setHiddenValues(criteria.getHiddenValues()));
           } else {
-            filter.removeColumnFilterCriteria(column);
+            checklist.filter.removeColumnFilterCriteria(column);
           }
         }
       }
@@ -58,5 +58,5 @@ const QUICK_FILTER = (function(){
 
 // eslint-disable-next-line no-unused-vars
 function debug() {
-  //let sheet = SpreadsheetApp.getActiveSheet();
+  //let sheet = Checklist.getActiveSheet();
 }

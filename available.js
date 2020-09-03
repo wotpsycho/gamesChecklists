@@ -86,7 +86,7 @@ const AVAILABLE = (function(){
     }
   }  
 
-  const STATUS = {
+  const STATUS = Object.freeze({
     CHECKED: "CHECKED",
     AVAILABLE: "TRUE",
     MISSED: "MISSED",
@@ -94,9 +94,9 @@ const AVAILABLE = (function(){
     PR_NOT_MET: "FALSE",
     UNKNOWN: "UNKNOWN",
     ERROR: "ERROR",
-  };
+  });
 
-  const FORMULA = _helpersToGenerateFunctions({
+  const FORMULA = Object.freeze(_helpersToGenerateFunctions({
     AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/,"AND"),
     OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/,"OR"),
     NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
@@ -121,7 +121,7 @@ const AVAILABLE = (function(){
     ERRORTYPE: new SimpleFormulaHelper("ERROR.TYPE"),
 
     CONCAT: new SimpleFormulaHelper("CONCATENATE"),
-  });
+  }));
   
 
   function _helpersToGenerateFunctions(helpers) {
@@ -137,11 +137,9 @@ const AVAILABLE = (function(){
   }
 
   // CLASS DEFINITION
-  function _getCellFormulaParser(sheet) {
-    
+  function _getCellFormulaParser(checklist) {
     time();
-    const columns = UTIL.getColumns(sheet);
-    //const rows = UTIL.getRows(sheet);
+    const COLUMN = Checklist.COLUMN;
     const columnToValueToRows = {};
     const prettyPrint = true; // TODO extract to config/setting
     // Essentially static defs
@@ -151,11 +149,11 @@ const AVAILABLE = (function(){
     const _quoteMapping = {};
     const _parentheticalMapping = {};
     const cellR1C1 = (row, column) => {
-      column = columns[column] || columns.byHeader[column] || column;
+      column = checklist.toColumnIndex(column);
       return `R${row}C${column}`;
     };
     const rowsR1C1 = (rows, column) => {
-      column = columns[column] || columns.byHeader[column] || column;
+      column = checklist.toColumnIndex(column);
       const ranges = [];
       if (rows.length === 0) return ranges;
       let firstRow = rows[0];
@@ -174,15 +172,13 @@ const AVAILABLE = (function(){
     const getColumnValues = (column) => {
       if (columnToValueToRows[column]) return columnToValueToRows[column];
       time(column);
-      const columnIndex = columns[column] || columns.byHeader[column];
-      if (!columnIndex) return;
+      if (!checklist.hasColumn(column)) return;
       const valueToRows = {};
       
-      const range = UTIL.getColumnDataRange(sheet, columnIndex);
-      const firstRow = range.getRow();
-      const values = range.getValues();
-      values.forEach((valueArr,i) => {
-        const value = valueArr[0];
+      const firstRow = checklist.firstDataRow;
+      const values = checklist.getColumnDataValues(column);
+      values.forEach((value,i) => {
+        // const value = valueArr[0];
         if (valueToRows[value]) {
           valueToRows[value].push(firstRow+i);
         } else {
@@ -200,7 +196,7 @@ const AVAILABLE = (function(){
       if (parsersByRow[row]) {
         return parsersByRow[row];
       } else {
-        const cellValue = sheet.getRange(row,columns.preReq).getValue();
+        const cellValue = checklist.getRange(row,COLUMN.PRE_REQS).getValue();
         return new CellFormulaParser(cellValue,row);
       }
     };
@@ -555,7 +551,7 @@ const AVAILABLE = (function(){
         if (this.hasErrors()) formula = `"${STATUS.ERROR}"`;
         else 
           formula = FORMULA.IFS([
-            `R${this.row}C${columns.check}`,`"${STATUS.CHECKED}"`,
+            `R${this.row}C${checklist.toColumnIndex(COLUMN.CHECK)}`,`"${STATUS.CHECKED}"`,
             this.toAvailableFormula(),`${STATUS.AVAILABLE}`,
             this.toUnknownFormula(), `"${STATUS.UNKNOWN}"`,
             this.toRawMissedFormula(), `"${STATUS.MISSED}"`,
@@ -1012,6 +1008,7 @@ const AVAILABLE = (function(){
           usesInfo[this.valueInfo.key] = {};
         }
         usesInfo[this.valueInfo.key][this.row] = this.valueInfo.numNeeded;
+        // console.log("usesNode",this.text,this.children,this.value);
       }
 
       toPRUsedFormula() {
@@ -1072,16 +1069,15 @@ const AVAILABLE = (function(){
   }
 
   // PUBLIC FUNCTIONS
-  function populateAvailable(sheet = UTIL.getSheet(), event) {
+  function populateAvailable(checklist = Checklist.getActiveChecklist(), event) {
     time();
-    const columns = UTIL.getColumns(sheet);
-    const rows = UTIL.getRows(sheet);
+    const COLUMN = Checklist.COLUMN; // static import
     let filteredRange;
     if (event
       && event.range
-      && UTIL.isColumnInRange([columns.preReq,columns.available],event.range)
+      && checklist.isColumnInRange([COLUMN.PRE_REQS,COLUMN.STATUS],event.range)
       && (event.value || event.oldValue) // Single cell update
-      && event.range.getRow() > rows.header // In data range
+      && event.range.getRow() >= checklist.firstDataRow // In data range
       && (!event.value || !event.value.toString().match(/USES/i))  // NOT uses
       && (!event.oldValue || !event.oldValue.toString().match(/USES/i)) // WASN'T uses
     ) {
@@ -1090,13 +1086,13 @@ const AVAILABLE = (function(){
     }
   
     // Must have required columns
-    if (!columns.available || !columns.check || !columns.item || !columns.preReq) return;
+    if (!checklist.hasColumn(COLUMN.STATUS, COLUMN.CHECK, COLUMN.ITEM, COLUMN.PRE_REQS)) return;
     
-    const preReqRange = UTIL.getColumnDataRangeFromRange(sheet, columns.preReq, filteredRange);
-    const availableDataRange = UTIL.getColumnDataRangeFromRange(sheet, columns.available, filteredRange);
+    const preReqRange = checklist.getColumnDataRangeFromRange(COLUMN.PRE_REQS, filteredRange);
+    const availableDataRange = checklist.getColumnDataRangeFromRange(COLUMN.STATUS, filteredRange);
 
     if (!preReqRange || !availableDataRange) return; // filteredRange had no data rows; shouldn't be hit
-    const CellFormulaParser = _getCellFormulaParser(sheet);
+    const CellFormulaParser = _getCellFormulaParser(checklist);
 
     const firstRow = preReqRange.getRow();
     const preReqValues = preReqRange.getValues();
@@ -1107,16 +1103,18 @@ const AVAILABLE = (function(){
     //const preReqValidations = preReqRange.getDataValidations(); 
   
     // will be overwriting these
-    const availables = availableDataRange.getValues();
+    // const availables = availableDataRange.getValues();
+    const parsers = [];
+    const statusFormulas = [];
     const notes = [];
 
     time("parseCells");
     for (let i = 0; i < preReqValues.length; i++) {
       if (preReqFormulas[i][0]) {
         // Allow direct formulas, just use reference
-        availables[i][0] = "R" + (i+firstRow) + "C" + columns.preReq;
+        statusFormulas[i] = "R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
       } else {
-        availables[i][0] = new CellFormulaParser(preReqValues[i][0],i+firstRow);
+        parsers[i] = new CellFormulaParser(preReqValues[i][0],i+firstRow);
       }
     }
     timeEnd("parseCells");
@@ -1141,8 +1139,8 @@ const AVAILABLE = (function(){
       },
     };
     Object.keys(debugColumns).forEach(debugColumn =>{
-      if (columns.byHeader[debugColumn]) {
-        const range = UTIL.getColumnDataRangeFromRange(sheet,columns.byHeader[debugColumn],preReqRange);
+      if (checklist.columnsByHeader[debugColumn]) {
+        const range = checklist.getColumnDataRangeFromRange(checklist.columnsByHeader[debugColumn],preReqRange);
         debugColumns[debugColumn].range = range;
         debugColumns[debugColumn].formulas = [];
       } else {
@@ -1150,33 +1148,31 @@ const AVAILABLE = (function(){
       }
     });
     time("generateFormulas");
-    availables.forEach((availableArray) => {
-      const errorNotes = [null];
-      let parser;
-      if (availableArray[0].toFormula) {
-        parser = availableArray[0];
-        availableArray[0] = parser.toFormula();
+    for (let i = 0; i < preReqValues.length; i++) {
+      const parser = parsers[i];
+      let errorNote = null;
+      if (parser) {
+        statusFormulas[i] = parser.toFormula();
         if (parser.hasErrors()) {
-          errorNotes[0] = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
+          errorNote = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
         }
       }
       Object.values(debugColumns).forEach(value => value.formulas.push([parser ? value.formulaFunc.call(parser) : null]));
-      notes.push(errorNotes);
-    });
+      notes[i] = errorNote;
+    }
     timeEnd("generateFormulas");
   
-    availableDataRange.setFormulasR1C1(availables);
+    availableDataRange.setFormulasR1C1(statusFormulas.map(formula => [formula]));
+    preReqRange.setNotes(notes.map(note => [note]));
+    
     Object.values(debugColumns).forEach(value => value.range.setFormulasR1C1(value.formulas));
-    preReqRange.setNotes(notes);
 
-    //checkErrors(availableDataRange);
-    //console.log(availables);
     timeEnd();
     return;
   }
 
 
-  return {
+  return Object.freeze({
     populateAvailable,
-  };
+  });
 })();

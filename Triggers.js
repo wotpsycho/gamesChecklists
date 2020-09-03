@@ -2,94 +2,99 @@
 function handleEdit(event) {
   time();
   try {
-    time("1");
+    // static imports
+    const COLUMN = Checklist.COLUMN;
+    const ROW = Checklist.ROW;
+
+    time("event.range");
     const range = event.range;
-    timeEnd("1");
+    timeEnd("event.range");
     
-    time("2");
+    time("range.getSheet()");
     const sheet = range.getSheet();
-    UTIL.setSheet(sheet);
-    timeEnd("2");
+    timeEnd("range.getSheet()");
+    
+    time("Checklist.setActiveSheet(..)");
+    Checklist.setActiveSheet(sheet);
+    timeEnd("Checklist.setActiveSheet(..)");
+
+    time("getCL");
+    const checklist = Checklist.getActiveChecklist();
+    timeEnd("getCL");
     
     
-    if (!UTIL.getHeaderRow()) return; // Non checklist
+    if (!checklist.isChecklist) return; // Non checklist
     
-    time("3");
-    const columns = UTIL.getColumns();
-    timeEnd("3");
-    time("4");
-    const rows = UTIL.getRows();
-    timeEnd("4");
-    time("5");
+    time("logEditedRange");
     Logger.log("edit: ", range.getA1Notation());
-    timeEnd("5");
-    
-    //QUICK DEBUG:  try { SETTINGS.resetSettings(sheet); } catch (e) { sheet.getRange("F1").setValue(e.message);} finally { return;  }
-    
-    if (UTIL.isRowInRange(rows.quickFilter,range)) {
+    timeEnd("logEditedRange");
+        
+    if (checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
       QUICK_FILTER.onChange(sheet, range, event);
     }
 
     if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
       switch (event.value){
-        case "reset":  RESET.reset(); break;
-        case "meta": META.ProcessMeta(); break;
-        case "FULL RESET": RESET.reset(sheet,true); break;
+        case "reset":  RESET.reset(checklist); break;
+        case "meta": META.ProcessMeta(sheet); break;
+        case "FULL RESET": RESET.reset(checklist,true); break;
       }
       TOTALS.updateTotals(sheet);
       return;
     }
-
-    time("2.5");
-    const filter = sheet.getFilter();
-    timeEnd("2.5");
     
-    time("6");
-    if (UTIL.isRowInRange(rows.quickFilter,range) && range.getNumRows() == 1) {
-      FILTER.reapplyFilter(filter);
+    // time("reapplyFilter quick");
+    // if (checklist.isRowInRange(ROW.QUICK_FILTER,range) && range.getNumRows() == 1) {
+    //   //FILTER.reapplyFilter(filter);
+    //   checklist.refreshFilter();
+    //   timeEnd("reapplyFilter quick");
       
-      timeEnd("6");
-      return;
-    }
-    timeEnd("6");
+    //   return;
+    // }
+    // timeEnd("reapplyFilter quick");
     
-    time("6.5");
-    Logger.log(rows);
-    if (UTIL.isRowInRange(rows.settings, range)) {
+    time("updateSettings");
+    if (checklist.isRowInRange(ROW.SETTINGS, range)) {
       SETTINGS.updateSettings(sheet,range);
       if (range.getNumRows() == 1) {
-        timeEnd("6.5");
+        timeEnd("updateSettings");
         return;
       }
     }
-    timeEnd("6.5");
+    timeEnd("updateSettings");
     
-    time("7");
-    if (UTIL.isColumnInRange([columns.preReq, /* TODO  remove deprecated */columns.item, columns.available], range)) {
-      AVAILABLE.populateAvailable(sheet, event);
+    time("populateAvailable");
+    if (checklist.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
+      AVAILABLE.populateAvailable(checklist, event);
     }
-    timeEnd("7");
+    timeEnd("populateAvailable");
     
-    time("8");
-    if (UTIL.isColumnInRange(columns.check, range) || UTIL.isColumnInRange(columns.preReq,range) || 
-      UTIL.isRowInRange(rows.quickFilter,range)) {
-      FILTER.reapplyFilter(filter);
+    time("reapplyFilter");
+    if (checklist.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
+    checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
+      checklist.refreshFilter();
+      //FILTER.reapplyFilter(filter);
     }
-    timeEnd("8");
+    timeEnd("reapplyFilter");
     
-    time("9");
-    if (UTIL.isColumnInRange(columns.notes,range)) {
-      NOTES.moveNotes(range);
+    time("moveNotes");
+    if (checklist.isColumnInRange(COLUMN.NOTES,range)) {
+      checklist.syncNotes(range);
+      // NOTES.moveNotes(range);
     }
-    timeEnd("9");
+    timeEnd("moveNotes");
     
-    time("10");
-    if (UTIL.isColumnInRange(columns.check,range) || UTIL.isColumnInRange(columns.item,range)) {
+    time("updateTotals");
+    if (checklist.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
       TOTALS.updateTotals(sheet);
     }
-    timeEnd("10");
+    timeEnd("updateTotals");
+  } catch(e) {
+    const message = e && e.getMessage && e.getMessage() || e;
+    event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);
+    throw e;
   } finally {
-    UTIL.clearSheet();
+    Checklist.clearActiveSheet();
     timeEnd();
   }
 }
@@ -140,17 +145,15 @@ function onSelectionChange(event) {
   const range = event.range;
   const sheet = range.getSheet();
   console.log("onSelectionChange", range);
-  UTIL.setSheet(sheet);
+  Checklist.setActiveSheet(sheet);
   //AVAILABLE.checkErrors(event.range);
-  const columns = UTIL.getColumns();
-  const rows = UTIL.getRows();
    
   // if (SETTINGS.isEditable(sheet)) {
-  //   UTIL.getColumnDataRange(sheet,columns.preReq).clearDataValidations();
+  //   chekcliskt.getColumnDataRange(sheet,columns.preReq).clearDataValidations();
   //   const nearbyPreReqs = sheet.getRange(Math.max(rows.header+1, range.getRow()-1), columns.preReq, range.getNumRows()+2);
   //   const validation = SpreadsheetApp
   //     .newDataValidation()
-  //     .requireValueInRange(UTIL.getColumnDataRange(sheet, columns.item), true)
+  //     .requireValueInRange(chekclist.getColumnDataRange(sheet, columns.item), true)
   //     .setAllowInvalid(true)
   //     .build();
   //   nearbyPreReqs.setDataValidation(validation);

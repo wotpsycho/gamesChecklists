@@ -3,108 +3,108 @@
 // eslint-disable-next-line no-redeclare
 const META = (function(){
 
-  function ProcessMeta() {
+  function ProcessMeta(sheet = Checklist.getActiveSheet()) {
     time();
-    const sheet = SpreadsheetApp.getActiveSheet();
-  
-    const checkboxHeaderRow = UTIL.getHeaderRow(sheet);
-    if (!checkboxHeaderRow) {
+
+    const checklist = _getChecklistWithMetaSheet(sheet, true);
+
+    if (!checklist || !checklist.isChecklist) {
       SpreadsheetApp.getUi().alert("This does not appear to be a checklist. Please run on the correct sheet, or run the Reset method.");
       return;
     }
   
-    const metaSheet = _getMetaSheet(sheet, true);
   
     // Get info from sheets
-    const headerMetadata = _getMetadata(metaSheet, sheet, true);
+    const headerMetadata = _getMetadata(checklist, true);
   
     // Data validation for given column
-    _setDataValidationForChecklistToMetaValues(sheet, headerMetadata);
+    _setDataValidationForChecklistToMetaValues(checklist, headerMetadata);
   
     // Add missing values to metadata
-    _updateMetaSheetWithMissingValues(metaSheet, headerMetadata);
+    _updateMetaSheetWithMissingValues(checklist, headerMetadata);
   
     // Replace conditional format rules
-    _updateConditionalFormatToMetaValues(sheet, headerMetadata);
+    _updateConditionalFormatToMetaValues(checklist, headerMetadata);
   
     timeEnd();
   }
 
-  function removeDataValidationFromMeta(sheet) {
-    time();
-    const metaSheet = _getMetaSheet(sheet);
-    const headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
-    const columns = UTIL.getColumns(sheet);
+  // function removeDataValidationFromMeta(sheet) {
+  //   time();
+  //   const checklist = _getChecklistWithMetaSheet(sheet);
+  //   const headerMetadata = checklist && _getMetadata(checklist);
   
   
-    if (headerMetadata) {
-      Object.values(headerMetadata).forEach(function(metadata) {
-        if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
-          UTIL.getColumnDataRange(sheet, metadata.column).clearDataValidations();
-        }
-      });
-    }
+  //   if (headerMetadata) {
+  //     Object.values(headerMetadata).forEach(function(metadata) {
+  //       if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
+  //         checklist.getColumnDataRange(metadata.column).clearDataValidations();
+  //       }
+  //     });
+  //   }
   
-    timeEnd();
-  }
+  //   timeEnd();
+  // }
 
   function setDataValidationFromMeta(sheet) {
-    const metaSheet = _getMetaSheet(sheet);
-    const headerMetadata = metaSheet && _getMetadata(metaSheet, sheet);
+    const checklist = _getChecklistWithMetaSheet(sheet);
+    const headerMetadata = checklist && _getMetadata(checklist);
     if (headerMetadata) {
-      _setDataValidationForChecklistToMetaValues(sheet, headerMetadata);
+      _setDataValidationForChecklistToMetaValues(checklist, headerMetadata);
     }
   }
 
   function setMetaEditable(sheet, _isEditable) {
-    const metaSheet = _getMetaSheet(sheet);
-    if (metaSheet) {
+    const checklist = _getChecklistWithMetaSheet(sheet);
+    if (checklist) {
       if (_isEditable === false) {
-        metaSheet.protect().setWarningOnly(true);
+        checklist.metaSheet.protect().setWarningOnly(true);
       } else {
-        const protections = metaSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        const protections = checklist.metaSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         protections && protections[0] && protections[0].remove();
       }
     }
   }
 
-  function _getMetadata(metaSheet, _sheet, _includeMissingValues) {
-    const headerMetadata = _readHeaderMetadata(metaSheet);
-    if (_sheet) {
-      _associateChecklistToMetadata(_sheet, headerMetadata);
+  function _getMetadata(checklist, _includeMissingValues) {
+    const headerMetadata = _readHeaderMetadata(checklist);
+    if (checklist) {
+      _associateChecklistToMetadata(checklist, headerMetadata);
       if (_includeMissingValues) {
-        _determineMissingValues(_sheet, headerMetadata);
+        _determineMissingValues(checklist, headerMetadata);
       }
     }
     return headerMetadata;
   }
 
-  function _getMetaSheet(sheet, _interactive) {
-    const config = CONFIG.getConfig(sheet);
-    let metaSheetName = config.metaSheet || sheet.getName().split(" ")[0] + " Meta";
-    let metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
+  function _getChecklistWithMetaSheet(sheet, _interactive) {
+    let cl = Checklist.fromSheet(sheet);
+    if (!cl.isChecklist) cl = Checklist.checklistFromMeta(sheet) || cl;
+
+    let metaSheet = cl.metaSheet;
     if (_interactive) {
       const ui = SpreadsheetApp.getUi();
+      let metaSheetName;
       if (!metaSheet) {
         const response = ui.prompt("Meta Spreadsheet Name","Could not determine Meta sheet. Please enter the name of the spreadsheet that contains the Metadata.", ui.ButtonSet.OK_CANCEL);
         if (response.getSelectedButton() !== ui.Button.OK) return;
         metaSheetName = response.getResponseText();
         metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
+        if (metaSheet) {
+          cl.metaSheet = metaSheet;
+        }
       }
       if (!metaSheet) {
         ui.alert("Sheet Not Found", "Could not find the sheet named '" + metaSheetName + "', please verify and try again.", ui.ButtonSet.OK);
       }
     }
-    if (metaSheet && !config.metaSheet) {
-      CONFIG.setConfig(sheet,"metaSheet", metaSheetName);
-    }
-    return metaSheet;
+    return metaSheet && cl;
   }
 
-  function _readHeaderMetadata(metaSheet) {
+  function _readHeaderMetadata(checklist) {
     time();
     const headerMetadata = {};
-    const metaHeaders = metaSheet.getRange("A1:1");
+    const metaHeaders = checklist.metaSheet.getRange("A1:1");
     const metaHeaderValues = metaHeaders.getValues()[0];
     for (let column = 1; column <= metaHeaderValues.length; column++) {
       let metaHeader = metaHeaderValues[column-1];
@@ -122,7 +122,7 @@ const META = (function(){
           });
         }
         const metaValueCells = {};
-        const metaValueRange = UTIL.getColumnRangeFromRow(metaSheet, column, 2);
+        const metaValueRange = checklist.metaSheet.getRange(2, column, checklist.metaSheet.getLastRow()-2+1);
       
         const metaValues = metaValueRange.getValues().map(function(metaValueRow){
           return metaValueRow[0];
@@ -144,7 +144,7 @@ const META = (function(){
           metaValueCells: metaValueCells,
           lastMetaRow: lastRow,
           missingValues: {},
-          metaRange: metaSheet.getRange("R2C" + column + ":R2C" + lastRow),
+          metaRange: checklist.metaSheet.getRange("R2C" + column + ":R2C" + lastRow),
         };
       } else if (metaHeader == "META") {
       // TODO determine what to include as meta
@@ -153,40 +153,34 @@ const META = (function(){
     timeEnd();
     return headerMetadata;
   }
-  function _associateChecklistToMetadata(sheet, headerMetadata, _includeMissingValues) {
+  function _associateChecklistToMetadata(checklist, headerMetadata, _includeMissingValues) {
     time();
     // Associate header info with checklist
-    const checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
-    Object.keys(checklistColumns).forEach(function(checklistColumnName) {
+    Object.entries(checklist.columnsByHeader).forEach(([checklistColumnName,checklistColumn]) => {
       if (headerMetadata[checklistColumnName]) {
       // Add associated column info
-        const checklistColumn = checklistColumns[checklistColumnName];
-        const checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
+        const checklistRange = checklist.getColumnDataRange(checklistColumn);
         const metadata = headerMetadata[checklistColumnName];
         metadata.column = checklistColumn;
         metadata.range = checklistRange;
       }
     });
     if (_includeMissingValues) {
-      _determineMissingValues(sheet,headerMetadata);
+      _determineMissingValues(checklist,headerMetadata);
     }
     timeEnd();
   }
 
-  function _determineMissingValues(sheet, headerMetadata) {
+  function _determineMissingValues(checklist, headerMetadata) {
     time();
-    const checklistColumns = UTIL.getColumns(sheet, Object.keys(headerMetadata));
-    console.log("[checklistcolumns]", checklistColumns);
-    Object.entries(checklistColumns).forEach(([checklistColumnName, checklistColumn]) => {
-      if (checklistColumnName == "Item") return; // Skip the Item column
-      const checklistRange = UTIL.getColumnDataRange(sheet, checklistColumn);
+    Object.entries(checklist.columnsByHeader).forEach(([checklistColumnName, checklistColumn]) => {
+      if (checklistColumnName == CONFIG.COLUMN_HEADERS[Checklist.COLUMN.ITEM]) return; // Skip the Item column
+      // const checklistRange = checklist.getColumnDataRange(checklistColumn);
       const metadata = headerMetadata[checklistColumnName];
-      if (headerMetadata[checklistColumnName]) {
+      if (metadata) {
       // Determine missing values
         if (metadata.metaColumn && metadata.metaValueCells) {
-          const checklistValues = checklistRange.getValues().map(function(checklistValueRow) {
-            return checklistValueRow[0];
-          });
+          const checklistValues = checklist.getColumnDataValues(checklistColumn);
           checklistValues.forEach(function(checklistValue){
             if (!checklistValue || !checklistValue.toString().trim()) return;
             // Handle multi-value entries
@@ -203,11 +197,10 @@ const META = (function(){
     timeEnd();
   }
 
-  function _setDataValidationForChecklistToMetaValues(sheet, headerMetadata) {
+  function _setDataValidationForChecklistToMetaValues(checklist, headerMetadata) {
     time();
-    const columns = UTIL.getColumns(sheet);
     Object.values(headerMetadata).forEach(function(metadata) {
-      if (metadata.metaValueCells && metadata.range && metadata.column != columns.item) {
+      if (metadata.metaValueCells && metadata.range && metadata.column != checklist.toColumnIndex(Checklist.COLUMN.ITEM)) {
         metadata.rangeValidation = SpreadsheetApp
           .newDataValidation()
           .requireValueInList(Object.keys(metadata.metaValueCells), true)
@@ -219,13 +212,13 @@ const META = (function(){
     timeEnd();
   }
 
-  function _updateMetaSheetWithMissingValues(metaSheet, headerMetadata) {
+  function _updateMetaSheetWithMissingValues(checklist, headerMetadata) {
     time();
     Object.values(headerMetadata).forEach(function(metadata) {
       if (metadata.missingValues) {
         const missingValues = Object.keys(metadata.missingValues);
         if (missingValues && missingValues.length > 0) {
-          const outputRange = metaSheet.getRange(metadata.lastMetaRow + 2, metadata.metaColumn, missingValues.length);
+          const outputRange = checklist.metaSheet.getRange(metadata.lastMetaRow + 2, metadata.metaColumn, missingValues.length);
           const outputValues = missingValues.map(function(missingValue) { 
             return [missingValue];
           });
@@ -236,7 +229,7 @@ const META = (function(){
     timeEnd();
   }
 
-  function _updateConditionalFormatToMetaValues(sheet, headerMetadata) {
+  function _updateConditionalFormatToMetaValues(checklist, headerMetadata) {
     time();
     const formulaToRuleMap = {};
     const newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
@@ -294,7 +287,7 @@ const META = (function(){
     });
   
     // update conditional formatting
-    const oldRules = sheet.getConditionalFormatRules();
+    const oldRules = checklist.sheet.getConditionalFormatRules();
     const replacedRules = [];
     for (let i = oldRules.length-1; i >= 0; i--) {
       const oldRule = oldRules[i];
@@ -315,14 +308,23 @@ const META = (function(){
   
     const newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(function(rules) {return rules && rules.length;}).flat();
     
-    sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
+    checklist.sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
     timeEnd();
+  }
+
+  function setConditionalFormatRules(sheet) {
+    const checklist = _getChecklistWithMetaSheet(sheet,false);
+    if (checklist && checklist.isChecklist && checklist.metaSheet) {
+      const metadata = _getMetadata(checklist,false);
+      _updateConditionalFormatToMetaValues(checklist,metadata);
+    }
   }
   return {
     ProcessMeta: ProcessMeta,
-    removeDataValidation: removeDataValidationFromMeta,
+    // removeDataValidation: removeDataValidationFromMeta,
     setDataValidation: setDataValidationFromMeta,
     setEditable: setMetaEditable,
+    setConditionalFormatRules,
   };
 })();
 
@@ -333,6 +335,6 @@ function ProcessMeta() {
 // eslint-disable-next-line no-unused-vars
 function debug(){
   time();
-  META.removeDataValidationFromMeta(SpreadsheetApp.getActiveSheet());
+  META.removeDataValidationFromMeta(Checklist.getActiveSheet());
   timeEnd();
 }

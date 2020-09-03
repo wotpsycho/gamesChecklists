@@ -4,8 +4,10 @@ const TOTALS = (function(){
 // Save as Note to A1
   function updateTotals(sheet) {
     time();
-    const columns = UTIL.getColumns(sheet);
-    const rows = UTIL.getRows(sheet);
+    const COLUMN = Checklist.COLUMN;
+    const checklist = Checklist.fromSheet(sheet);
+    // console.log(columns);
+    // console.log(rows);
     // TODO determine best way for reporting
     // if (columns.item === columns.check+1) return; // No type/category to break down
     // const counts = _countByType(sheet, columns.check+1);
@@ -17,17 +19,20 @@ const TOTALS = (function(){
     // });
 
     // notes.push(counts._total.checked + "/" + counts._total.total + " Total");
-    const totalCell = sheet.getRange("A1");
+    const totalCell = checklist.getRange("A1");
     // totalCell.setNote(notes.join("\n"));
-    const firstRow = rows.header+1;
+    const firstRow = checklist.firstDataRow;
+    const itemColumn = checklist.toColumnIndex(COLUMN.ITEM);
+    const checkColumn = checklist.toColumnIndex(COLUMN.CHECK);
+    const statusColumn = checklist.toColumnIndex(COLUMN.STATUS);
 
-    const total       = `R${firstRow}C${columns.item}:C${columns.item}, "<>"`;
-    const checked     = `R${firstRow}C${columns.check}:C${columns.check},TRUE,${total}`;
-    const missed      = `R${firstRow}C${columns.available}:C${columns.available},"MISSED",${total}`;
-    const prUsed      = `R${firstRow}C${columns.available}:C${columns.available},"PR_USED",${total}`;
-    const available   = `R${firstRow}C${columns.available}:C${columns.available},"TRUE",${total}`;
-    const unknown     = `R${firstRow}C${columns.available}:C${columns.available},"UNKNOWN",${total}`;
-    const unavailable = `R${firstRow}C${columns.available}:C${columns.available},"FALSE",${total}`;
+    const total       = `R${firstRow}C${itemColumn}:C${itemColumn}, "<>"`;
+    const checked     = `R${firstRow}C${checkColumn}:C${checkColumn},TRUE,${total}`;
+    const missed      = `R${firstRow}C${statusColumn}:C${statusColumn},"MISSED",${total}`;
+    const prUsed      = `R${firstRow}C${statusColumn}:C${statusColumn},"PR_USED",${total}`;
+    const available   = `R${firstRow}C${statusColumn}:C${statusColumn},"TRUE",${total}`;
+    const unknown     = `R${firstRow}C${statusColumn}:C${statusColumn},"UNKNOWN",${total}`;
+    const unavailable = `R${firstRow}C${statusColumn}:C${statusColumn},"FALSE",${total}`;
     
     const formula = "=CONCATENATE("
     +`IF(OR(COUNTIFS(${missed}) > 0, COUNTIFS(${prUsed}) > 0), "M: "&COUNTIFS(${missed})&IF(COUNTIFS(${prUsed}) > 0," ("&COUNTIFS(${prUsed})&")","")&CHAR(10),""),`
@@ -42,7 +47,6 @@ const TOTALS = (function(){
 
   /* function _countByType(sheet, _typeColumn) {
     time();
-    const columns = UTIL.getColumns(sheet);
     const counts = {
       _total: {
         checked: 0,
@@ -54,8 +58,8 @@ const TOTALS = (function(){
     if (!_typeColumn || !columns.check) return;
   
     time("data");
-    const checkData = UTIL.getColumnDataRange(sheet, columns.check).getValues().map((row) => row[0]);
-    const typeData = UTIL.getColumnDataRange(sheet, _typeColumn).getValues().map((row) => row[0]);
+    const checkData = checklist.getColumnDataRange(sheet, columns.check).getValues().map((row) => row[0]);
+    const typeData = chekclist.getColumnDataRange(sheet, _typeColumn).getValues().map((row) => row[0]);
     timeEnd("data");
     typeData.forEach((type, i) => {
       if (!type || !type.trim()) return;
