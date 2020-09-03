@@ -5,7 +5,7 @@ const TOTALS = (function(){
   function updateTotals(sheet) {
     time();
     // static imports
-    const {COLUMN} = Checklist;
+    const {COLUMN,ROW} = Checklist;
     const {STATUS} = AVAILABLE;
     const {CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ} = FORMULA;
 
@@ -21,7 +21,7 @@ const TOTALS = (function(){
     // });
 
     // notes.push(counts._total.checked + "/" + counts._total.total + " Total");
-    const totalCell = checklist.getRange("A1");
+    const totalCell = checklist.getRange(ROW.TITLE,1);
     // totalCell.setNote(notes.join("\n"));
     const firstRow = checklist.firstDataRow;
     const itemColumn = checklist.toColumnIndex(COLUMN.ITEM);

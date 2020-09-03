@@ -17,6 +17,7 @@ const QUICK_FILTER = (function(){
 
   function quickFilterChange(sheet, range) {
     const checklist = Checklist.fromSheet(sheet);
+    const {REGEXMATCH,A1,VALUE} = FORMULA;
 
     const rowValueIndex = checklist.toRowIndex(Checklist.ROW.QUICK_FILTER) - range.getRow();
     const firstChangedColumn = range.getColumn();
@@ -33,7 +34,9 @@ const QUICK_FILTER = (function(){
           criteria = SpreadsheetApp.newFilterCriteria();
         }
         const filterRange = checklist.getColumnDataRange(column);
-        criteria.whenFormulaSatisfied("=REGEXMATCH(" + filterRange.getA1Notation() + ",\"(?mis:"+ changedValue +")\")");
+        const prettyPrint = FORMULA.togglePrettyPrint(false);
+        criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(A1(filterRange),VALUE("(?mis:"+ changedValue +")"))));
+        FORMULA.togglePrettyPrint(prettyPrint);
         checklist.filter.setColumnFilterCriteria(column, criteria);
       } else {
         if (criteria && criteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {

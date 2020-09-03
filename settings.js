@@ -271,7 +271,7 @@ const SETTINGS = (function(){
           first = false;
         } else {
           // Don't allow anything to be set
-          validation.requireFormulaSatisfied("=FALSE");
+          validation.requireFormulaSatisfied(FORMULA(FORMULA.VALUE.FALSE));
         }
         cell.setDataValidation(validation);
       }
@@ -453,7 +453,7 @@ const SETTINGS = (function(){
       const checklist = Checklist.fromSheet(sheet);
       if (enabled) {
         if (!checklist.hasRow(Checklist.ROW.QUICK_FILTER)) {
-          sheet.toggleQuickFilterView(true);
+          checklist.toggleQuickFilterRow(true);
           resetCache();
           const filterValueRange = checklist.getRowRange(Checklist.ROW.QUICK_FILTER, 2);
           const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString();
@@ -468,7 +468,7 @@ const SETTINGS = (function(){
           filterValueRange.setBackground(newColor);
         }
       } else {
-        checklist.toggleQuickFilterView(false);
+        checklist.toggleQuickFilterRow(false);
         resetCache();
         const lastColumn = checklist.lastColumn;
         for (let column = 2; column <= lastColumn; column++) {

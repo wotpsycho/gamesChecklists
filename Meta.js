@@ -227,9 +227,10 @@ const META = (function(){
           }
         });
         if (formatRanges.length > 0) {
-          const firstCellA1 = metadata.range.getCell(1,1).getA1Notation();
+          const relativeCell = FORMULA.A1(metadata.range.getCell(1,1),true);//.getA1Notation();
           // This can be made into rules based on cells.
           Object.entries(metadata.metaValueCells).forEach(function([cellValue, cell]){
+            const {REGEXMATCH,VALUE} = FORMULA;
             const [background, color] = [cell.getBackground(), cell.getFontColor()];
             const isBold = cell.getFontWeight() == "bold";
             const isItalic = cell.getFontStyle() == "italic";
@@ -238,7 +239,9 @@ const META = (function(){
             const isBackgroundWhite = background === "#ffffff";
             const isTextBlack = color === "#000000";
             const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
-            const formula = "=REGEXMATCH($" + firstCellA1 + ",\"^(" + cellValue + "\\n|" + cellValue + "$)\")";
+            const prettyPrint = FORMULA.togglePrettyPrint(false);
+            const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue}\\n|${cellValue}$)`)));
+            FORMULA.togglePrettyPrint(prettyPrint);
             ruleBuilder.whenFormulaSatisfied(formula);
             ruleBuilder.setRanges(formatRanges);
             if (!isBackgroundWhite) {
