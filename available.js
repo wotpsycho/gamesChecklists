@@ -16,7 +16,7 @@ const AVAILABLE = (function(){
   function _getCellFormulaParser(checklist) {
     time();
     // static imports
-    const {COLUMN} = Checklist;
+    const {COLUMN} = ChecklistApp;
     const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
 
     const columnToValueToRows = {};
@@ -957,9 +957,9 @@ const AVAILABLE = (function(){
   }
 
   // PUBLIC FUNCTIONS
-  function populateAvailable(checklist = Checklist.getActiveChecklist(), event) {
+  function populateAvailable(checklist = ChecklistApp.getActiveChecklist(), event) {
     time();
-    const COLUMN = Checklist.COLUMN; // static import
+    const COLUMN = ChecklistApp.COLUMN; // static import
     let filteredRange;
     if (event
       && event.range

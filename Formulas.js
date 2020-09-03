@@ -138,7 +138,7 @@ const FORMULA = (function initFormula(){
       let row;
       if (typeof rangeOrRow == "object") {
         const range = rangeOrRow;
-        console.log(range.getA1Notation(),range.isStartColumnBounded(),range.isStartRowBounded(),range.isEndColumnBounded(),range.isEndRowBounded(),range.getNumRows(),range.getNumColumns());
+        // console.log(range.getA1Notation(),range.isStartColumnBounded(),range.isStartRowBounded(),range.isEndColumnBounded(),range.isEndRowBounded(),range.getNumRows(),range.getNumColumns());
 
         // A1:A => not end row bounded
         // A:A => not end/start row bounded
@@ -156,7 +156,7 @@ const FORMULA = (function initFormula(){
       let endCell;
       if (isNumber(endRow) || isNumber(endColumn)) endCell = this._rowColumnToRangeFormula(endRow,endColumn,endRowRelative,endColumnRelative);
       if (endCell && endCell != startCell) range += ":" + endCell;
-      console.log("r1c1",rangeOrRow,row,column,endRow,endColumn,rowRelative,columnRelative,endRowRelative,endColumnRelative,rest,range,booleanStart);
+      // console.log("r1c1",rangeOrRow,row,column,endRow,endColumn,rowRelative,columnRelative,endRowRelative,endColumnRelative,rest,range,booleanStart);
       return range;
     }
   }

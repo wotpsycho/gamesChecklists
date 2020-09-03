@@ -2,7 +2,7 @@
 // eslint-disable-next-line no-redeclare
 const RESET = (function(){
 
-  function promptReset(checklist = Checklist.getActiveChecklist()) {
+  function promptReset(checklist = ChecklistApp.getActiveChecklist()) {
     time();
     const ui = SpreadsheetApp.getUi();
   

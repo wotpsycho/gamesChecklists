@@ -2,14 +2,13 @@
 // eslint-disable-next-line no-redeclare
 const TOTALS = (function(){
 // Save as Note to A1
-  function updateTotals(sheet) {
+  function updateTotals(checklist = ChecklistApp.getActiveChecklist()) {
     time();
     // static imports
-    const {COLUMN,ROW} = Checklist;
+    const {COLUMN,ROW} = ChecklistApp;
     const {STATUS} = AVAILABLE;
     const {CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ} = FORMULA;
 
-    const checklist = Checklist.fromSheet(sheet);
     // TODO determine best way for reporting
     // if (columns.item === columns.check+1) return; // No type/category to break down
     // const counts = _countByType(sheet, columns.check+1);

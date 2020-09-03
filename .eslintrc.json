@@ -30,16 +30,14 @@
         "ScriptApp": false,
         "Logger": false,
 
-        "Checklist": false,
+        "ChecklistApp": false,
 
         "AVAILABLE": false,
         "FORMULA": false,
         "META": false,
-        "QUICK_FILTER": false, 
         "RESET": false,
         "SETTINGS": false,
         "TOTALS": false,
-        "UTIL": false,
 
         "time": false,
         "timeEnd": false

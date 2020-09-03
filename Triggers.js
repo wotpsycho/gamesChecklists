@@ -3,8 +3,8 @@ function handleEdit(event) {
   time();
   try {
     // static imports
-    const COLUMN = Checklist.COLUMN;
-    const ROW = Checklist.ROW;
+    const COLUMN = ChecklistApp.COLUMN;
+    const ROW = ChecklistApp.ROW;
 
     time("event.range");
     const range = event.range;
@@ -14,12 +14,12 @@ function handleEdit(event) {
     const sheet = range.getSheet();
     timeEnd("range.getSheet()");
     
-    time("Checklist.setActiveSheet(..)");
-    Checklist.setActiveSheet(sheet);
-    timeEnd("Checklist.setActiveSheet(..)");
+    time("ChecklistApp.setActiveSheet(..)");
+    ChecklistApp.setActiveSheet(sheet);
+    timeEnd("ChecklistApp.setActiveSheet(..)");
 
     time("getCL");
-    const checklist = Checklist.getActiveChecklist();
+    const checklist = ChecklistApp.getActiveChecklist();
     timeEnd("getCL");
     
     
@@ -29,17 +29,19 @@ function handleEdit(event) {
     Logger.log("edit: ", range.getA1Notation());
     timeEnd("logEditedRange");
         
+    time("quickFilterChange");
     if (checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
-      QUICK_FILTER.onChange(sheet, range, event);
+      checklist.quickFilterChange(event);
     }
+    timeEnd("quickFilterChange");
 
     if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
       switch (event.value){
         case "reset":  checklist.reset(); break;
-        case "meta": META.ProcessMeta(sheet); break;
+        case "meta": META.ProcessMeta(checklist); break;
         case "FULL RESET": checklist.reset(true); break;
       }
-      TOTALS.updateTotals(sheet);
+      TOTALS.updateTotals(checklist);
       return;
     }
     
@@ -76,7 +78,7 @@ function handleEdit(event) {
     
     time("updateTotals");
     if (checklist.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
-      TOTALS.updateTotals(sheet);
+      TOTALS.updateTotals(checklist);
     }
     timeEnd("updateTotals");
   } catch(e) {
@@ -84,7 +86,6 @@ function handleEdit(event) {
     event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);
     throw e;
   } finally {
-    Checklist.clearActiveSheet();
     timeEnd();
   }
 }
@@ -135,7 +136,7 @@ function onSelectionChange(event) {
   const range = event.range;
   const sheet = range.getSheet();
   console.log("onSelectionChange", range);
-  Checklist.setActiveSheet(sheet);
+  ChecklistApp.setActiveSheet(sheet);
   //AVAILABLE.checkErrors(event.range);
    
   // if (SETTINGS.isEditable(sheet)) {

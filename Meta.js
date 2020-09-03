@@ -3,10 +3,10 @@
 // eslint-disable-next-line no-redeclare
 const META = (function(){
 
-  function ProcessMeta(sheet = Checklist.getActiveSheet()) {
+  function ProcessMeta(checklist = ChecklistApp.getActiveChecklist()) {
     time();
 
-    const checklist = _getChecklistWithMetaSheet(sheet, true);
+    checklist = _ensureChecklistHasMetaSheet(checklist, true);
 
     if (!checklist || !checklist.isChecklist) {
       SpreadsheetApp.getUi().alert("This does not appear to be a checklist. Please run on the correct sheet, or run the Reset method.");
@@ -29,16 +29,16 @@ const META = (function(){
     timeEnd();
   }
 
-  function setDataValidationFromMeta(sheet) {
-    const checklist = _getChecklistWithMetaSheet(sheet);
+  function setDataValidationFromMeta(checklist) {
+    checklist = _ensureChecklistHasMetaSheet(checklist);
     const headerMetadata = checklist && _getMetadata(checklist);
     if (headerMetadata) {
       _setDataValidationForChecklistToMetaValues(checklist, headerMetadata);
     }
   }
 
-  function setMetaEditable(sheet, _isEditable) {
-    const checklist = _getChecklistWithMetaSheet(sheet);
+  function setMetaEditable(checklist, _isEditable) {
+    checklist = _ensureChecklistHasMetaSheet(checklist);
     if (checklist) {
       if (_isEditable === false) {
         checklist.metaSheet.protect().setWarningOnly(true);
@@ -60,11 +60,10 @@ const META = (function(){
     return headerMetadata;
   }
 
-  function _getChecklistWithMetaSheet(sheet, _interactive) {
-    let cl = Checklist.fromSheet(sheet);
-    if (!cl.isChecklist) cl = Checklist.checklistFromMeta(sheet) || cl;
+  function _ensureChecklistHasMetaSheet(checklist, _interactive) {
+    if (!checklist.isChecklist) checklist = ChecklistApp.checklistFromMeta(checklist.sheet) || checklist;
 
-    let metaSheet = cl.metaSheet;
+    let metaSheet = checklist.metaSheet;
     if (_interactive) {
       const ui = SpreadsheetApp.getUi();
       let metaSheetName;
@@ -74,14 +73,14 @@ const META = (function(){
         metaSheetName = response.getResponseText();
         metaSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(metaSheetName);
         if (metaSheet) {
-          cl.metaSheet = metaSheet;
+          checklist.metaSheet = metaSheet;
         }
       }
       if (!metaSheet) {
         ui.alert("Sheet Not Found", "Could not find the sheet named '" + metaSheetName + "', please verify and try again.", ui.ButtonSet.OK);
       }
     }
-    return metaSheet && cl;
+    return metaSheet && checklist;
   }
 
   function _readHeaderMetadata(checklist) {
@@ -157,7 +156,7 @@ const META = (function(){
   function _determineMissingValues(checklist, headerMetadata) {
     time();
     Object.entries(checklist.columnsByHeader).forEach(([checklistColumnName, checklistColumn]) => {
-      if (checklistColumn == checklist.toColumnIndex(Checklist.COLUMN.ITEM)) return; // Skip the Item column
+      if (checklistColumn == checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) return; // Skip the Item column
       // const checklistRange = checklist.getColumnDataRange(checklistColumn);
       const metadata = headerMetadata[checklistColumnName];
       if (metadata) {
@@ -183,7 +182,7 @@ const META = (function(){
   function _setDataValidationForChecklistToMetaValues(checklist, headerMetadata) {
     time();
     Object.values(headerMetadata).forEach(function(metadata) {
-      if (metadata.metaValueCells && metadata.range && metadata.column != checklist.toColumnIndex(Checklist.COLUMN.ITEM)) {
+      if (metadata.metaValueCells && metadata.range && metadata.column != checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
         metadata.rangeValidation = SpreadsheetApp
           .newDataValidation()
           .requireValueInList(Object.keys(metadata.metaValueCells), true)
@@ -298,8 +297,8 @@ const META = (function(){
     timeEnd();
   }
 
-  function setConditionalFormatRules(sheet) {
-    const checklist = _getChecklistWithMetaSheet(sheet,false);
+  function setConditionalFormatRules(checklist) {
+    checklist = _ensureChecklistHasMetaSheet(checklist,false);
     if (checklist && checklist.isChecklist && checklist.metaSheet) {
       const metadata = _getMetadata(checklist,false);
       _updateConditionalFormatToMetaValues(checklist,metadata);
@@ -321,6 +320,6 @@ function ProcessMeta() {
 // eslint-disable-next-line no-unused-vars
 function debug(){
   time();
-  META.removeDataValidationFromMeta(Checklist.getActiveSheet());
+  META.removeDataValidationFromMeta(ChecklistApp.getActiveChecklist());
   timeEnd();
 }
