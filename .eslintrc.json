@@ -31,13 +31,11 @@
         "Logger": false,
 
         "ChecklistApp": false,
+        "StatusTranspiler": false,
 
-        "AVAILABLE": false,
         "FORMULA": false,
         "META": false,
-        "RESET": false,
         "SETTINGS": false,
-        "TOTALS": false,
 
         "time": false,
         "timeEnd": false

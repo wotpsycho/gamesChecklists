@@ -41,13 +41,13 @@ function handleEdit(event) {
         case "meta": META.ProcessMeta(checklist); break;
         case "FULL RESET": checklist.reset(true); break;
       }
-      TOTALS.updateTotals(checklist);
+      checklist.ensureTotalFormula();
       return;
     }
     
     time("updateSettings");
     if (checklist.isRowInRange(ROW.SETTINGS, range)) {
-      SETTINGS.updateSettings(sheet,range);
+      SETTINGS.updateSettings(checklist,range);
       if (range.getNumRows() == 1) {
         timeEnd("updateSettings");
         return;
@@ -57,7 +57,7 @@ function handleEdit(event) {
     
     time("populateAvailable");
     if (checklist.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
-      AVAILABLE.populateAvailable(checklist, event);
+      StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(checklist, event);
     }
     timeEnd("populateAvailable");
     
@@ -65,20 +65,18 @@ function handleEdit(event) {
     if (checklist.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
     checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
       checklist.refreshFilter();
-      //FILTER.reapplyFilter(filter);
     }
     timeEnd("reapplyFilter");
     
     time("moveNotes");
     if (checklist.isColumnInRange(COLUMN.NOTES,range)) {
       checklist.syncNotes(range);
-      // NOTES.moveNotes(range);
     }
     timeEnd("moveNotes");
     
     time("updateTotals");
     if (checklist.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
-      TOTALS.updateTotals(checklist);
+      checklist.ensureTotalFormula();
     }
     timeEnd("updateTotals");
   } catch(e) {
@@ -92,7 +90,7 @@ function handleEdit(event) {
 
 function handleChange(event) {
   console.log("changeEvent",event.changeType,event);
-  // TODO validate/update metadata when implemented
+  // TODO validate/update metadata if implemented
 }
 
 /**

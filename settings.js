@@ -85,8 +85,8 @@ const SETTINGS = (function(){
         Yes: _generateSetEditableFunction(true),
         No: _generateSetEditableFunction(false),
       },
-      determiner: function(sheet) {
-        const protection = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      determiner: function(checklist) {
+        const protection = checklist.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         return protection && protection[0] ? "No" : "Yes";
       },
     },
@@ -95,8 +95,8 @@ const SETTINGS = (function(){
         On: _generateEnableQuickFilterFunction(true),
         Off: _generateEnableQuickFilterFunction(false),
       },
-      determiner: function(sheet) {
-        return ChecklistApp.fromSheet(sheet).hasRow(ChecklistApp.ROW.QUICK_FILTER) ? "On" : "Off";
+      determiner: function(checklist) {
+        return checklist.hasRow(ChecklistApp.ROW.QUICK_FILTER) ? "On" : "Off";
       },
     },
     Mode: {
@@ -108,33 +108,31 @@ const SETTINGS = (function(){
   };
   const SETTING_REGEX = /^(.+): (.+?)(\*)?$/;
 
-  function updateSettings(sheet, _range) {
+  function updateSettings(checklist, _range) {
     time();
-    const checklist = ChecklistApp.fromSheet(sheet);
-    const settingsObject = getSettingsObject(sheet);
+    const settingsObject = getSettingsObject(checklist);
     
     Object.entries(settingsObject).forEach(function([setting, settingInfo]) {
       if (settingInfo.column && (!_range || checklist.isColumnInRange(settingInfo.column, _range))) {
         // The setting is present and was just changed, execute the function(s) associated with it
-        setSetting(sheet, setting);
+        setSetting(checklist, setting);
         Logger.log("Setting updated: ", setting, settingInfo.value);
       }
     });
     
-    _populateEmptyDataValidation(sheet); 
+    _populateEmptyDataValidation(checklist); 
     timeEnd();
   }
 
-  function setSettings(sheet,settings) {
+  function setSettings(checklist,settings) {
     Object.entries(settings).forEach(function([setting,value]) {
-      setSetting(sheet,setting,value);
+      setSetting(checklist,setting,value);
     });
   }
 
-  function setSetting(sheet, setting, _settingValue) {
+  function setSetting(checklist, setting, _settingValue) {
     time();
-    const checklist = ChecklistApp.fromSheet(sheet);
-    const settingsObject = getSettingsObject(sheet);
+    const settingsObject = getSettingsObject(checklist);
     
     if (!settingsObject[setting]) throw new Error("Invalid setting: ", + setting);
     
@@ -147,24 +145,24 @@ const SETTINGS = (function(){
       cell.setValue(setting + ": " + _settingValue);
       _setDataValidation(cell, setting);
     }
-    _executeSetting(sheet, setting);
-    _checkCustomMode(sheet);
+    _executeSetting(checklist, setting);
+    _checkCustomMode(checklist);
     
     // cache
     settingsCache = undefined;
     timeEnd();
   }
 
-  function getSetting(sheet, setting) {
-    return getSettings(sheet)[setting];
+  function getSetting(checklist, setting) {
+    return getSettings(checklist)[setting];
   }
 
-  function getSettings(sheet = ChecklistApp.getActiveSheet()) {
-    return Object.fromEntries(Object.entries(getSettingsObject(sheet)).map(([setting, settingInfo]) => [setting, settingInfo.value]));
+  function getSettings(checklist = ChecklistApp.getActiveChecklist()) {
+    return Object.fromEntries(Object.entries(getSettingsObject(checklist)).map(([setting, settingInfo]) => [setting, settingInfo.value]));
   }
 
   let settingsCache;
-  function getSettingsObject(sheet = ChecklistApp.getActiveSheet()) {
+  function getSettingsObject(checklist = ChecklistApp.getActiveChecklist()) {
     if (settingsCache) return Object.assign({},settingsCache);
     time();
     
@@ -176,7 +174,6 @@ const SETTINGS = (function(){
       };
       settings._available[setting] = true;
     });
-    const checklist = ChecklistApp.fromSheet(sheet);
     
     if (!checklist.hasRow(ChecklistApp.ROW.SETTINGS)) return settings;
     
@@ -208,7 +205,7 @@ const SETTINGS = (function(){
     // If it is not set by setting, determine based on sheet
     Object.keys(SETTINGS_CONFIG).forEach(function(setting) {
       if (!settings[setting].value) {
-        settings[setting].value = SETTINGS_CONFIG[setting].determiner(sheet);
+        settings[setting].value = SETTINGS_CONFIG[setting].determiner(checklist);
       }
     });
     console.log(settingsSheetValues);
@@ -218,34 +215,33 @@ const SETTINGS = (function(){
     return settingsCache = settings;
   }
 
-  function resetSettings(sheet = ChecklistApp.getActiveSheet(), _mode) {
+  function resetSettings(checklist = ChecklistApp.getActiveChecklist(), _mode) {
     time();
-    _populateEmptyDataValidation(sheet);
+    _populateEmptyDataValidation(checklist);
     if (_mode) {
-      setSetting(sheet,"Mode",_mode);
+      setSetting(checklist,"Mode",_mode);
     }
     timeEnd();
   }
 
-  function _executeSetting(sheet, setting) {
+  function _executeSetting(checklist, setting) {
     time(setting, true);
-    const settings = getSettings(sheet);
+    const settings = getSettings(checklist);
     
     const settingFunction = SETTINGS_CONFIG[setting].options[settings[setting]];
     if (Array.isArray(settingFunction)) {
       settingFunction.forEach(function(func) {
-        func(sheet);
+        func(checklist);
       });
     } else {
-      settingFunction(sheet);
+      settingFunction(checklist);
     }
     timeEnd(setting, true);
   }
 
-  function _populateEmptyDataValidation(sheet) {
+  function _populateEmptyDataValidation(checklist) {
     time();
-    const checklist = ChecklistApp.fromSheet(sheet);
-    const settingsObject = getSettingsObject(sheet);
+    const settingsObject = getSettingsObject(checklist);
     
     const range = checklist.getRowRange(ChecklistApp.ROW.SETTINGS,2);
     const settingRowValues = checklist.getRowValues(ChecklistApp.ROW.SETTINGS,2);
@@ -280,10 +276,9 @@ const SETTINGS = (function(){
     timeEnd();
   }
 
-  function _checkCustomMode(sheet) {
+  function _checkCustomMode(checklist) {
     time();
-    const checklist = ChecklistApp.fromSheet(sheet);
-    const settingsObject = getSettingsObject(sheet);
+    const settingsObject = getSettingsObject(checklist);
     
     if (!settingsObject.Mode.column) return;
     
@@ -312,8 +307,7 @@ const SETTINGS = (function(){
 
 
   function _generateFilterValueVisibilityDeterminer(columnId, value, ifVisible, ifHidden) {
-    return function filterValueVisibilityDeterminer(sheet) {
-      const checklist = ChecklistApp.fromSheet(sheet);
+    return function filterValueVisibilityDeterminer(checklist) {
       const criteria = checklist.filter && checklist.filter.getColumnFilterCriteria(checklist.toColumnIndex(columnId));
       const hiddenValues = criteria && criteria.getHiddenValues();
       return hiddenValues && hiddenValues.includes(value) ? ifHidden : ifVisible;
@@ -321,9 +315,8 @@ const SETTINGS = (function(){
   }
 
   function _generateUpdateFilterValuesVisibilityFunction(columnName, valuesToShow, valuesToHide) {
-    return function updateFilterValuesVisibility(sheet) {
+    return function updateFilterValuesVisibility(checklist) {
       time(columnName, true);
-      const checklist = ChecklistApp.fromSheet(sheet);
       let changed = false;
       const criteria = checklist.filter.getColumnFilterCriteria(checklist.toColumnIndex(columnName));
       let newCriteria, hiddenValues;
@@ -363,43 +356,40 @@ const SETTINGS = (function(){
   }
 
   function _generateColumnVisibilityDeterminer(columnId, ifVisible, ifHidden) {
-    return function columnVisibilityDeterminer(sheet) {
-      const checklist = ChecklistApp.fromSheet(sheet);
-      return sheet.isColumnHiddenByUser(checklist.toColumnIndex(columnId)) ? ifHidden : ifVisible;
+    return function columnVisibilityDeterminer(checklist) {
+      return checklist.sheet.isColumnHiddenByUser(checklist.toColumnIndex(columnId)) ? ifHidden : ifVisible;
     };
   }
 
   function _generateSetColumnVisibilityFunction(columnId, isVisible) {
-    return function setColumnVisibility(sheet) {
+    return function setColumnVisibility(checklist) {
       time(columnId + " " + isVisible, true);
-      const checklist = ChecklistApp.fromSheet(sheet);
       const columnIndex = checklist.toColumnIndex(columnId);
       if (!columnIndex) throw new Error("Column does not exist", columnId);
       
       if (isVisible) {
-        sheet.showColumns(columnIndex);
+        checklist.sheet.showColumns(columnIndex);
       } else {
-        sheet.hideColumns(columnIndex);
+        checklist.sheet.hideColumns(columnIndex);
       }
       timeEnd(columnId + " " + isVisible, true);
     };
   }
 
   function _generateSetEditableFunction(editable) {
-    return function setEditable(sheet) {
+    return function setEditable(checklist) {
       time();
-      const checklist = ChecklistApp.fromSheet(sheet);
       const preReqColumnRange = checklist.getColumnDataRange(ChecklistApp.COLUMN.PRE_REQS);
       
       // Remove old protection either way; was hitting race condition with deleting quickFilter row
-      const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      const protections = checklist.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
       if (protections && protections[0]) {
         protections[0].remove();
       }
       
       if (!editable) {
         // Protect sheet
-        const protection = sheet.protect();
+        const protection = checklist.sheet.protect();
         protection.setWarningOnly(true);
         const unprotected = [];
         if (checklist.hasRow(ChecklistApp.ROW.QUICK_FILTER)) {
@@ -437,20 +427,19 @@ const SETTINGS = (function(){
   }
 
   function _generateSetSettingHelperFunction(setting, value) {
-    return function setSettingHelper(sheet) { 
-      setSetting(sheet, setting, value); 
+    return function setSettingHelper(checklist) { 
+      setSetting(checklist, setting, value); 
     };
   }
 
   function _generateSetModeFunction(settings) {
-    return function setMode(sheet) {
-      setSettings(sheet, settings);
+    return function setMode(checklist) {
+      setSettings(checklist, settings);
     };
   }
 
   function _generateEnableQuickFilterFunction(enabled) {
-    return function enableQuickFilter(sheet) {
-      const checklist = ChecklistApp.fromSheet(sheet);
+    return function enableQuickFilter(checklist) {
       if (enabled) {
         if (!checklist.hasRow(ChecklistApp.ROW.QUICK_FILTER)) {
           checklist.toggleQuickFilterRow(true);
@@ -478,9 +467,9 @@ const SETTINGS = (function(){
           }
         }
       }
-      if (getSetting(sheet, "Editable") == "No") {
+      if (getSetting(checklist, "Editable") == "No") {
         // If it is not editable, need to update to reflect the fact that this ignored range is updated
-        setSetting(sheet, "Editable");
+        setSetting(checklist, "Editable");
       }
     };
   }
@@ -526,7 +515,7 @@ const SETTINGS = (function(){
 
 // eslint-disable-next-line no-unused-vars
 function debug() {
-  const sheet = ChecklistApp.getActiveSheet();
-  SETTINGS.setSetting(sheet, "Editable");
+  const checklist = ChecklistApp.getActiveChecklist();
+  SETTINGS.setSetting(checklist, "Editable");
 //  getSettingsObject(SpreadsheetApp.getActiveSheet());
 }

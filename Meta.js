@@ -80,7 +80,10 @@ const META = (function(){
         ui.alert("Sheet Not Found", "Could not find the sheet named '" + metaSheetName + "', please verify and try again.", ui.ButtonSet.OK);
       }
     }
-    return metaSheet && checklist;
+    if (checklist && checklist.metaSheet) {
+      checklist.activate();
+      return checklist;
+    }
   }
 
   function _readHeaderMetadata(checklist) {
