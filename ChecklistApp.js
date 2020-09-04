@@ -131,10 +131,6 @@ const ChecklistApp = (function(){
     constructor(sheet) {
       this._sheet = sheet;
     }
-
-    activate() {
-      ChecklistApp.setActiveSheet(this.sheet);
-    }
     
     // PROPERTIES SECTION
     get sheet() {
@@ -262,11 +258,25 @@ const ChecklistApp = (function(){
       }
       timeEnd("set metaSheet");
     }
+    // END PROPERTY SECTIONS
 
-    // PROPERTY SECTIONS
+    // UI Section
+    activate() {
+      ChecklistApp.setActiveSheet(this.sheet);
+    }
+
+    toast(message, _titleOrSeconds, _seconds) {
+      let title, seconds;
+      if (Number(_titleOrSeconds)) { // 0 seconds not valid so truthy check OK
+        seconds = _titleOrSeconds;
+      } else {
+        [title,seconds] = [_titleOrSeconds,_seconds];
+      }
+      this.spreadsheet.toast(message,title,seconds);
+    }
+    // END UI SECTION
 
     // RANGE/DATA SECTION
-
     _checkRow(row,_allowMissingRow = false) {
       if (!Number(row)) {
         if (!this.rows[row]) {
@@ -331,6 +341,16 @@ const ChecklistApp = (function(){
       return this.sheet.getRange(this.toRowIndex(row),this.toColumnIndex(column),_numRows,_numColumns);
     }
 
+    getUnboundedRange(row, column, endRow, endColumn) {
+      // R1C1 unbounded column/row range results in Rn:Rm/Cn:Cm which is interpreted as A1. Use existing A1 formula translator instead
+      return this.getRange(FORMULA.A1(
+        row       && this.toRowIndex(   row), 
+        column    && this.toColumnIndex(column), 
+        endRow    && this.toRowIndex(   endRow), 
+        endColumn && this.toColumnIndex(endColumn)
+      ));
+    }
+
     getValues(row, column, _numRows = 1, _numColumns = 1) {
       return this.getRange(row, column, _numRows, _numColumns).getValues();
     }
@@ -380,7 +400,7 @@ const ChecklistApp = (function(){
     }
 
     getUnboundedColumnDataRange(column, _startRow = this.firstDataRow) {
-      return this.getRange(`R${_startRow}C${this.toColumnIndex(column)}:C${this.toColumnIndex(column)}`);
+      return this.getUnboundedRange(_startRow,column,null,column);
     }
 
     setColumnDataValues(column, values, _startRow = this.firstDataRow) {
@@ -393,7 +413,7 @@ const ChecklistApp = (function(){
 
     getUnboundedRowRange(row, _startColumn = 1) {
       const rowIndex = this.toRowIndex(row);
-      return this.getRange(`R${rowIndex}C${_startColumn}:R${rowIndex}`);
+      return this.getUnboundedRange(rowIndex,_startColumn,rowIndex,null);
     }
 
     getRowValues(row, _startColumn = 1, _numColumns = this.lastColumn - _startColumn + 1) {
@@ -459,7 +479,7 @@ const ChecklistApp = (function(){
       const toastMessage = `${_resetData ? "Resetting" : "Refreshing"}...`;
       const previousMode = SETTINGS.getSetting(this,"Mode"); // Preserve mode
 
-      this.spreadsheet.toast(toastMessage, toastTitle, -1);
+      this.toast(toastMessage, toastTitle, -1);
       Logger.log("Reseting checklist ", this.sheet.getName());
   
       time("filter removal");
@@ -538,7 +558,7 @@ const ChecklistApp = (function(){
       SETTINGS.resetSettings(this, previousMode || "Edit");
       timeEnd("settings");
 
-      this.spreadsheet.toast("Done!", toastTitle,5);
+      this.toast("Done!", toastTitle,5);
       timeEnd();
 
     }
@@ -761,7 +781,7 @@ const ChecklistApp = (function(){
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
       const statusDataRange = this.getUnboundedColumnDataRange(COLUMN.STATUS);
       const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
-      const allDataRange = this.getRange(`R${this.firstDataRow}C1:C${this.lastColumn}`);
+      const allDataRange = this.getUnboundedRange(this.firstDataRow,1,null,this.lastColumn);
       
       
       const relativeCheckboxCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.CHECK),true);
@@ -867,11 +887,30 @@ const ChecklistApp = (function(){
         timeEnd("refreshFilter");
       }
     }
-    createFilter() {
+    createFilter(_oldFilter) {
       this.removeFilter();
-      console.log("creating filter for rcrc ", this.headerRow, 2, this.sheet.getMaxRows()-this.headerRow,this.lastColumn-2);
-      const filterRange = this.getRange(`R${this.headerRow}C1:C${this.lastColumn}`);//,1,this.sheet.getMaxRows()-this.headerRow+1,this.lastColumn);
+      const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);//,1,this.sheet.getMaxRows()-this.headerRow+1,this.lastColumn);
       filterRange.createFilter();
+      if (_oldFilter) {
+        const oldFilterRange = _oldFilter.getRange();
+        for (let column = oldFilterRange.getColumn(); column <= oldFilterRange.getLastColumn(); column++) {
+          const criteria = _oldFilter.getColumnFilterCriteria(column);
+          if (criteria) {
+            this.filter.setColumnFilterCriteria(column,criteria);
+          }
+        }
+      }
+    }
+    ensureFilterSize() {
+      const filterRange = this.filter.getRange();
+      if (filterRange.getRow()        != this.headerRow 
+      ||  filterRange.getColumn()     != 1 
+      ||  filterRange.getLastRow()    != this.sheet.getMaxRows() 
+      ||  filterRange.getLastColumn() != this.lastColumn) {
+        this.toast("Please wait...","Expanding Filter",-1);
+        this.createFilter(this.filter);
+        this.toast("Done!", "ExpandingFilter");
+      }
     }
     // END FILTER SECTION
 

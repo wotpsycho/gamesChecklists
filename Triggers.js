@@ -73,6 +73,13 @@ function handleEdit(event) {
       checklist.syncNotes(range);
     }
     timeEnd("moveNotes");
+
+    time("checkFilterSize");
+    if (!event.value && !event.oldValue) {
+      // was more than a cell change, 
+      checklist.ensureFilterSize();
+    }
+    timeEnd("checkFilterSize");
     
     time("updateTotals");
     if (checklist.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
