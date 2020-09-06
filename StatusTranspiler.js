@@ -9,8 +9,8 @@ const StatusTranspiler = (function(){
   class StatusTranspiler {
     constructor(checklist) {
       if (transpilerCreationLock) throw new Error("Do not create transpiler direcly, use " + StatusTranspiler.getTranspilerForChecklist.name);
-      this._checklist = checklist;
-      checklistTranspilers[checklist.sheet.getSheetId()] = this;
+      Object.defineProperty(this,"checklist",{value: checklist});
+      checklistTranspilers[checklist.sheetId] = this;
     }
 
     static getActiveChecklistTranspiler(){
@@ -18,7 +18,7 @@ const StatusTranspiler = (function(){
     }
 
     static getTranspilerForChecklist(checklist = ChecklistApp.getActiveChecklist()) {
-      let transpiler = checklistTranspilers[checklist.sheet.getSheetId()];
+      let transpiler = checklistTranspilers[checklist.sheetId];
       if (!transpiler) {
         transpilerCreationLock = false;
         transpiler = new StatusTranspiler(checklist);
@@ -29,10 +29,6 @@ const StatusTranspiler = (function(){
 
     static validateAndGenerateStatusFormulasForChecklist(checklist = ChecklistApp.getActiveChecklist(), _event) {
       StatusTranspiler.getTranspilerForChecklist(checklist).validateAndGenerateStatusFormulas(_event);
-    }
-
-    get checklist() {
-      return this._checklist;
     }
 
     // CLASS DEFINITION
@@ -976,7 +972,8 @@ const StatusTranspiler = (function(){
       };
 
       timeEnd();
-      return this._CellFormulaParser = CellFormulaParser;
+      Object.defineProperty(this,"_CellFormulaParser",{value: CellFormulaParser}); // Prevents rewrite
+      return this._CellFormulaParser;
     }
 
     // PUBLIC FUNCTIONS

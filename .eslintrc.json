@@ -35,7 +35,7 @@
 
         "FORMULA": false,
         "META": false,
-        "SETTINGS": false,
+        "ChecklistSettings": false,
 
         "time": false,
         "timeEnd": false

@@ -26,13 +26,13 @@ const ChecklistApp = (function(){
     ERROR: "ERROR",
   });
   
-  const COLUMN_HEADER = Object.freeze({
-    CHECK: "✓",
-    TYPE: "Type",
-    ITEM: "Item",
-    PRE_REQS: "Pre-Reqs",
-    STATUS: "Available",
-    NOTES: "Notes",
+  const COLUMN_HEADERS = Object.freeze({
+    [COLUMN.CHECK]: "✓",
+    [COLUMN.TYPE]: "Type",
+    [COLUMN.ITEM]: "Item",
+    [COLUMN.PRE_REQS]: "Pre-Reqs",
+    [COLUMN.STATUS]: "Available",
+    [COLUMN.NOTES]: "Notes",
   });
 
   const COLOR = Object.freeze({
@@ -47,10 +47,10 @@ const ChecklistApp = (function(){
     WHITE: "white",
   });
 
-  const ROW_HEADER = Object.freeze({
-    QUICK_FILTER: "Filter",
-    SETTINGS: "⚙",
-    HEADERS: "✓",
+  const ROW_HEADERS = Object.freeze({
+    [ROW.QUICK_FILTER]: "Filter",
+    [ROW.SETTINGS]: "⚙",
+    [ROW.HEADERS]: "✓",
   });
 
   const MAX_EMPTY_ROWS = 100;
@@ -129,13 +129,10 @@ const ChecklistApp = (function(){
 
   class Checklist {
     constructor(sheet) {
-      this._sheet = sheet;
+      Object.defineProperty(this,"sheet",{value: sheet});
     }
     
     // PROPERTIES SECTION
-    get sheet() {
-      return this._sheet;
-    }
 
     get spreadsheet() {
       return this.sheet.getParent();
@@ -148,16 +145,14 @@ const ChecklistApp = (function(){
     get rows() {
       if (!this._rows) {
         time("get rows");
+        Object.defineProperty(this,"_rows", {value: {}});
+        
         const numRowTypes = Object.keys(ROW).length;
-      
         const rowHeaders = this.getColumnValues(1,1,numRowTypes);
-        this._rows = {};
         for (let i = 0; i < rowHeaders.length; i++) {
           let rowType;
           Object.values(ROW).forEach(type => {
-          // console.log("type,value",rowType,rowHeaders[i]);
-          
-            if (rowHeaders[i] && rowHeaders[i] == ROW_HEADER[type]) {
+            if (rowHeaders[i] && rowHeaders[i] == ROW_HEADERS[type]) {
               rowType = type;
             }
           });
@@ -172,17 +167,11 @@ const ChecklistApp = (function(){
     get columns() {
       if (!this.isChecklist) return {};
       if (!this._columns) {
+        Object.defineProperty(this,"_columns", {value: {}});
+
         time("get columns");
-        this._columns = {};
-        this._columnsByHeader = {};
-        const columnHeaders = this.getRowValues(this.headerRow);
-        columnHeaders.forEach((header, i) => {
-          if (!header) return;
-          const column = i + 1;
-          this._columnsByHeader[header] = column;
-        });
         Object.values(COLUMN).forEach(columnType => {
-          const column = this._columnsByHeader[COLUMN_HEADER[columnType]];
+          const column = this.columnsByHeader[COLUMN_HEADERS[columnType]];
           if (column) {
             this._columns[columnType] = column;
           }
@@ -192,7 +181,45 @@ const ChecklistApp = (function(){
       return {...this._columns};
     }
     get columnsByHeader() {
-      return (this.columns && this._columnsByHeader && {...this._columnsByHeader}) || {};
+      if (!this._columnsByHeader) {
+        Object.defineProperty(this,"_columnsByHeader", {value: {}});
+        const columnHeaders = this.getRowValues(this.headerRow);
+        columnHeaders.forEach((header, i) => {
+          if (!header) return;
+          const column = i + 1;
+          this._columnsByHeader[header] = column;
+        });
+      }
+      return {...this._columnsByHeader};
+    }
+
+    get title() {
+      if (typeof this._title == "undefined") {
+        const titleValues = this.getRowValues(ROW.TITLE, 2);
+        const titleIndex = titleValues.findIndex(value => value);
+        Object.defineProperty(this,"_title",      {configurable: true, value: titleIndex >= 0 ? titleValues[titleIndex] : null});
+        Object.defineProperty(this,"_titleColumn",{configurable: true, value: titleIndex >= 0 ? titleIndex + 2          : 3});
+      }
+      return this._title;
+    }
+
+    set title(newTitle) {
+      if (newTitle != this.title) {
+        Object.defineProperty(this,"_title",{configurable: true, value: newTitle});
+        this.setValue(ROW.TITLE,this._titleColumn,newTitle);
+      }
+    }
+
+    get name() {
+      return this.sheet.getName();
+    }
+
+    set name(newName) {
+      this.sheet.setName(newName);
+    }
+
+    get sheetId() {
+      return this.sheet.getSheetId();
     }
     
     get isChecklist() {
@@ -215,35 +242,44 @@ const ChecklistApp = (function(){
       return this.sheet.getLastRow();
     }
 
+    get maxRows() {
+      return this.sheet.getMaxRows();
+    }
+
+    get maxColumns() {
+      return this.sheet.getMaxColumns();
+    }
+
     get metaSheet() {
-      if (!this.isChecklist) return undefined;
       if (typeof this._metaSheet == "undefined") {
         time("get metaSheet");
+        let metaSheet;
         const devMeta = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
         if (devMeta && devMeta[0]) {
-          this._metaSheet = this.sheet.getParent().getSheetByName(devMeta[0].getValue());
-          if (!this._metaSheet) {
+          metaSheet = this.sheet.getParent().getSheetByName(devMeta[0].getValue());
+          if (!metaSheet) {
             const metaDevMeta = this.sheet.getParent().createDeveloperMetadataFinder().withKey("metaForSheet").withValue(this.sheet.getName()).withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
             if (metaDevMeta && metaDevMeta[0]) {
-              this._metaSheet = metaDevMeta[0].getLocation().getSheet();
-              this.metaSheet = this._metaSheet;
+              metaSheet = metaDevMeta[0].getLocation().getSheet();
+              this.metaSheet = metaSheet; // run setter to set metadata
             }
           }
         }
-        if (!this._metaSheet) {
-          this._metaSheet = this.sheet.getParent().getSheetByName(this.sheet.getName() + " Meta");
-          if (this._metaSheet) {
-            this.metaSheet = this._metaSheet;
+        if (!metaSheet) {
+          metaSheet = this.sheet.getParent().getSheetByName(this.sheet.getName() + " Meta");
+          if (metaSheet) {
+            this.metaSheet = metaSheet; // run setter to set metadata
           }
         }
-        if (!this._metaSheet) this._metaSheet = null;
+        if (!metaSheet) metaSheet = null;
+        Object.defineProperty(this,"_metaSheet",{configurable: true, value: metaSheet});
         timeEnd("get metaSheet");
       }
       return this._metaSheet;
     }
     set metaSheet(metaSheet) {
       time("set metaSheet");
-      this._metaSheet = metaSheet;
+      Object.defineProperty(this,"_metaSheet",{configurable: true, value: metaSheet});
       const devMeta = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (devMeta && devMeta[0]) {
         devMeta[0].setValue(this._metaSheet.getName());
@@ -257,6 +293,43 @@ const ChecklistApp = (function(){
         metaSheet.addDeveloperMetadata("metaForSheet", this.sheet.getName(), SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
       }
       timeEnd("set metaSheet");
+    }
+    createMetaSheet(name = this.name + " Meta") {
+      this.metaSheet = this.spreadsheet.insertSheet(name, this.sheet.getIndex());
+      this.activate(); // creating the new sheet activates it
+    }
+
+    get editable() {
+      return !!this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
+    }
+    set editable(isEditable) {
+      const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
+      if (protection && isEditable) {
+        protection.remove();
+        META.setEditable(this,isEditable);
+      } else if (!protection && !isEditable) {
+        const protection = this.sheet.protect();
+        protection.setWarningOnly(true);
+        const editableRanges = [];
+        if (this.hasRow(ROW.QUICK_FILTER)) {
+          editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
+        }
+        if (this.hasRow(ROW.SETTINGS)) {
+          editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.SETTINGS));
+        }
+        if (this.hasColumn(ChecklistApp.COLUMN.CHECK)) {
+          editableRanges.push(this.getUnboundedColumnDataRange(ChecklistApp.COLUMN.CHECK));
+        }
+        protection.setUnprotectedRanges(editableRanges);
+        META.setEditable(this,isEditable);
+      }
+    }
+
+    get settings() {
+      if (!this._settings) {
+        Object.defineProperty(this,"_settings",{value: ChecklistSettings.getSettingsForChecklist(this)});
+      }
+      return this._settings;
     }
     // END PROPERTY SECTIONS
 
@@ -371,11 +444,12 @@ const ChecklistApp = (function(){
     }
 
     getColumnRange(column, _startRow = 1, _numRows = this.lastRow - _startRow + 1) {
+      if (_numRows <= 0 && this.lastRow != this.maxRows) _numRows += this.maxRows - this.lastRow;
       return this.getRange(_startRow, column, _numRows, 1);
     }
 
     getColumnValues(column, _startRow = 1, _numRows = this.lastRow - _startRow + 1) {
-      return this.getValues(_startRow, column, _numRows, 1).map(row => row[0]);
+      return this.getColumnRange(_startRow, column, _numRows, 1).getValues().map(row => row[0]);
     }
 
     setColumnValues(column, values, _startRow = 1) {
@@ -383,13 +457,14 @@ const ChecklistApp = (function(){
     }
 
     getColumnDataRange(column, _startRow = this.firstDataRow, _numRows = this.lastRow - _startRow + 1) {
+      if (_numRows <= 0 && this.lastRow != this.maxRows) _numRows += this.maxRows - this.lastRow;
       if (_numRows <= 0) return;
       return this.getColumnRange(column, _startRow, _numRows);
     }
 
     getColumnDataValues(column, _startRow = this.firstDataRow, _numRows = this.lastRow - _startRow + 1) {
-      if (_numRows == 0) return [];
-      return this.getColumnValues(column, _startRow, _numRows);
+      const columnDataRange = this.getColumnDataRange(column, _startRow, _numRows);
+      return columnDataRange && columnDataRange.getValues().map(row => row[0]) || [];
     }
 
     getColumnDataRangeFromRange(column, range) {
@@ -408,6 +483,7 @@ const ChecklistApp = (function(){
     }
 
     getRowRange(row, _startColumn = 1, _numColumns = this.lastColumn - _startColumn + 1) {
+      if (_numColumns <= 0 && this.lastColumn != this.maxColumns) _numColumns += this.maxColumns - this.lastColumn;
       return this.getRange(row, _startColumn, 1, _numColumns);
     }
 
@@ -417,7 +493,7 @@ const ChecklistApp = (function(){
     }
 
     getRowValues(row, _startColumn = 1, _numColumns = this.lastColumn - _startColumn + 1) {
-      return this.getValues(row, _startColumn, 1, _numColumns)[0];
+      return this.getRowRange(row, _startColumn, _numColumns).getValues()[0];
     }
 
     setRowValues(row, values, _startColumn = 1) {
@@ -453,11 +529,20 @@ const ChecklistApp = (function(){
       }
       return false;
     }
-
     // END RANGE/DATA SECTION
 
-    // NOTES SECTION
+    // Settings section
+    getSetting(setting) {
+      return this.settings.getSetting(setting);
+    }
 
+    setSetting(setting, value) {
+      this.settings.setSetting(setting, value);
+    }
+
+    // END Settings Section
+
+    // NOTES SECTION
     syncNotes(range) {
       time("syncNotes");
       const itemRange = this.getColumnDataRangeFromRange(COLUMN.ITEM,range);
@@ -474,13 +559,14 @@ const ChecklistApp = (function(){
 
     reset(_resetData = false) {
       time();
+      const type = !this.isChecklist ? "Initializing" : _resetData ? "Resetting" : "Refreshing";
 
-      const toastTitle = `${_resetData ? "Reset " : "Refresh "}Checklist`;
-      const toastMessage = `${_resetData ? "Resetting" : "Refreshing"}...`;
-      const previousMode = SETTINGS.getSetting(this,"Mode"); // Preserve mode
+      const toastTitle = `${type} Checklist`;
+      const toastMessage = `${type}...`;
+      const previousMode = this.getSetting(ChecklistSettings.SETTING.MODE); // Preserve mode
 
       this.toast(toastMessage, toastTitle, -1);
-      Logger.log("Reseting checklist ", this.sheet.getName());
+      Logger.log(`${type} checklist "${this.sheet.getName()}"`);
   
       time("filter removal");
       // Remove filter first to ensure data is available to write
@@ -555,7 +641,7 @@ const ChecklistApp = (function(){
       timeEnd("totals");
 
       time("settings");
-      SETTINGS.resetSettings(this, previousMode || "Edit");
+      this.setSetting(ChecklistSettings.SETTING.MODE, previousMode);
       timeEnd("settings");
 
       this.toast("Done!", toastTitle,5);
@@ -565,28 +651,43 @@ const ChecklistApp = (function(){
 
     // STRUCTURE UTILITIES
 
-    ensureColumn(columnType, columnIndex = this.lastColumn+1) {
-      // console.log("ensureColumn [columnType,columnIndex,columns[columnType],_columns]",columnType,columnIndex,this.columns[columnType],this._columns);
-      
-      if (!this.hasColumn(columnType)) {
-        columnIndex = this._checkColumn(columnIndex,true) || this.lastColumn;
-        if (columnIndex <= this.sheet.getMaxColumns()) {
-          this.sheet.insertColumnBefore(columnIndex);
-        } else {
-          columnIndex = this.lastColumn+1;
-          this.sheet.insertColumnAfter(this.lastColumn);
+    insertColumn(columnIndex) {
+      if (columnIndex <= this.maxColumns) {
+        if (columnIndex > this.lastColumn) return; // is an empty column already since it is after last and before max
+        this.sheet.insertColumnBefore(columnIndex);
+      } else {
+        columnIndex = this.lastColumn+1;
+        this.sheet.insertColumnAfter(this.lastColumn);
+      }
+      Object.keys(this._columns).forEach(_columnType => {
+        if (this._columns[_columnType] >= columnIndex) {
+          this._columns[_columnType]++;
         }
-        if (COLUMN_HEADER[columnType]) {
-          this.setValue(this.headerRow,columnIndex,COLUMN_HEADER[columnType]);
+      });
+      Object.keys(this._columnsByHeader).forEach(_columnType => {
+        if (this._columnsByHeader[_columnType] >= columnIndex) {
+          this._columnsByHeader[_columnType]++;
         }
-        Object.keys(this._columns).forEach(_columnType => {
-          if (this._columns[_columnType] >= columnIndex) {
-            this._columns[_columnType]++;
+      });
+      if (columnIndex < this.lastColumn) {
+        [ROW.TITLE, ROW.SETTINGS].forEach(rowType =>{
+          if (this.hasRow(rowType)) {
+            const shiftedRange = this.getRowRange(rowType, columnIndex+1);
+            shiftedRange.moveTo(shiftedRange.offset(0,-1));
           }
         });
+      }
+    }
+
+    ensureColumn(columnType, columnIndex = this.lastColumn+1) {
+      if (!this.hasColumn(columnType)) {
+        columnIndex = this._checkColumn(columnIndex,true) || this.lastColumn;
+        this.insertColumn(columnIndex);
+        if (COLUMN_HEADERS[columnType]) {
+          this.setValue(this.headerRow,columnIndex,COLUMN_HEADERS[columnType]);
+        }
         this._columns[columnType] = columnIndex;
       }
-      // console.log("ensureColumnEnd [columnType,columnIndex,columns[columnType],_columns]",columnType,columnIndex,this.columns[columnType],this._columns);
     }
 
     ensureCheckColumn() {
@@ -627,28 +728,34 @@ const ChecklistApp = (function(){
       });
     }
 
+    isColumnHidden(column) {
+      return this.sheet.isColumnHiddenByUser(this.toColumnIndex(column));
+    }
+
+    insertRow(rowIndex) {
+      if (rowIndex <= this.maxRows) {
+        if (rowIndex > this.lastRow) return; // is already a blank row
+        this.sheet.insertRowBefore(rowIndex);
+      } else {
+        this.rowIndex = this.lastRow+1;
+        this.sheet.insertRowAfter(this.lastRow);
+      }
+      Object.keys(this._rows).forEach(_rowType => {
+        if (this._rows[_rowType] >= rowIndex) {
+          this._rows[_rowType]++;
+        }
+      });
+    }
+
     ensureRow(rowType, rowIndex = this.headerRow) {
-      // console.log("ensureRow [rowType,rowIndex,rows[rowType],_rows]",rowType,rowIndex,this.rows[rowType],this._rows);
       if (!this.hasRow(rowType)) {
         rowIndex = this._checkRow(rowIndex,true) || this.lastRow;
-        if (rowIndex <= this.sheet.getMaxRows()) {
-          this.sheet.insertRowBefore(rowIndex);
-        } else {
-          this.rowIndex = this.lastRow+1;
-          this.sheet.insertRowAfter(this.lastRow);
+        this.insertRow(rowIndex);
+        if (ROW_HEADERS[rowType]) {
+          this.setValue(rowIndex,1,ROW_HEADERS[rowType]);
         }
-        if (ROW_HEADER[rowType]) {
-          this.setValue(rowIndex,1,ROW_HEADER[rowType]);
-        }
-        Object.keys(this._rows).forEach(_rowType => {
-          if (this._rows[_rowType] >= rowIndex) {
-            this._rows[_rowType]++;
-          }
-        });
         this._rows[rowType] = rowIndex;
       }
-      // console.log("ensureRowEnd [rowType,rowIndex,rows[rowType],_rows]",rowType,rowIndex,this.rows[rowType],this._rows);
-
     }
 
     ensureTitleRow() {
@@ -673,19 +780,40 @@ const ChecklistApp = (function(){
       this.ensureRow(ROW.HEADERS, this._determineLastRow(ROW.TITLE,ROW.SETTINGS,ROW.QUICK_FILTER) + 1);
     }
 
+    _removeRow(row) {
+      const rowIndex = this.toRowIndex(row);
+      this.sheet.deleteRow(rowIndex);
+      delete this._rows[ROW.QUICK_FILTER];
+      Object.keys(this._rows).forEach(_rowType => {
+        if (this._rows[_rowType] > rowIndex) {
+          this._rows[_rowType]--;
+        }
+      });
+    }
+
     toggleQuickFilterRow(show = !this.hasRow(ROW.QUICK_FILTER)) {
       const hasQuickFilter = this.hasRow(ROW.QUICK_FILTER);
       if (hasQuickFilter && !show) {
-        const row = this.toRowIndex(ROW.QUICK_FILTER);
-        this.sheet.deleteRow(row);
-        delete this._rows[ROW.QUICK_FILTER];
-        Object.keys(this._rows).forEach(_rowType => {
-          if (this._rows[_rowType] > row) {
-            this._rows[_rowType]--;
+        this._removeRow(ROW.QUICK_FILTER);
+        for (let column = 2; column <= this.lastColumn; column++) {
+          const criteria = this.filter && this.filter.getColumnFilterCriteria(column);
+          if (criteria && criteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
+            this.filter.removeColumnFilterCriteria(column);
           }
-        });
+        }
       } else if (!hasQuickFilter && show) {
         this.ensureRow(ROW.QUICK_FILTER);
+        const filterValueRange = this.getRowRange(ChecklistApp.ROW.QUICK_FILTER, 2);
+        const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString();
+        // HACK lighten the color
+        const r = parseInt(color.slice(1,3),16);
+        const g = parseInt(color.slice(3,5),16);
+        const b = parseInt(color.slice(5,7),16);
+        const newR = parseInt((r+255)/2);
+        const newG = parseInt((g+255)/2);
+        const newB = parseInt((b+255)/2);
+        const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
+        filterValueRange.setBackground(newColor);
       }
     }
 
@@ -713,13 +841,13 @@ const ChecklistApp = (function(){
       for (lastItemRow = itemValues.length - 1 + firstRow; lastItemRow >= firstRow; lastItemRow--) {
         if (itemValues[lastItemRow-firstRow]) break;
       }
-      if (this.sheet.getMaxRows() - lastItemRow > MAX_EMPTY_ROWS) {
-        this.sheet.deleteRows(lastItemRow + MAX_EMPTY_ROWS + 1, this.sheet.getMaxRows() - lastItemRow - MAX_EMPTY_ROWS);
+      if (this.maxRows - lastItemRow > MAX_EMPTY_ROWS) {
+        this.sheet.deleteRows(lastItemRow + MAX_EMPTY_ROWS + 1, this.maxRows - lastItemRow - MAX_EMPTY_ROWS);
       }
-      if (this.lastColumn != this.sheet.getMaxColumns()) {
-        this.sheet.deleteColumns(this.lastColumn+1,this.sheet.getMaxColumns()-this.lastColumn);
+      if (this.lastColumn != this.maxColumns) {
+        this.sheet.deleteColumns(this.lastColumn+1,this.maxColumns-this.lastColumn);
       }
-      if (this.sheet.getMaxRows() == this.headerRow) {
+      if (this.maxRows == this.headerRow) {
         this.sheet.insertRowAfter(this.headerRow);
       }
       timeEnd("trim checklist");
@@ -733,7 +861,7 @@ const ChecklistApp = (function(){
 
     // DATA VALIDATION UTILITIES
     removeValidations() {
-      this.getRange(1,1,this.sheet.getMaxRows(),this.sheet.getMaxColumns()).setDataValidation(null);
+      this.getRange(1,1,this.maxRows,this.maxColumns).setDataValidation(null);
     }
 
     resetDataValidation(_skipMeta = false) {
@@ -757,7 +885,6 @@ const ChecklistApp = (function(){
         )
       );
       FORMULA.togglePrettyPrint(prettyPrint);
-      // console.log(itemDataValidationFormula);
       const itemDataValidation = SpreadsheetApp.newDataValidation();
       itemDataValidation.setAllowInvalid(true);
       itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
@@ -766,7 +893,6 @@ const ChecklistApp = (function(){
       if (this.metaSheet && !_skipMeta) {
         META.setDataValidation(this);
       }
-      // return itemDataValidationFormula;
       timeEnd("checklist resetDataValidation");
     }
     // END DATA VALIDATION UTILITIES
@@ -889,7 +1015,7 @@ const ChecklistApp = (function(){
     }
     createFilter(_oldFilter) {
       this.removeFilter();
-      const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);//,1,this.sheet.getMaxRows()-this.headerRow+1,this.lastColumn);
+      const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);//,1,this.maxRows-this.headerRow+1,this.lastColumn);
       filterRange.createFilter();
       if (_oldFilter) {
         const oldFilterRange = _oldFilter.getRange();
@@ -905,7 +1031,7 @@ const ChecklistApp = (function(){
       const filterRange = this.filter.getRange();
       if (filterRange.getRow()        != this.headerRow 
       ||  filterRange.getColumn()     != 1 
-      ||  filterRange.getLastRow()    != this.sheet.getMaxRows() 
+      ||  filterRange.getLastRow()    != this.maxRows 
       ||  filterRange.getLastColumn() != this.lastColumn) {
         this.toast("Please wait...","Expanding Filter",-1);
         this.createFilter(this.filter);

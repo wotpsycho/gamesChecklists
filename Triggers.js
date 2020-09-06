@@ -22,8 +22,9 @@ function handleEdit(event) {
     const checklist = ChecklistApp.getActiveChecklist();
     timeEnd("getCL");
     
-    
+    time("isChecklist");
     if (!checklist.isChecklist) return; // Non checklist
+    timeEnd("isChecklist");
     
     time("logEditedRange");
     Logger.log("edit: ", range.getA1Notation());
@@ -47,7 +48,7 @@ function handleEdit(event) {
     
     time("updateSettings");
     if (checklist.isRowInRange(ROW.SETTINGS, range)) {
-      SETTINGS.updateSettings(checklist,range);
+      ChecklistSettings.handleChange(event);
       if (range.getNumRows() == 1) {
         timeEnd("updateSettings");
         return;
