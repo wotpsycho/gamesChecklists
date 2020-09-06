@@ -1,32 +1,25 @@
 /* exported time, timeEnd */
-
 // eslint-disable-next-line no-redeclare
-function time(_extraLabel, _includeUnlabeled) {
-  const functionName = time.caller && time.caller.name || "[unknown]";
-  if (!_extraLabel || _includeUnlabeled) {
-    console.time(functionName);
-  }
-  if (_extraLabel) {
-    if (Array.isArray(_extraLabel)) {
-      _extraLabel.forEach(extraLabel => console.time(functionName + " " + extraLabel));
-    } else {
-      console.time(functionName + " " + _extraLabel);
+const {time,timeEnd} = (function(){
+  
+  function _timeHelper(callerName, timeFunction, labels) {
+    callerName || (callerName = "[unknown]");
+    const timeLabels = [];
+    if (labels.length == 0 || labels[labels.length-1] === true) {
+      labels.pop();
+      timeLabels.push(callerName);
     }
+    timeLabels.push(...labels.map(label => `${callerName} ${label}`));
+    timeLabels.forEach(label => timeFunction.call(console, label));
   }
-}
+  function time(...labels) {
+    const callerName = time.caller && time.caller.name;
+    return _timeHelper(callerName, console.time, labels.flat());
+  }
 
-// eslint-disable-next-line no-redeclare
-function timeEnd(_extraLabel, _includeUnlabeled) {
-  const functionName = timeEnd.caller && timeEnd.caller.name || "[unknown]";
-  if (!_extraLabel || _includeUnlabeled) {
-    console.timeEnd(functionName);
+  function timeEnd(...labels) {
+    const callerName = timeEnd.caller && timeEnd.caller.name;
+    return _timeHelper(callerName, console.timeEnd, labels.flat());
   }
-  if (_extraLabel) {
-    if (Array.isArray(_extraLabel)) {
-      _extraLabel.forEach(extraLabel => console.timeEnd(functionName + " " + extraLabel));
-    } else {
-      console.timeEnd(functionName + " " + _extraLabel);
-    }
-  }
-}
-
+  return {time,timeEnd};
+})();
