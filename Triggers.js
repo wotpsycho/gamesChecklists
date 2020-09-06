@@ -1,4 +1,15 @@
-/* exported onOpen, onSelectionChange, handleEdit, handleChange */
+/* exported onOpen, onSelectionChange, onEdit, handleEdit, handleChange,AttachTriggers */
+function onEdit(event) {
+  const trigger = ScriptApp.getProjectTriggers().filter(trigger => 
+    trigger.getEventType() == ScriptApp.EventType.ON_EDIT
+      && trigger.getHandlerFunction() == handleEdit.name 
+      && trigger.getTriggerSourceId() == event.source.getId()
+  )[0];
+  if (!trigger) {
+    handleEdit(event);
+  }
+}
+  
 function handleEdit(event) {
   time();
   try {
@@ -39,7 +50,7 @@ function handleEdit(event) {
     if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
       switch (event.value){
         case "reset":  checklist.reset(); break;
-        case "meta": META.ProcessMeta(checklist); break;
+        case "meta": checklist.syncMeta(); break;
         case "FULL RESET": checklist.reset(true); break;
       }
       checklist.ensureTotalFormula();
@@ -96,22 +107,10 @@ function handleEdit(event) {
   }
 }
 
-function handleChange(event) {
-  console.log("changeEvent",event.changeType,event);
-  // TODO validate/update metadata if implemented
-}
-
-/**
- * Menu items and triggers need authorization; to try to prevent need for auth, will put controls in-sheet to trigger instead.
- * Will disable later.
- */
-function onOpen(event) {
-  SpreadsheetApp.getUi().createAddonMenu()
-    .addItem("Refresh Sheet...", "ResetChecklist")
-    .addItem("Sync With Meta Sheet", "ProcessMeta")
-    .addToUi();
-
+function AttachTriggers() {
+  time("getTriggers","getEditTrigger",true);
   const triggers = ScriptApp.getProjectTriggers();
+  timeEnd("getTriggers");
   const getTrigger = (type, handlerName) => {
     const myTriggers = triggers.filter(trigger => 
       trigger.getEventType() == type
@@ -120,40 +119,24 @@ function onOpen(event) {
     );
     return myTriggers && myTriggers.length > 0 && myTriggers[0];
   };
-
-  let trigger = getTrigger(ScriptApp.EventType.ON_CHANGE, "handleChange");
-  // Disabled for now until we have content
-  if (!trigger) {
-    // ScriptApp.newTrigger("handleChange").forSpreadsheet(event.source).onChange().create();
-  } else {
-    ScriptApp.deleteTrigger(trigger);
-  }
-  trigger = getTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit");
+  const trigger = getTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit");
+  timeEnd("getEditTrigger");
   if (!trigger) {
     ScriptApp.newTrigger("handleEdit").forSpreadsheet(event.source).onEdit().create();
   }  
-    
+  timeEnd();
 }
 
-// Currently disabled
-/* 
-function onSelectionChange(event) {
+/**
+ * Menu items and triggers need authorization; to try to prevent need for auth, will put controls in-sheet to trigger instead.
+ * Will disable later.
+ */
+function onOpen() {
   time();
-  const range = event.range;
-  const sheet = range.getSheet();
-  console.log("onSelectionChange", range);
-  ChecklistApp.setActiveSheet(sheet);
-  //AVAILABLE.checkErrors(event.range);
-   
-  // if (SETTINGS.isEditable(sheet)) {
-  //   chekcliskt.getColumnDataRange(sheet,columns.preReq).clearDataValidations();
-  //   const nearbyPreReqs = sheet.getRange(Math.max(rows.header+1, range.getRow()-1), columns.preReq, range.getNumRows()+2);
-  //   const validation = SpreadsheetApp
-  //     .newDataValidation()
-  //     .requireValueInRange(chekclist.getColumnDataRange(sheet, columns.item), true)
-  //     .setAllowInvalid(true)
-  //     .build();
-  //   nearbyPreReqs.setDataValidation(validation);
-  // } 
+  SpreadsheetApp.getUi().createAddonMenu()
+    .addItem("Refresh Sheet...", "ResetChecklist")
+    .addItem("Sync With Meta Sheet", "ProcessMeta")
+    .addItem("Attach Triggers", "AttackTriggers")
+    .addToUi();
   timeEnd();
-}  */
+}

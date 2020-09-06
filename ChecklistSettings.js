@@ -538,10 +538,3 @@ const ChecklistSettings = (function(){
   
   return ChecklistSettings;
 })();
-
-// eslint-disable-next-line no-unused-vars
-function debugSettings() {
-  const cs = ChecklistSettings.getSettingsForActiveChecklist();
-  return [cs,cs.settings,ChecklistSettings.SETTING,cs.settings[ChecklistSettings.SETTING.MODE].options];
-
-}

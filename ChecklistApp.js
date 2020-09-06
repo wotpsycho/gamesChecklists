@@ -298,6 +298,9 @@ const ChecklistApp = (function(){
       this.metaSheet = this.spreadsheet.insertSheet(name, this.sheet.getIndex());
       this.activate(); // creating the new sheet activates it
     }
+    get meta() {
+      return this.metaSheet && ChecklistMeta.getFromChecklist(this);
+    }
 
     get editable() {
       return !!this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
@@ -306,7 +309,7 @@ const ChecklistApp = (function(){
       const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
       if (protection && isEditable) {
         protection.remove();
-        META.setEditable(this,isEditable);
+        this.meta && this.meta.setEditable(isEditable);
       } else if (!protection && !isEditable) {
         const protection = this.sheet.protect();
         protection.setWarningOnly(true);
@@ -321,7 +324,7 @@ const ChecklistApp = (function(){
           editableRanges.push(this.getUnboundedColumnDataRange(ChecklistApp.COLUMN.CHECK));
         }
         protection.setUnprotectedRanges(editableRanges);
-        META.setEditable(this,isEditable);
+        this.meta && this.meta.setEditable(isEditable);
       }
     }
 
@@ -540,6 +543,11 @@ const ChecklistApp = (function(){
       this.settings.setSetting(setting, value);
     }
 
+    resetSetting(_oldMode) {
+      this.setSetting(ChecklistSettings.SETTING.MODE,_oldMode);
+      this.settings.setDataValidation();
+    }
+
     // END Settings Section
 
     // NOTES SECTION
@@ -552,8 +560,13 @@ const ChecklistApp = (function(){
       }
       timeEnd("syncNotes");
     }
-
     // NOTES SECTION
+
+    // META SECTION
+    syncMeta() {
+      this.meta && this.meta.syncWithChecklist();
+    }
+    // END META SECTION
 
     // RESET/INIT/STRUCTURE SECTION
 
@@ -627,8 +640,9 @@ const ChecklistApp = (function(){
       this.resetConditionalFormatting(true);
       timeEnd("available rules");
   
-      if (this.metaSheet) {
-        META.ProcessMeta(this);
+      if (this.meta) {
+        this.meta.syncWithChecklist(toastTitle);
+        this.toast(toastMessage, toastTitle, -1);
       }
   
       // Create new filter
@@ -641,7 +655,8 @@ const ChecklistApp = (function(){
       timeEnd("totals");
 
       time("settings");
-      this.setSetting(ChecklistSettings.SETTING.MODE, previousMode);
+      this.resetSetting(previousMode);
+
       timeEnd("settings");
 
       this.toast("Done!", toastTitle,5);
@@ -890,8 +905,8 @@ const ChecklistApp = (function(){
       itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
       itemDataRange.setDataValidation(itemDataValidation);
       
-      if (this.metaSheet && !_skipMeta) {
-        META.setDataValidation(this);
+      if (!_skipMeta && this.meta) {
+        this.meta.updateChecklistDataValidation();
       }
       timeEnd("checklist resetDataValidation");
     }
@@ -984,8 +999,8 @@ const ChecklistApp = (function(){
       missableRule.setRanges([itemDataRange]);
       
       this.sheet.setConditionalFormatRules([availableErrorRule,crossthroughCheckedRule,checkboxDisableRule,missableRule,missedRule,usedRule,notAvailableRule]);//.concat(existingRules,[notAvailableRule]));
-      if (this.metaSheet && !_skipMeta) {
-        META.setConditionalFormatRules(this);
+      if (!_skipMeta && this.metaSheet) {
+        this.meta.updateChecklistConditionalFormatting();
       }
       timeEnd("checklist resetConditionalFormatting");
     }
@@ -1165,10 +1180,3 @@ const ChecklistApp = (function(){
                     
 })();
                   
-/* eslint-disable */
-                  function testChecklist() {
-                    time();
-                    const sheet = ChecklistApp.getActiveSheet();
-                    console.log(sheet.getName());
-                    return;
-                  }

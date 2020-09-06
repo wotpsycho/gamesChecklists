@@ -32,10 +32,10 @@
 
         "ChecklistApp": false,
         "StatusTranspiler": false,
+        "ChecklistMeta": false,
+        "ChecklistSettings": false,
 
         "FORMULA": false,
-        "META": false,
-        "ChecklistSettings": false,
 
         "time": false,
         "timeEnd": false

@@ -46,10 +46,7 @@ function ResetChecklist(checklist = ChecklistApp.getActiveChecklist()) {
       checklist.name = response.getResponseText() || defaultName;
     }
     if (!checklist.metaSheet) {
-      const defaultMetaSheetName = checklist.name + " Meta";
-      const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
-      if (response.getSelectedButton() != ui.Button.OK) return;
-      checklist.createMetaSheet(response.getResponseText() || defaultMetaSheetName);
+      ChecklistMeta.promptMetaSheetCreate(checklist, title);
     }
 
     time("nonUI");
