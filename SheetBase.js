@@ -124,9 +124,10 @@ const SheetBase = (()=>{
       return !this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
     }
     set editable(isEditable) {
-      const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
-      if (protection && isEditable) {
+      if (!this.editable && isEditable) {
+        const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
         protection.remove();
+      } else if (this.editable && !isEditable) {
         const protection = this.sheet.protect();
         protection.setWarningOnly(true);
       }
@@ -330,6 +331,8 @@ const SheetBase = (()=>{
     
 
     insertColumn(columnIndex) {
+      const wasEditable = this.editable;
+      if (!wasEditable) this.editable = true;
       if (columnIndex <= this.maxColumns) {
         if (columnIndex > this.lastColumn) return; // is an empty column already since it is after last and before max
         this.sheet.insertColumnBefore(columnIndex);
@@ -347,6 +350,7 @@ const SheetBase = (()=>{
           this._columnsByHeader[_columnType]++;
         }
       });
+      if (!wasEditable) this.editable = false;
     }
 
     ensureColumn(columnType, columnIndex = this.lastColumn+1) {
@@ -375,6 +379,8 @@ const SheetBase = (()=>{
     }
 
     insertRow(rowIndex) {
+      const wasEditable = this.editable;
+      if (!wasEditable) this.editable = true;
       if (rowIndex <= this.maxRows) {
         if (rowIndex > this.lastRow) return; // is already a blank row
         this.sheet.insertRowBefore(rowIndex);
@@ -387,6 +393,7 @@ const SheetBase = (()=>{
           this._rows[_rowType]++;
         }
       });
+      if (!wasEditable) this.editable = false;
     }
 
     ensureRow(rowType, rowIndex = this.headerRow) {
@@ -402,6 +409,8 @@ const SheetBase = (()=>{
     
 
     _removeRow(row) {
+      const wasEditable = this.editable;
+      if (!wasEditable) this.editable = true;
       const rowIndex = this.toRowIndex(row);
       this.sheet.deleteRow(rowIndex);
       delete this._rows[row];
@@ -410,6 +419,7 @@ const SheetBase = (()=>{
           this._rows[_rowType]--;
         }
       });
+      if (!wasEditable) this.editable = false;
     }
 
     _determineLastNamedRow(...rowTypes) {

@@ -226,9 +226,9 @@ const ChecklistApp = (function(){
           return super.editable;
         }
         set editable(isEditable) {
-          const wasEditable = this.editable;
           super.editable = isEditable;
-          if (wasEditable && !isEditable) {
+          if (!isEditable) {
+            console.log("adding unprotected ranges");
             const editableRanges = [];
             if (this.hasRow(ROW.QUICK_FILTER)) {
               editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
@@ -462,12 +462,9 @@ const ChecklistApp = (function(){
             const newB = parseInt((b+255)/2);
             const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
             filterValueRange.setBackground(newColor);
-            if (!this.editable) {
-              const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
-              const unprotectedRanges = protection.getUnprotectedRanges();
-              unprotectedRanges.push(filterValueRange);
-              protection.setUnprotectedRanges(unprotectedRanges);
-            }
+          }
+          if (!this.editable) {
+            this.editable = false;
           }
         }
 

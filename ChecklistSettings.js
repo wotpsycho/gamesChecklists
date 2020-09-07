@@ -568,7 +568,9 @@ const ChecklistSettings = (function(){
         }
         execute() {
           time(`setMode ${this.newMode}`);
+          checklist.toast(`Setting mode to ${this.newMode}...`,-1);
           checklistSettings.setSettings(MODE_SETTINGS[this.newMode]);
+          checklist.toast(`Mode set to ${this.newMode}`);
           timeEnd(`setMode ${this.newMode}`);
         }
       }
@@ -581,7 +583,9 @@ const ChecklistSettings = (function(){
 
         execute() {
           time("toggleQuickFilter");
+          checklist.toast("Toggling Quick Filter...",-1);
           checklist.toggleQuickFilterRow(this.enabled);
+          checklist.toast(`Quick Filter ${this.enabled ? "Enabled" : "Disabled"}`);
           timeEnd("toggleQuickFilter");
         }
       }
