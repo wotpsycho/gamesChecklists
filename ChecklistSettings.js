@@ -207,7 +207,7 @@ const ChecklistSettings = (function(){
     }
 
     get row() {
-      return this.checklist.toRowIndex(ChecklistApp.ROW.SETTINGS);
+      return ChecklistApp.ROW.SETTINGS;
     }
 
     _getChecklistSetting(setting) {
@@ -255,15 +255,18 @@ const ChecklistSettings = (function(){
 
     get _rowSettings() {
       if (!this.__rowSettings) {
-        const rowSettings = this.checklist.getRowValues(this.row,2).reduce((rowSettings,cellValue,i) => {
-          if (cellValue) {
-            const [, cellSetting, cellSettingValue,isCustom] = cellValue && cellValue.match(SETTING_REGEX) || [];
-            if (cellSetting) rowSettings[cellSetting] = {value: cellSettingValue, column: i+2,isCustom:!!isCustom};
-            else this.checklist.setValue(this.row,i+2,null);
-          }
-          return rowSettings;
-        },{});
-        Object.defineProperty(this,"__rowSettings",{value:rowSettings});
+        let rowSettings;
+        if (this.checklist.hasRow(this.row)) {
+          rowSettings = this.checklist.getRowValues(this.row,2).reduce((rowSettings,cellValue,i) => {
+            if (cellValue) {
+              const [, cellSetting, cellSettingValue,isCustom] = cellValue && cellValue.match(SETTING_REGEX) || [];
+              if (cellSetting) rowSettings[cellSetting] = {value: cellSettingValue, column: i+2,isCustom:!!isCustom};
+              else this.checklist.setValue(this.row,i+2,null);
+            }
+            return rowSettings;
+          },{});
+        }
+        Object.defineProperty(this,"__rowSettings",{value:rowSettings || {}});
       }
       return this.__rowSettings;
     }
@@ -492,7 +495,7 @@ const ChecklistSettings = (function(){
       class ChangeColumnFilterAction extends SettingAction {
         constructor(column, expectedValues = [], valuesToHide = []) {
           super();
-          if (!checklist.hasColumn(column)) throw new ChecklistSettingsError(`Invalid Column: ${column}`);
+          // if (!checklist.hasColumn(column)) throw new ChecklistSettingsError(`Invalid Column: ${column}`);
           if (typeof expectedValues != "undefined" && !Array.isArray(expectedValues)) expectedValues = [expectedValues];
           if (typeof valuesToHide != "undefined" && !Array.isArray(valuesToHide)) valuesToHide = [valuesToHide];
           Object.defineProperty(this,"column"        ,{value: column});
@@ -519,7 +522,7 @@ const ChecklistSettings = (function(){
       class ChangeColumnVisibilityAction extends SettingAction {
         constructor(column, shouldShow) {
           super();
-          if (!checklist.hasColumn(column)) throw new ChecklistSettingsError(`Invalid Column: ${column}`);
+          // if (!checklist.hasColumn(column)) throw new ChecklistSettingsError(`Invalid Column: ${column}`);
           Object.defineProperty(this,"column",    {value: column});
           Object.defineProperty(this,"shouldShow",{value: shouldShow});
         }

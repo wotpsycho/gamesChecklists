@@ -34,6 +34,7 @@
         "StatusTranspiler": false,
         "ChecklistMeta": false,
         "ChecklistSettings": false,
+        "SheetBase": false,
 
         "FORMULA": false,
 
