@@ -303,7 +303,7 @@ const ChecklistApp = (function(){
     }
 
     get editable() {
-      return !!this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
+      return !this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
     }
     set editable(isEditable) {
       const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
@@ -311,8 +311,6 @@ const ChecklistApp = (function(){
         protection.remove();
         this.meta && this.meta.setEditable(isEditable);
       } else if (!protection && !isEditable) {
-        const protection = this.sheet.protect();
-        protection.setWarningOnly(true);
         const editableRanges = [];
         if (this.hasRow(ROW.QUICK_FILTER)) {
           editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
@@ -323,7 +321,9 @@ const ChecklistApp = (function(){
         if (this.hasColumn(ChecklistApp.COLUMN.CHECK)) {
           editableRanges.push(this.getUnboundedColumnDataRange(ChecklistApp.COLUMN.CHECK));
         }
+        const protection = this.sheet.protect();
         protection.setUnprotectedRanges(editableRanges);
+        protection.setWarningOnly(true);
         this.meta && this.meta.setEditable(isEditable);
       }
     }
@@ -829,6 +829,12 @@ const ChecklistApp = (function(){
         const newB = parseInt((b+255)/2);
         const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
         filterValueRange.setBackground(newColor);
+        if (!this.editable) {
+          const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
+          const unprotectedRanges = protection.getUnprotectedRanges();
+          unprotectedRanges.push(filterValueRange);
+          protection.setUnprotectedRanges(unprotectedRanges);
+        }
       }
     }
 

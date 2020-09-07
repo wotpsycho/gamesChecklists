@@ -10,6 +10,7 @@ const ChecklistSettings = (function(){
     BLANKS      : "Blanks",
     EDITABLE    : "Editable",
     QUICK_FILTER: "Quick Filter",
+    ACTION      : "Action"
   };
 
   const SETTING_OPTIONS = {
@@ -43,6 +44,12 @@ const ChecklistSettings = (function(){
       ON:  "On",
       OFF: "Off",
     },
+    [SETTING.ACTION]      : {
+      NONE:    "...",
+      REFRESH: "Refresh Checklist",
+      META:    "Sync Meta",
+      RESET:   "RESET",
+    }
   };
 
   const SETTING_DEFAULTS = {
@@ -53,6 +60,21 @@ const ChecklistSettings = (function(){
     [SETTING.BLANKS]      : SETTING_OPTIONS[SETTING.BLANKS].SHOW,
     [SETTING.EDITABLE]    : SETTING_OPTIONS[SETTING.EDITABLE].YES,
     [SETTING.QUICK_FILTER]: SETTING_OPTIONS[SETTING.QUICK_FILTER].OFF,
+    [SETTING.ACTION]      : SETTING_OPTIONS[SETTING.ACTION].NONE,
+  };
+
+  const DESCRIPTIONS = {
+    [SETTING.MODE]: {
+      [SETTING_OPTIONS[SETTING.MODE].DYNAMIC]: "Only available items are shown, updates as you check them off",
+      [SETTING_OPTIONS[SETTING.MODE].CLASSIC]: "All items are shown, with Pre-Reqs column showing item availability",
+      [SETTING_OPTIONS[SETTING.MODE].EDIT]   : "All items and columns are shown and editable, useful for fixing errors",
+      [SETTING_OPTIONS[SETTING.MODE].CREATE] : "Mix of Dynamic and Edit, only available items are shown and can edit/add new items",
+    },
+    [SETTING.ACTION]: {
+      [SETTING_OPTIONS[SETTING.ACTION].REFRESH] : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
+      [SETTING_OPTIONS[SETTING.ACTION].META]    : "Formatting and dropdowns from Meta to Checklist, new values added to Meta for formatting",
+      [SETTING_OPTIONS[SETTING.ACTION].RESET]   : "Reset checkmarks for the Checklist after prompt",
+    },
   };
 
   const MODE = SETTING_OPTIONS[SETTING.MODE];
@@ -129,8 +151,9 @@ const ChecklistSettings = (function(){
           const [,setting,value] = event.value.match(SETTING_REGEX) || [];
           if (setting) {
             this.setSetting(setting,value);
-          } else {
-            this.setDataValidation();
+            if (event.oldValue && setting == event.oldValue.match(SETTING_REGEX)[1]) {
+              return;
+            }
           }
         }
       } else {
@@ -140,8 +163,8 @@ const ChecklistSettings = (function(){
             this.settings[setting].set(rowSetting.value);
           }
         });
-        this.setDataValidation();
       }
+      this.setDataValidation();
       timeEnd("settings handleChange");
     }
 
@@ -149,10 +172,15 @@ const ChecklistSettings = (function(){
       time("settings dataValidation");
       const rowRange = this.checklist.getRowRange(this.row,2);
       rowRange.clearDataValidations().clearContent();
-      [SETTING.MODE,SETTING.QUICK_FILTER].forEach((setting,i) => {
+      [SETTING.MODE,SETTING.QUICK_FILTER,SETTING.ACTION].forEach((setting,i) => {
         const cell = rowRange.getCell(1,i+1);
         cell.setValue(`${setting}: ${this.getSetting(setting)}`);
-        cell.setDataValidation(SpreadsheetApp.newDataValidation().setAllowInvalid(false).requireValueInList(Object.values(SETTING_OPTIONS[setting]).map(option => `${setting}: ${option}`),true));
+        cell.setDataValidation(SpreadsheetApp.newDataValidation().setAllowInvalid(false).requireValueInList(Object.values(this.settings[setting].options).map(option => `${setting}: ${option}`),true));
+        const notes = Object.entries(this.settings[setting].descriptions).reduce((notes,[option, description]) => {
+          if (description) notes.push(`•${option}: ${description}`);
+          return notes;
+        },[]);
+        if (notes.length) cell.setNote(notes.join("\n"));
       });
       timeEnd("settings dataValidation");
     }
@@ -171,6 +199,7 @@ const ChecklistSettings = (function(){
           }),
           [SETTING.EDITABLE]    : new ChecklistSetting.EditableSetting(),
           [SETTING.QUICK_FILTER]: new ChecklistSetting.QuickFilterSetting(),
+          [SETTING.ACTION]      : new ChecklistSetting.ChecklistActions(),
         };
         Object.defineProperty(this,"_settings",{value: settings});
       }
@@ -195,6 +224,7 @@ const ChecklistSettings = (function(){
     }
 
     setSetting(setting, value) {
+      console.log("ss",setting,value,this._rowSettings[setting]);
       this._getChecklistSetting(setting).set(value);
       if (this._rowSettings[setting]) {
         const newValue = `${setting}: ${this.getSetting(setting)}`;
@@ -258,6 +288,13 @@ const ChecklistSettings = (function(){
           return Object.keys(this._options);
         }
 
+        get descriptions() {
+          return Object.values(this._options).reduce((descriptions, option) => ({
+            ...descriptions,
+            [option.name]: option.description,
+          }),{});
+        }
+
         _determineValue() {
           return SETTING_DEFAULTS[this.setting];
         }
@@ -294,7 +331,7 @@ const ChecklistSettings = (function(){
 
       class ModeSetting extends ChecklistSetting {
         constructor(_initialValue) {
-          const modeOptions = Object.values(SETTING_OPTIONS[SETTING.MODE]).map(mode => new ChecklistSetting.SettingOption(mode, new ChecklistSetting.SetModeAction(mode)));
+          const modeOptions = Object.values(SETTING_OPTIONS[SETTING.MODE]).map(mode => new ChecklistSetting.SettingOption(mode, new ChecklistSetting.SetModeAction(mode), DESCRIPTIONS[SETTING.MODE] && DESCRIPTIONS[SETTING.MODE][mode]));
           super(SETTING.MODE, modeOptions,_initialValue);
         }
       }
@@ -304,7 +341,7 @@ const ChecklistSettings = (function(){
           const allValues = new Set(Object.values(optionToHiddenValues).flat());
           const options = Object.entries(optionToHiddenValues).map(([option,hiddenValues]) =>{
             const action = new ChangeColumnFilterAction(column,[...allValues],hiddenValues);
-            return new SettingOption(option,action);
+            return new SettingOption(option,action, DESCRIPTIONS[setting] && DESCRIPTIONS[setting][option]);
           });
           super(setting,options,_initialValue);
           Object.defineProperty(this,"column",{value: column});
@@ -343,8 +380,8 @@ const ChecklistSettings = (function(){
       class ColumnVisibilitySetting extends ChecklistSetting {
         constructor(setting, column, showOption, hideOption, _initialValue) {
           const options = {
-            [showOption]: new SettingOption(showOption, new ChangeColumnVisibilityAction(column,true)),
-            [hideOption]: new SettingOption(hideOption, new ChangeColumnVisibilityAction(column,false))
+            [showOption]: new SettingOption(showOption, new ChangeColumnVisibilityAction(column,true) , DESCRIPTIONS[setting] && DESCRIPTIONS[setting][showOption]),
+            [hideOption]: new SettingOption(hideOption, new ChangeColumnVisibilityAction(column,false), DESCRIPTIONS[setting] && DESCRIPTIONS[setting][hideOption]),
           };
           super(setting,options,_initialValue);
           Object.defineProperty(this,"visibilityToOption",{value: {[true]: showOption, [false]: hideOption}});
@@ -367,8 +404,8 @@ const ChecklistSettings = (function(){
         constructor(_initialValue) {
           const {YES,NO} = SETTING_OPTIONS[SETTING.EDITABLE];
           const options = {
-            [YES]: new SettingOption(YES,new ToggleChecklistEditableAction(true)),
-            [NO] : new SettingOption(NO ,new ToggleChecklistEditableAction(false)),
+            [YES]: new SettingOption(YES, new ToggleChecklistEditableAction(true) , DESCRIPTIONS[SETTING.EDITABLE] && DESCRIPTIONS[SETTING.EDITABLE][YES]),
+            [NO] : new SettingOption(NO , new ToggleChecklistEditableAction(false), DESCRIPTIONS[SETTING.EDITABLE] && DESCRIPTIONS[SETTING.EDITABLE][NO]),
           };
           super(SETTING.EDITABLE,options,_initialValue);
         }
@@ -382,14 +419,46 @@ const ChecklistSettings = (function(){
         constructor(_initalValue) {
           const {ON,OFF} = SETTING_OPTIONS[SETTING.QUICK_FILTER];
           const options = {
-            [ON]: new SettingOption(ON, new ToggleQuickFilterAction(true)),
-            [OFF]: new SettingOption(OFF, new ToggleQuickFilterAction(false)),
+            [ON]:  new SettingOption(ON , new ToggleQuickFilterAction(true),  DESCRIPTIONS[SETTING.QUICK_FILTER] && DESCRIPTIONS[SETTING.QUICK_FILTER][ON]),
+            [OFF]: new SettingOption(OFF, new ToggleQuickFilterAction(false), DESCRIPTIONS[SETTING.QUICK_FILTER] && DESCRIPTIONS[SETTING.QUICK_FILTER][OFF]),
           };
           super(SETTING.QUICK_FILTER,options,_initalValue);
         }
         _determineValue() {
           const {ON,OFF} = SETTING_OPTIONS[SETTING.QUICK_FILTER];
           return checklist.hasRow(ROW.QUICK_FILTER) ? ON : OFF;
+        }
+      }
+
+      class ChecklistActions extends ChecklistSetting {
+        constructor() {
+          // const {NONE,REFRESH,META,RESET} = SETTING_OPTIONS[SETTING.ACTION];
+          const {NONE,REFRESH,META} = SETTING_OPTIONS[SETTING.ACTION];
+          const setNoneAction = new SetSettingAction(SETTING.ACTION, NONE);
+          const refreshAction = new class extends SettingAction{
+            execute() {
+              checklist.reset();
+            }
+          }();
+          const metaAction = new class extends SettingAction{
+            execute() {
+              if (!checklist.meta) ChecklistMeta.promptMetaSheetCreate(checklist);
+              if (checklist.meta) checklist.syncMeta();
+            }
+          }();
+          // const resetAction = new class extends SettingAction {
+          //   execute() {
+              
+          //     // const response = Che
+          //   }
+          // };
+          const descriptions = DESCRIPTIONS[SETTING.ACTION] || {};
+          const options = {
+            [NONE]   : new SettingOption(NONE   , []                           , descriptions[NONE]),
+            [REFRESH]: new SettingOption(REFRESH, [setNoneAction,refreshAction], descriptions[REFRESH]),
+            [META]   : new SettingOption(META   , [setNoneAction,metaAction], descriptions[META]),
+          };
+          super(SETTING.ACTION,options);
         }
       }
 
@@ -416,6 +485,7 @@ const ChecklistSettings = (function(){
         }
         execute() {
           // abstract
+          throw new ChecklistSettingsError("SettingActions must implement execute");
         }
       }
 
@@ -483,7 +553,7 @@ const ChecklistSettings = (function(){
           Object.defineProperty(this,"setting", {value: setting});
           Object.defineProperty(this,"newValue",{value: newValue});
         }
-        exectue() {
+        execute() {
           checklistSettings.setSetting(this.setting, this.newValue);
         }
       }
@@ -520,6 +590,7 @@ const ChecklistSettings = (function(){
         PreReqsVisibilitySetting,
         EditableSetting,
         QuickFilterSetting,
+        ChecklistActions,
         SettingOption,
         ChangeColumnFilterAction,
         ChangeColumnVisibilityAction,
