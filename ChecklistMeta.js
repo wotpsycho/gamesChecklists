@@ -123,7 +123,7 @@ const ChecklistMeta = (function(){
 
         get missingValues() {
           if (!this._missingValues) {
-            time();
+            time("meta missingValues");
             const missingValues = {};
             Object.entries(this.checklist.columnsByHeader).filter(([checklistColumnName,checklistColumn]) => {
               const metadata = this.columnMetadata[checklistColumnName]; 
@@ -142,11 +142,11 @@ const ChecklistMeta = (function(){
               missingValues[checklistColumnName] = columnMissingValues;
             });
             Object.defineProperty(this,"_missingValues",{value: missingValues});
-            timeEnd();
+            timeEnd("meta missingValues");
           }
           return this._missingValues;
         }
-
+        
         // eslint-disable-next-line no-unused-vars
         handleEdit(event) {
           time("meta handleEdit");

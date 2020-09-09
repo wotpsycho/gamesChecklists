@@ -34,7 +34,7 @@ const StatusTranspiler = (function(){
     // CLASS DEFINITION
     get CellFormulaParser() {
       if (this._CellFormulaParser) return this._CellFormulaParser;
-      time();
+      time("get CellFormulaParser");
       const checklist = this.checklist;
       // static imports
       const {COLUMN,STATUS} = ChecklistApp;
@@ -71,15 +71,15 @@ const StatusTranspiler = (function(){
       };
       const getColumnValues = (column) => {
         if (!checklist.hasColumn(column)) return;
-        column = checklist.toColumnIndex(column);
-        if (columnToValueToRows[column]) return columnToValueToRows[column];
-        time(column);
+        const columnIndex = checklist.toColumnIndex(column);
+        if (columnToValueToRows[columnIndex]) return columnToValueToRows[columnIndex];
+        time(`getColumnValues ${column}`);
         const valueToRows = {
           _rowToValues: {},
         };
       
         const firstRow = checklist.firstDataRow;
-        const values = checklist.getColumnDataValues(column);
+        const values = checklist.getColumnDataValues(columnIndex);
         values.forEach((value,i) => {
           if (valueToRows[value]) {
             valueToRows[value].push(firstRow+i);
@@ -88,9 +88,9 @@ const StatusTranspiler = (function(){
           }
           valueToRows._rowToValues[firstRow+i] = value;
         });
-        columnToValueToRows[column] = valueToRows;
+        columnToValueToRows[columnIndex] = valueToRows;
         valueToRows._entries = Object.entries(valueToRows);
-        timeEnd(column);
+        timeEnd(`getColumnValues ${column}`);
         return valueToRows;
       };
 
@@ -1044,14 +1044,14 @@ const StatusTranspiler = (function(){
         }
       };
 
-      timeEnd();
+      timeEnd("get CellFormulaParser");
       Object.defineProperty(this,"_CellFormulaParser",{value: CellFormulaParser}); // Prevents rewrite
       return this._CellFormulaParser;
     }
 
     // PUBLIC FUNCTIONS
     validateAndGenerateStatusFormulas(_event) {
-      time();
+      time("validateAndGenerateStatusFormulas");
       const COLUMN = ChecklistApp.COLUMN; // static import
       let filteredRange;
       if (_event
@@ -1151,7 +1151,7 @@ const StatusTranspiler = (function(){
     
       Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas));
 
-      timeEnd();
+      timeEnd("validateAndGenerateStatusFormulas");
       return;
     }
   }

@@ -351,34 +351,34 @@ const ChecklistApp = (function(){
         // RESET/INIT/STRUCTURE SECTION
 
         reset(_resetData = false) {
-          time();
+          time("checklist reset");
           const type = !this.isChecklist ? "Initializing" : _resetData ? "Resetting" : "Refreshing";
-
+          
           const toastTitle = `${type} Checklist`;
           const toastMessage = `${type}...`;
           const previousMode = this.getSetting(ChecklistSettings.SETTING.MODE); // Preserve mode
-
+          
           this.toast(toastMessage, toastTitle, -1);
           Logger.log(`${type} checklist "${this.sheet.getName()}"`);
-  
+          
           time("filter removal");
           // Remove filter first to ensure data is available to write
           this.removeFilter();
           timeEnd("filter removal");
-  
+          
           time("row/column show");
           // Show all rows/columns
           this.expandAll();
           timeEnd("row/column show");
-    
+          
           time("removeValidation");
           this.removeValidations();
           timeEnd("removeValidation");
-    
-  
+          
+          
           time("row/column existence");
           this.ensureHeaderRow();
-
+          
           this.ensureCheckColumn();
           this.ensureTypeColumn();
           this.ensureItemColumn();
@@ -386,62 +386,62 @@ const ChecklistApp = (function(){
           this.ensureNotesColumn();
           this.ensureStatusColumn();
           this.hideColumn(COLUMN.STATUS);
-    
+          
           this.ensureTitleRow();
           this.ensureSettingsRow();
           timeEnd("row/column existence");
-
+          
           time("trim");
           this.trim();
           timeEnd("trim");
-  
+          
           // Reset checkboxes
           if (_resetData) {
             this.resetCheckmarks();
           }
-  
+          
           // Update all notes
           time("notes");
           this.syncNotes();
           timeEnd("notes");
-    
+          
           StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(this);
-  
+          
           time("quickFilter");
           this.clearQuickFilterValues();
           timeEnd("quickFilter");
-  
+          
           time("dataValidation");
           this.resetDataValidation(true);
           timeEnd("dataValidation");
-
+          
           time("available rules");
           //Add conditional formatting rules
           this.resetConditionalFormatting(true);
           timeEnd("available rules");
-  
+          
           if (this.meta) {
             this.meta.syncWithChecklist(toastTitle);
             this.toast(toastMessage, toastTitle, -1);
           }
-  
+          
           // Create new filter
           time("filterCreate");
           this.createFilter();
           timeEnd("filterCreate");
-  
+          
           time("totals");
           this.ensureTotalFormula();
           timeEnd("totals");
-
+          
           time("settings");
           this.resetSetting(previousMode);
-
+          
           timeEnd("settings");
-
+          
           this.toast("Done!", toastTitle,5);
-          timeEnd();
-
+          timeEnd("checklist reset");
+          
         }
 
         // STRUCTURE UTILITIES
