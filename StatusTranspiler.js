@@ -74,7 +74,9 @@ const StatusTranspiler = (function(){
         column = checklist.toColumnIndex(column);
         if (columnToValueToRows[column]) return columnToValueToRows[column];
         time(column);
-        const valueToRows = {};
+        const valueToRows = {
+          _rowToValues: {},
+        };
       
         const firstRow = checklist.firstDataRow;
         const values = checklist.getColumnDataValues(column);
@@ -84,6 +86,7 @@ const StatusTranspiler = (function(){
           } else {
             valueToRows[value] = [firstRow+i];
           }
+          valueToRows._rowToValues[firstRow+i] = value;
         });
         columnToValueToRows[column] = valueToRows;
         valueToRows._entries = Object.entries(valueToRows);
@@ -103,6 +106,8 @@ const StatusTranspiler = (function(){
         constructor(row, cellValue = checklist.getValue(row, COLUMN.PRE_REQS)) {
           this.row = row;
           parsersByRow[row] = this;
+
+          this.itemValue = getColumnValues(COLUMN.ITEM)._rowToValues[row];
 
           const lines = [];
           cellValue.toString().split(/ *[\n;] */).forEach((line,i) => {
@@ -165,6 +170,26 @@ const StatusTranspiler = (function(){
         getErrors() {
           return this.rootNode.getErrors();
         }
+
+        getAllPossiblePreReqs() {
+          const itemValues = getColumnValues(COLUMN.ITEM)._rowToValues;
+          return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row]);
+        }
+
+        getAllDirectlyMissablePreReqs() {
+          const allMissableRows = [...this.getAllPossiblePreReqRows()].filter(row => parsersByRow[row].isDirectlyMissable());
+          const itemValues = getColumnValues(COLUMN.ITEM)._rowToValues;
+          return [...allMissableRows].map(row => itemValues[row]);
+        }
+
+        getAllPossiblePreReqRows() {
+          return this.rootNode.getAllPossiblePreReqRows();
+        }
+
+        isDirectlyMissable() {
+          return this.rootNode.isDirectlyMissable();
+        }
+
         isInCircularDependency() {
           return this.getCircularDependencies().has(this.row);
         }
@@ -291,6 +316,27 @@ const StatusTranspiler = (function(){
         toUnknownFormula() {
           throw `${new Error("AbstractMethod " + this.constructor.name)}.${this.toUnknownFormula.name}`;
         }
+
+        isDirectlyMissable() {
+          return this.children.reduce((directlyMissable,child) => directlyMissable || child.isDirectlyMissable(), false);
+        }
+
+        getAllPossiblePreReqRows() {
+          if (!this._allPossiblePreReqRows) {
+            let allPossiblePreReqs;
+            if (this.isInCircularDependency()) {
+              allPossiblePreReqs = this.getCircularDependencies();
+            } else {
+              allPossiblePreReqs = new Set();
+              this.children.forEach(child => 
+                child.getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
+              );
+            }
+            Object.defineProperty(this,"_allPossiblePreReqRows",{value: allPossiblePreReqs});
+          }
+          return this._allPossiblePreReqRows;
+        }
+
         isInCircularDependency() {
           return this.getCircularDependencies().has(this.row);
         }
@@ -431,6 +477,11 @@ const StatusTranspiler = (function(){
               return this.children[0].toUnknownFormula(); // TODO ???
             }
           }
+        }
+
+        isDirectlyMissable() {
+          if (this.type == NOT) return true;
+          else return super.isDirectlyMissable();
         }
       };
 
@@ -718,6 +769,22 @@ const StatusTranspiler = (function(){
             }
           }
         }
+
+        getAllPossiblePreReqRows() {
+          if (!this._allPossiblePreReqRows) {
+            let allPossiblePreReqs;
+            if (this.isInCircularDependency()) {
+              allPossiblePreReqs = this.getCircularDependencies();
+            } else {
+              allPossiblePreReqs = new Set(this.valueInfo.rows);
+              this.valueInfo.rows.forEach(row => 
+                CellFormulaParser.getParserForRow(row).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
+              );
+            }
+            Object.defineProperty(this,"_allPossiblePreReqRows",{value: allPossiblePreReqs});
+          }
+          return this._allPossiblePreReqRows;
+        }
       
         getCircularDependencies(previous = []) {
           if (this._circularDependencies) return this._circularDependencies;
@@ -943,6 +1010,14 @@ const StatusTranspiler = (function(){
           return this.formulaType.generateFormula(availableAmountFormula, numNeededFormula);
         }
 
+        isDirectlyMissable() {
+          if (Object.values(usesInfo[this.valueInfo.key]).reduce((total,needed) => total+needed,0) > this.children[0].getMaxValue()) {
+            // if TOTAL_NEEDED > TOTAL_AVAILABLE
+            return true;
+          } else {
+            return super.isDirectlyMissable();
+          }
+        }
       };
 
       CellFormulaParser.MissedFormulaNode = class MissedFormulaNode extends CellFormulaParser.FormulaNode {
@@ -963,6 +1038,9 @@ const StatusTranspiler = (function(){
         }
         toUnknownFormula() {
           return this.children[0].toUnknownFormula();
+        }
+        isDirectlyMissable() {
+          return true;
         }
       };
 
@@ -1051,15 +1129,20 @@ const StatusTranspiler = (function(){
       time("generateFormulas");
       for (let i = 0; i < preReqValues.length; i++) {
         const parser = parsers[i];
-        let errorNote = null;
+        let note = null;
         if (parser) {
           statusFormulas[i] = parser.toFormula();
           if (parser.hasErrors()) {
-            errorNote = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
+            note = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
+          } else {
+            const allMissablePreReqs = parser.getAllDirectlyMissablePreReqs();
+            if (allMissablePreReqs.length) {
+              note = "Possible to miss Pre-Reqs\n------------------------------\n" + allMissablePreReqs.join("\n");
+            } 
           }
         }
         Object.values(debugColumns).forEach(value => value.formulas.push([parser ? value.formulaFunc.call(parser) : null]));
-        notes[i] = errorNote;
+        notes[i] = note;
       }
       timeEnd("generateFormulas");
   
