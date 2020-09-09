@@ -226,7 +226,6 @@ const StatusTranspiler = (function(){
         }
 
         addError(message) {
-        // console.log("Adding error [text,error]", this.text, message);
           this.errors.add(message);
         }
 
@@ -246,7 +245,6 @@ const StatusTranspiler = (function(){
         }
 
         hasErrors() {
-        // console.log("hasErrors: [row,text,size]", this.row, this.text, this.getErrors().size);
           return this.getErrors().size > 0;
         }
 
@@ -643,7 +641,6 @@ const StatusTranspiler = (function(){
         constructor(text,row) {
           super(text,row);
           this.parseValue(this.text);
-        // console.log(this.valueInfo);
         }
 
         parseValue(text) {
@@ -851,7 +848,6 @@ const StatusTranspiler = (function(){
        * Number that have NOT been MISSED or PR_USED
        */
         toNotMissedFormula() {
-        // console.log("NMV text,value,valueInfo",this.text,this.value,this.valueInfo);
           return this.toFormulaByNotStatus(STATUS.MISSED,STATUS.PR_USED);
         }
         /**
@@ -917,7 +913,6 @@ const StatusTranspiler = (function(){
             usesInfo[this.valueInfo.key] = {};
           }
           usesInfo[this.valueInfo.key][this.row] = this.valueInfo.numNeeded;
-        // console.log("usesNode",this.text,this.children,this.value);
         }
 
         toPRUsedFormula() {

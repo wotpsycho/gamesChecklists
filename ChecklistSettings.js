@@ -224,7 +224,6 @@ const ChecklistSettings = (function(){
     }
 
     setSetting(setting, value) {
-      console.log("ss",setting,value,this._rowSettings[setting]);
       this._getChecklistSetting(setting).set(value);
       if (this._rowSettings[setting]) {
         const newValue = `${setting}: ${this.getSetting(setting)}`;

@@ -228,7 +228,6 @@ const ChecklistApp = (function(){
         set editable(isEditable) {
           super.editable = isEditable;
           if (!isEditable) {
-            console.log("adding unprotected ranges");
             const editableRanges = [];
             if (this.hasRow(ROW.QUICK_FILTER)) {
               editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
