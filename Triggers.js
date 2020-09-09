@@ -14,8 +14,8 @@ function handleEdit(event) {
   time();
   try {
     // static imports
-    const COLUMN = ChecklistApp.COLUMN;
-    const ROW = ChecklistApp.ROW;
+    // const COLUMN = ChecklistApp.COLUMN;
+    // const ROW = ChecklistApp.ROW;
 
     time("event.range");
     const range = event.range;
@@ -29,25 +29,16 @@ function handleEdit(event) {
     ChecklistApp.setActiveSheet(sheet);
     timeEnd("ChecklistApp.setActiveSheet(..)");
 
+    time("logEditedRange");
+    Logger.log("edit: ", range.getA1Notation());
+    timeEnd("logEditedRange");
+
     time("getCL");
     const checklist = ChecklistApp.getActiveChecklist();
     timeEnd("getCL");
     
-    time("isChecklist");
-    if (!checklist.isChecklist) return; // Non checklist
-    timeEnd("isChecklist");
-    
-    time("logEditedRange");
-    Logger.log("edit: ", range.getA1Notation());
-    timeEnd("logEditedRange");
-        
-    time("quickFilterChange");
-    if (checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
-      checklist.quickFilterChange(event);
-    }
-    timeEnd("quickFilterChange");
-
-    if ((event.value == "reset" || event.value == "meta" || event.value == "FULL RESET") && range.getA1Notation() == "A1") {
+    if (range.getA1Notation() == "A1") {
+      // Debug hacks
       switch (event.value){
         case "reset":  checklist.reset(); break;
         case "meta": checklist.syncMeta(); break;
@@ -57,47 +48,21 @@ function handleEdit(event) {
       return;
     }
     
-    time("updateSettings");
-    if (checklist.isRowInRange(ROW.SETTINGS, range)) {
-      ChecklistSettings.handleChange(event);
-      if (range.getNumRows() == 1) {
-        timeEnd("updateSettings");
-        return;
-      }
+    time("isChecklist");
+    if (checklist.isChecklist) {
+      timeEnd("isChecklist");
+      time("checklistHandleEdit");
+      checklist.handleEdit(event);
+      timeEnd("checklistHandleEdit");
+    } else {
+      time("metaHandleEdit");
+      // TODO add logic to reduce need for syncing
+      // const metaSheet = ChecklistMeta.getFromSheet(sheet);
+      // if (metaSheet) metaSheet.handleEdit(event);
+      timeEnd("metaHandleEdit");
     }
-    timeEnd("updateSettings");
-    
-    time("populateAvailable");
-    if (checklist.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
-      StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(checklist, event);
-    }
-    timeEnd("populateAvailable");
-    
-    time("reapplyFilter");
-    if (checklist.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
-    checklist.isRowInRange(ROW.QUICK_FILTER,range)) {
-      checklist.refreshFilter();
-    }
-    timeEnd("reapplyFilter");
-    
-    time("moveNotes");
-    if (checklist.isColumnInRange(COLUMN.NOTES,range)) {
-      checklist.syncNotes(range);
-    }
-    timeEnd("moveNotes");
 
-    time("checkFilterSize");
-    if (!event.value && !event.oldValue) {
-      // was more than a cell change, 
-      checklist.ensureFilterSize();
-    }
-    timeEnd("checkFilterSize");
     
-    time("updateTotals");
-    if (checklist.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
-      checklist.ensureTotalFormula();
-    }
-    timeEnd("updateTotals");
   } catch(e) {
     const message = e && e.getMessage && e.getMessage() || e;
     event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);

@@ -74,7 +74,7 @@ const ChecklistApp = (function(){
     static getChecklistByMetaSheet(metaSheet) {
       const metaDevMeta = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (metaDevMeta && metaDevMeta[0]) {
-        const sheet = metaSheet.getParent().getSheetByName(metaDevMeta.getValue());
+        const sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
         if (sheet) {
           const checklist = ChecklistApp.getChecklistBySheet(sheet);
           checklist.metaSheet = metaSheet;
@@ -251,6 +251,68 @@ const ChecklistApp = (function(){
           return this._settings;
         }
         // END PROPERTY SECTIONS
+
+        // Handlers
+        handleEdit(event) {
+          time("checklist handleEdit");
+          const range = event.range;
+          
+          time("quickFilterChange");
+          if (this.isRowInRange(ROW.QUICK_FILTER,range)) {
+            this.quickFilterChange(event);
+            if (range.getNumRows() == 1) {
+              timeEnd("quickFilterChange","checklist handleEdit");
+              return;
+            }
+          }
+          timeEnd("quickFilterChange");
+          
+          
+          time("updateSettings");
+          if (this.isRowInRange(ROW.SETTINGS, range)) {
+            ChecklistSettings.handleChange(event);
+            if (range.getNumRows() == 1) {
+              timeEnd("updateSettings","checklist handleEdit");
+              return;
+            }
+          }
+          timeEnd("updateSettings");
+          
+          time("populateAvailable");
+          if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
+            StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(this, event);
+          }
+          timeEnd("populateAvailable");
+          
+          time("reapplyFilter");
+          if (this.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
+          this.isRowInRange(ROW.QUICK_FILTER,range)) {
+            this.refreshFilter();
+          }
+          timeEnd("reapplyFilter");
+          
+          time("moveNotes");
+          if (this.isColumnInRange(COLUMN.NOTES,range)) {
+            this.syncNotes(range);
+          }
+          timeEnd("moveNotes");
+          
+          time("checkFilterSize");
+          if (!event.value && !event.oldValue) {
+            // was more than a cell change, 
+            this.ensureFilterSize();
+          }
+          timeEnd("checkFilterSize");
+          
+          time("updateTotals");
+          if (this.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
+            this.ensureTotalFormula();
+          }
+          timeEnd("updateTotals");
+          
+          timeEnd("checklist handleEdit");
+        }
+        // /Handlers
 
         // Settings section
         getSetting(setting) {

@@ -35,6 +35,11 @@ const ChecklistMeta = (function(){
       return checklistMetaSheets[key];
     }
 
+    static getFromSheet(sheet) {
+      const checklist = ChecklistApp.getChecklistByMetaSheet(sheet);
+      return checklist && checklist.meta;
+    }
+
     static promptMetaSheetCreate(checklist, title = "Meta Sheet Create") {
       const ui = SpreadsheetApp.getUi();
       const defaultMetaSheetName = checklist.name + " Meta";
@@ -140,6 +145,13 @@ const ChecklistMeta = (function(){
             timeEnd();
           }
           return this._missingValues;
+        }
+
+        // eslint-disable-next-line no-unused-vars
+        handleEdit(event) {
+          time("meta handleEdit");
+          // TODO possibly do things here to reduce need for syncing
+          timeEnd("meta handleEdit");
         }
 
         syncWithChecklist(_toastTitle = "Syncing Metadata") {
