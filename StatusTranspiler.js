@@ -2,8 +2,6 @@
 // eslint-disable-next-line no-redeclare
 const StatusTranspiler = (function(){
 
-  
-
   let transpilerCreationLock = true;
   const checklistTranspilers = {};
   class StatusTranspiler {
@@ -40,8 +38,9 @@ const StatusTranspiler = (function(){
       const {COLUMN,STATUS} = ChecklistApp;
       const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
 
-      const columnToValueToRows = {};
+      const columnInfo = {};
       // Essentially static defs
+      const PARSE_REGEX = /^ *(?:(\d+)x|x(\d+) +)? *((?:(.*)!)?([^ ].*?)) *$/;
       let UID_Counter = 0;
       const getParenPlaceholder = () =>  `PPH_${UID_Counter++}_PPH`;
       const getQuotePlaeholder = () => `QPH_${UID_Counter++}_QPH`;
@@ -52,46 +51,55 @@ const StatusTranspiler = (function(){
         column = this.checklist.toColumnIndex(column);
         return A1(row,column);
       };
-      const rowsA1 = (rows, column) => {
+      const rowInfosToA1Counts = (rowInfos, column) => {
         column = checklist.toColumnIndex(column);
-        const ranges = [];
-        if (rows.length === 0) return ranges;
-        let firstRow = rows[0];
-        let lastRow = rows[0];
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i] != lastRow+1) {
-            ranges.push(A1(firstRow,column,lastRow,column));
-            firstRow = lastRow = rows[i];
+        const rangeCounts = {};
+        if (rowInfos.length === 0) return rangeCounts;
+        let firstRow = rowInfos[0].row;
+        let lastRow = rowInfos[0].row;
+        let num = rowInfos[0].num;
+        for (let i = 1; i < rowInfos.length; i++) {
+          const rowInfo = rowInfos[i];
+          if (rowInfo.row != lastRow+1 || rowInfo.num != num) {
+            rangeCounts[A1(firstRow,column,lastRow,column)] = num;
+            firstRow = lastRow = rowInfo.row;
+            num = rowInfo.num;
           } else {
-            lastRow = rows[i];
+            lastRow = rowInfo.row;
           }
         }
-        ranges.push(A1(firstRow,column,lastRow,column));
-        return ranges;
+        rangeCounts[A1(firstRow,column,lastRow,column)] = num;
+        return rangeCounts;
       };
       const getColumnValues = (column) => {
         if (!checklist.hasColumn(column)) return;
         const columnIndex = checklist.toColumnIndex(column);
-        if (columnToValueToRows[columnIndex]) return columnToValueToRows[columnIndex];
+        if (columnInfo[columnIndex]) return columnInfo[columnIndex];
         time(`getColumnValues ${column}`);
-        const valueToRows = {
-          _rowToValues: {},
-        };
+        const byRow = {};
+        const byValue = {};
       
         const firstRow = checklist.firstDataRow;
         const values = checklist.getColumnDataValues(columnIndex);
         values.forEach((value,i) => {
-          if (valueToRows[value]) {
-            valueToRows[value].push(firstRow+i);
+          const rawParsed = value.match(PARSE_REGEX) || [];
+          const numReceived = Number(rawParsed[1] || rawParsed[2] || 1);
+          const valueInfo = {
+            num: numReceived,
+            value: rawParsed[3],
+            row: firstRow+i,
+          };
+          byRow[valueInfo.row] = valueInfo;
+          
+          if (byValue[valueInfo.value]) {
+            byValue[valueInfo.value].push(valueInfo);
           } else {
-            valueToRows[value] = [firstRow+i];
+            byValue[valueInfo.value] = [valueInfo];
           }
-          valueToRows._rowToValues[firstRow+i] = value;
         });
-        columnToValueToRows[columnIndex] = valueToRows;
-        valueToRows._entries = Object.entries(valueToRows);
+        columnInfo[columnIndex] = {byRow,byValue};
         timeEnd(`getColumnValues ${column}`);
-        return valueToRows;
+        return columnInfo[columnIndex];
       };
 
       const parsersByRow = {};
@@ -106,8 +114,6 @@ const StatusTranspiler = (function(){
         constructor(row, cellValue = checklist.getValue(row, COLUMN.PRE_REQS)) {
           this.row = row;
           parsersByRow[row] = this;
-
-          this.itemValue = getColumnValues(COLUMN.ITEM)._rowToValues[row];
 
           const lines = [];
           cellValue.toString().split(/ *[\n;] */).forEach((line,i) => {
@@ -172,14 +178,14 @@ const StatusTranspiler = (function(){
         }
 
         getAllPossiblePreReqs() {
-          const itemValues = getColumnValues(COLUMN.ITEM)._rowToValues;
-          return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row]);
+          const itemValues = getColumnValues(COLUMN.ITEM).byRow;
+          return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row].value);
         }
 
         getAllDirectlyMissablePreReqs() {
           const allMissableRows = [...this.getAllPossiblePreReqRows()].filter(row => parsersByRow[row].isDirectlyMissable());
-          const itemValues = getColumnValues(COLUMN.ITEM)._rowToValues;
-          return [...allMissableRows].map(row => itemValues[row]);
+          const itemValues = getColumnValues(COLUMN.ITEM).byRow;
+          return [...allMissableRows].map(row => itemValues[row].value);
         }
 
         getAllPossiblePreReqRows() {
@@ -697,8 +703,7 @@ const StatusTranspiler = (function(){
         parseValue(text) {
           let valueInfo = valueInfoCache[text];
           if (!valueInfo) {
-            const parseRegEx = /^ *(?:(\d+)x|x(\d+) +)? *((?:(.*)!)?([^ ].*?)) *$/;
-            const rawParsed = parseRegEx.exec(text);
+            const rawParsed = PARSE_REGEX.exec(text);
             if (rawParsed) {
               valueInfo = {
                 numNeeded: rawParsed[1] || rawParsed[2] || 1,
@@ -709,7 +714,7 @@ const StatusTranspiler = (function(){
                 original: text,
               };
               if (quoteMapping[valueInfo.key]) {
-                const rawParsedQuote = parseRegEx.exec(quoteMapping[valueInfo.key]);
+                const rawParsedQuote = PARSE_REGEX.exec(quoteMapping[valueInfo.key]);
                 valueInfo.key = rawParsedQuote[3];
                 valueInfo.altColumnName = rawParsedQuote[4];
                 valueInfo.id = rawParsedQuote[5];
@@ -718,25 +723,28 @@ const StatusTranspiler = (function(){
                 // Implicity prefix match on item for "[N]x [item]"
                 valueInfo.id += "*";
               }
-              const valuesToRows = getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
-              const rows = [];
-              if (valuesToRows) {
+              const columnInfo = getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
+              const rowInfos = [];
+              if (columnInfo) {
                 if (valueInfo.id.indexOf("*") < 0) {
-                  if (valuesToRows[valueInfo.id]) {
-                    rows.push(...(valuesToRows[valueInfo.id]));
+                  if (columnInfo.byValue[valueInfo.id]) {
+                    rowInfos.push(...(columnInfo.byValue[valueInfo.id]));
                   }
                 } else {
                   const search = RegExp("^" + valueInfo.id.replace(/\*/g,".*") + "$");
-                  valuesToRows._entries.forEach(([value,valueRows]) => {
+                  Object.entries(columnInfo.byValue).forEach(([value,columnValueInfos]) => {
                     if (value.match(search)) {
-                      rows.push(...valueRows);
+                      rowInfos.push(...columnValueInfos);
                     }
                   });
                 }
+                
               } else {
                 this.addError(`Could not find column "${valueInfo.altColumnName}"`);
               }
-              valueInfo.rows = rows;
+              const numPossible = rowInfos.reduce((total, rowInfo) => total + rowInfo.num, 0);
+              valueInfo.rowInfos = rowInfos;
+              valueInfo.numPossible = numPossible;
             
               valueInfoCache[text] = valueInfo;
             }
@@ -744,13 +752,14 @@ const StatusTranspiler = (function(){
           // Copy cached object
           if (valueInfo) {
             valueInfo = Object.assign({},valueInfo);
-            if (valueInfo.rows) {
-              valueInfo.rows = [...valueInfo.rows];
+            if (valueInfo.rowInfos) {
+              valueInfo.rowInfos = [...valueInfo.rowInfos.map(rowInfo => Object.assign({},rowInfo))];
               // Remove self reference (simplest dependency resolution, v0)
-              const rowIndex = valueInfo.rows.indexOf(this.row);
+              const rowIndex = valueInfo.rowInfos.findIndex(rowInfo => rowInfo.row == this.row);
               if (rowIndex >= 0) {
-                valueInfo.rows.splice(rowIndex,1);
+                const removed = valueInfo.rowInfos.splice(rowIndex,1);
                 valueInfo.wasSelfReferential = true;
+                valueInfo.numPossible -= removed[0].num;
               }
             }
           }
@@ -762,10 +771,10 @@ const StatusTranspiler = (function(){
           if (!this.hasValue()) {
             if (!this.valueInfo) {
               this.addError(`Could not find "${this.text}"`);
-            } else if (this.valueInfo.rows.length == 0) {
+            } else if (this.valueInfo.numPossible == 0) {
               this.addError(`Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (except itself)" : ""}`);
-            } else if (this.valueInfo.rows.length < this.valueInfo.numNeeded) {
-              this.addError(`There are only ${this.valueInfo.rows.length}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding itself)" : ""}`);
+            } else if (this.valueInfo.numPossible < this.valueInfo.numNeeded) {
+              this.addError(`There are only ${this.valueInfo.numPossible}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding itself)" : ""}`);
             }
           }
         }
@@ -776,9 +785,9 @@ const StatusTranspiler = (function(){
             if (this.isInCircularDependency()) {
               allPossiblePreReqs = this.getCircularDependencies();
             } else {
-              allPossiblePreReqs = new Set(this.valueInfo.rows);
-              this.valueInfo.rows.forEach(row => 
-                CellFormulaParser.getParserForRow(row).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
+              allPossiblePreReqs = new Set(this.valueInfo.rowInfos.map(rowInfo => rowInfo.row));
+              this.valueInfo.rowInfos.forEach(rowInfo => 
+                CellFormulaParser.getParserForRow(rowInfo.row).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
               );
             }
             Object.defineProperty(this,"_allPossiblePreReqRows",{value: allPossiblePreReqs});
@@ -794,8 +803,8 @@ const StatusTranspiler = (function(){
           } else {
             previous.push(this.row);
             this._lockCircular = true;
-            this.valueInfo.rows.forEach(row => {
-              CellFormulaParser.getParserForRow(row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+            this.valueInfo.rowInfos.forEach(rowInfo => {
+              CellFormulaParser.getParserForRow(rowInfo.row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
             });
             this._lockCircular = false;
           }
@@ -865,7 +874,7 @@ const StatusTranspiler = (function(){
        */
         toTotalFormula() {
           if (this.hasValue()) return VALUE(this.value);
-          return this.valueInfo.rows.length;
+          return this.valueInfo.numPossible;
         }
 
         toFormulaByStatus(...statuses) {
@@ -963,8 +972,11 @@ const StatusTranspiler = (function(){
             return VALUE.ZERO;
           } else {
             if (!Array.isArray(statuses)) statuses = [statuses];
-            const counts = rowsA1(this.valueInfo.rows, column).reduce((counts,range) => {
-              statuses.forEach(status => counts.push(COUNTIF(range, VALUE(status))));
+            const counts = Object.entries(rowInfosToA1Counts(this.valueInfo.rowInfos, column)).reduce((counts,[range,count]) => {
+              statuses.forEach(status => {
+                const countIf = COUNTIF(range, VALUE(status));
+                counts.push(count == 1 ? countIf : MULT(countIf,count));
+              });
               return counts;
             },[]);
             return ADD(counts);
