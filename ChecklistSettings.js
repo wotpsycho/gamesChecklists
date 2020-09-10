@@ -45,10 +45,11 @@ const ChecklistSettings = (function(){
       OFF: "Off",
     },
     [SETTING.ACTION]      : {
-      NONE:    "...",
-      REFRESH: "Refresh Checklist",
-      META:    "Sync Meta",
-      RESET:   "RESET",
+      NONE        : "...",
+      REFRESH     : "Refresh Checklist",
+      META        : "Sync Meta",
+      QUICK_FILTER: "Toggle Quick Filter",
+      RESET       : "RESET",
     }
   };
 
@@ -71,9 +72,10 @@ const ChecklistSettings = (function(){
       [SETTING_OPTIONS[SETTING.MODE].CREATE] : "Mix of Dynamic and Edit, only available items are shown and can edit/add new items",
     },
     [SETTING.ACTION]: {
-      [SETTING_OPTIONS[SETTING.ACTION].REFRESH] : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
-      [SETTING_OPTIONS[SETTING.ACTION].META]    : "Formatting and dropdowns from Meta to Checklist, new values added to Meta for formatting",
-      [SETTING_OPTIONS[SETTING.ACTION].RESET]   : "Reset checkmarks for the Checklist after prompt",
+      [SETTING_OPTIONS[SETTING.ACTION].REFRESH]     : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
+      [SETTING_OPTIONS[SETTING.ACTION].META]        : "Formatting and dropdowns from Meta to Checklist, new values added to Meta for formatting",
+      [SETTING_OPTIONS[SETTING.ACTION].QUICK_FILTER]: "Turn Quick Filter row On or Off",
+      [SETTING_OPTIONS[SETTING.ACTION].RESET]       : "Reset checkmarks for the Checklist after prompt",
     },
   };
 
@@ -172,7 +174,7 @@ const ChecklistSettings = (function(){
       time("settings dataValidation");
       const rowRange = this.checklist.getRowRange(this.row,2);
       rowRange.clearDataValidations().clearContent();
-      [SETTING.MODE,SETTING.QUICK_FILTER,SETTING.ACTION].forEach((setting,i) => {
+      [SETTING.MODE,SETTING.ACTION].forEach((setting,i) => {
         const cell = rowRange.getCell(1,i+1);
         cell.setValue(`${setting}: ${this.getSetting(setting)}`);
         cell.setDataValidation(SpreadsheetApp.newDataValidation().setAllowInvalid(false).requireValueInList(Object.values(this.settings[setting].options).map(option => `${setting}: ${option}`),true));
@@ -435,7 +437,7 @@ const ChecklistSettings = (function(){
       class ChecklistActions extends ChecklistSetting {
         constructor() {
           // const {NONE,REFRESH,META,RESET} = SETTING_OPTIONS[SETTING.ACTION];
-          const {NONE,REFRESH,META} = SETTING_OPTIONS[SETTING.ACTION];
+          const {NONE,REFRESH,META,QUICK_FILTER} = SETTING_OPTIONS[SETTING.ACTION];
           const setNoneAction = new SetSettingAction(SETTING.ACTION, NONE);
           const refreshAction = new class extends SettingAction{
             execute() {
@@ -459,6 +461,7 @@ const ChecklistSettings = (function(){
             [NONE]   : new SettingOption(NONE   , []                           , descriptions[NONE]),
             [REFRESH]: new SettingOption(REFRESH, [setNoneAction,refreshAction], descriptions[REFRESH]),
             [META]   : new SettingOption(META   , [setNoneAction,metaAction], descriptions[META]),
+            [QUICK_FILTER]: new SettingOption(QUICK_FILTER, [setNoneAction,new ToggleQuickFilterAction()], descriptions[QUICK_FILTER])
           };
           super(SETTING.ACTION,options);
         }
@@ -584,7 +587,7 @@ const ChecklistSettings = (function(){
           time("toggleQuickFilter");
           checklist.toast("Toggling Quick Filter...",-1);
           checklist.toggleQuickFilterRow(this.enabled);
-          checklist.toast(`Quick Filter ${this.enabled ? "Enabled" : "Disabled"}`);
+          checklist.toast(`Quick Filter ${typeof this.enabled == "undefined" ? "Toggled" : this.enabled ? "Enabled" : "Disabled"}`);
           timeEnd("toggleQuickFilter");
         }
       }
