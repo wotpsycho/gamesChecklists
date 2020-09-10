@@ -338,6 +338,16 @@ const ChecklistSettings = (function(){
           const modeOptions = Object.values(SETTING_OPTIONS[SETTING.MODE]).map(mode => new ChecklistSetting.SettingOption(mode, new ChecklistSetting.SetModeAction(mode), DESCRIPTIONS[SETTING.MODE] && DESCRIPTIONS[SETTING.MODE][mode]));
           super(SETTING.MODE, modeOptions,_initialValue);
         }
+        _determineValue() {
+          time("determineMode");
+          const value = this.options.find(mode => 
+            Object.entries(MODE_SETTINGS[mode]).reduce((hasSettings, [setting, modeValue]) => 
+              hasSettings && checklistSettings.getSetting(setting) == modeValue
+            , true)
+          ) || super._determineValue();
+          timeEnd("determineMode");          
+          return value;
+        }
       }
 
       class ColumnFilterSetting extends ChecklistSetting {
@@ -392,7 +402,7 @@ const ChecklistSettings = (function(){
           Object.defineProperty(this,"column",{value: column});
         }
         _determineValue() {
-          return this.visibilityToOption[checklist.isColumnHidden(this.column)];
+          return this.visibilityToOption[!checklist.isColumnHidden(this.column)];
         }
       }
 
