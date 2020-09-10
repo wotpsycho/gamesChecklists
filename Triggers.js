@@ -44,7 +44,7 @@ function handleEdit(event) {
         case "meta": checklist.syncMeta(); break;
         case "FULL RESET": checklist.reset(true); break;
       }
-      checklist.ensureTotalFormula();
+      checklist.isChecklist && checklist.ensureTotalFormula();
       return;
     }
     

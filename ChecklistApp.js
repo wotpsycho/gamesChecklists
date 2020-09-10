@@ -586,6 +586,12 @@ const ChecklistApp = (function(){
           itemDataValidation.setAllowInvalid(true);
           itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
           itemDataRange.setDataValidation(itemDataValidation);
+
+          this.getUnboundedColumnDataRange(COLUMN.PRE_REQS).setDataValidation(SpreadsheetApp.newDataValidation()
+            .setAllowInvalid(true)
+            .requireValueInRange(itemDataRange,true)
+          );
+          
       
           if (!_skipMeta && this.meta) {
             this.meta.updateChecklistDataValidation();
