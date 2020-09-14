@@ -10,17 +10,18 @@ const StatusTranspiler = (function(){
   let transpilerCreationLock = true;
   const checklistTranspilers = {};
   class StatusTranspiler {
+    readonly checklist;
     constructor(checklist) {
       if (transpilerCreationLock) throw new Error("Do not create transpiler direcly, use " + StatusTranspiler.getTranspilerForChecklist.name);
-      Object.defineProperty(this,"checklist",{value: checklist});
+      this.checklist = checklist;
       checklistTranspilers[checklist.sheetId] = this;
     }
 
-    static getActiveChecklistTranspiler(){
+    static getActiveChecklistTranspiler(): StatusTranspiler{
       return StatusTranspiler.getTranspilerForChecklist(ChecklistApp.getActiveChecklist());
     }
 
-    static getTranspilerForChecklist(checklist = ChecklistApp.getActiveChecklist()) {
+    static getTranspilerForChecklist(checklist = ChecklistApp.getActiveChecklist()): StatusTranspiler {
       let transpiler = checklistTranspilers[checklist.sheetId];
       if (!transpiler) {
         transpilerCreationLock = false;
@@ -30,20 +31,34 @@ const StatusTranspiler = (function(){
       return transpiler;
     }
 
-    static validateAndGenerateStatusFormulasForChecklist(checklist = ChecklistApp.getActiveChecklist(), _event) {
-      StatusTranspiler.getTranspilerForChecklist(checklist).validateAndGenerateStatusFormulas(_event);
+    static validateAndGenerateStatusFormulasForChecklist(checklist = ChecklistApp.getActiveChecklist()): void {
+      StatusTranspiler.getTranspilerForChecklist(checklist).validateAndGenerateStatusFormulas();
     }
 
     // CLASS DEFINITION
+    private _CellFormulaParser;
     get CellFormulaParser() {
+      type column = number|string;
+      type valueInfo = {
+        num: number;
+        value: any;
+        row: number;
+        column: number;
+      };
+      type rowInfo = {
+        num: number;
+        row: number;
+      };
+
       if (this._CellFormulaParser) return this._CellFormulaParser;
       time("get CellFormulaParser");
       const checklist = this.checklist;
       // static imports
-      const {COLUMN,STATUS} = ChecklistApp;
+      const {COLUMN,STATUS}: {COLUMN: {[x:string]:string}, STATUS: {[x:string]:string}} = ChecklistApp;
       const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
 
-      const columnInfo = {};
+    
+      const columnInfo: {[x:number]: columnValues} = {};
       // Essentially static defs
       const PARSE_REGEX = /^ *(?:(\d+)x|x(\d+) +)? *((?:(.*)!)?([^ ].*?)) *$/;
       let UID_Counter = 0;
@@ -52,11 +67,11 @@ const StatusTranspiler = (function(){
       const quoteMapping = {};
       const parentheticalMapping = {};
 
-      const cellA1 = (row, column) => {
+      const cellA1 = (row: number, column: column): string => {
         column = this.checklist.toColumnIndex(column);
         return A1(row,column);
       };
-      const rowInfosToA1Counts = (rowInfos, column) => {
+      const rowInfosToA1Counts = (rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} => {
         column = checklist.toColumnIndex(column);
         const rangeCounts = {};
         if (rowInfos.length === 0) return rangeCounts;
@@ -76,23 +91,32 @@ const StatusTranspiler = (function(){
         rangeCounts[A1(firstRow,column,lastRow,column)] = num;
         return rangeCounts;
       };
-      const getColumnValues = (column) => {
+      type columnValues = {
+        byRow: {
+          [x:number]: valueInfo;
+        };
+        byValue: {
+          [x:string]: valueInfo[];
+        };
+      };
+      const getColumnValues = (column: column): columnValues => {
         if (!checklist.hasColumn(column)) return;
-        const columnIndex = checklist.toColumnIndex(column);
+        const columnIndex: number = checklist.toColumnIndex(column);
         if (columnInfo[columnIndex]) return columnInfo[columnIndex];
         time(`getColumnValues ${column}`);
         const byRow = {};
         const byValue = {};
       
         const firstRow = checklist.firstDataRow;
-        const values = checklist.getColumnDataValues(columnIndex);
+        const values: string[] = checklist.getColumnDataValues(columnIndex);
         values.forEach((value,i) => {
           const rawParsed = value.match(PARSE_REGEX) || [];
           const numReceived = Number(rawParsed[1] || rawParsed[2] || 1);
-          const valueInfo = {
+          const valueInfo: valueInfo = {
             num: numReceived,
             value: rawParsed[3],
             row: firstRow+i,
+            column: columnIndex,
           };
           byRow[valueInfo.row] = valueInfo;
           
@@ -108,21 +132,23 @@ const StatusTranspiler = (function(){
       };
 
       const PREFIX_REGEX = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) `, "i");
-      const parsersByRow = {};
+      const parsersByRow: {[x:number]: CellFormulaParser} = {};
       class CellFormulaParser {
-        static getParserForRow(row) {
+        static getParserForRow(row: number) {
           if (parsersByRow[row]) {
             return parsersByRow[row];
           } else {
             return new CellFormulaParser(row);
           }
         }
-        constructor(row, cellValue = checklist.getValue(row, COLUMN.PRE_REQS)) {
+        private readonly row: number;
+        private readonly rootNode: RootNode;
+        constructor(row:number, cellValue = checklist.getValue(row, COLUMN.PRE_REQS)) {
           this.row = row;
           parsersByRow[row] = this;
 
           const lines = [];
-          cellValue.toString().split(/ *[\n;] */).forEach((line,i) => {
+          cellValue.toString().split(/ *[\n;] */).forEach((line:string,i:number) => {
             if (i > 0 && line.indexOf("...") === 0) {
               lines[lines.length-1] += line.substring(3);
             } else {
@@ -136,13 +162,13 @@ const StatusTranspiler = (function(){
             if (!line) continue;
 
         
-            line = line.replace(/"([^"]+)"/g, (_match,text) => {
+            line = line.replace(/"([^"]+)"/g, (_match,text:string) => {
               const placeholder = getQuotePlaeholder();
               quoteMapping[placeholder] = text;
               return placeholder;
             });
         
-            let match;
+            let match: RegExpMatchArray;
             const parenMatcher = /\(([^()]*)\)/;
             // eslint-disable-next-line no-cond-assign
             while (match = line.match(parenMatcher)) {
@@ -151,7 +177,7 @@ const StatusTranspiler = (function(){
               line = line.replace(parenMatcher, placeholder);
             }
 
-            let childFormulaNode;
+            let childFormulaNode: FormulaNode<any>;
             const prefixCheck = line.match(PREFIX_REGEX);
             if (prefixCheck) { 
               const content = line.substring(line.indexOf(" ")).trim();
@@ -164,7 +190,6 @@ const StatusTranspiler = (function(){
                   break;
                 case SPECIAL_PREFIXES.CHOICE.toUpperCase():
                   childFormulaNode = new ChoiceFormulaNode(content,row);
-                  (this.choiceNodes || (this.choiceNodes = [])).push(childFormulaNode);
                   break;
               }
             } else {
@@ -205,9 +230,10 @@ const StatusTranspiler = (function(){
         getChoiceInfo() {
           if (this.hasChoices()) {
             const itemValues = getColumnValues(COLUMN.ITEM).byRow;
-            const choiceInfo = {};
-            choiceInfo.choiceCheckedFormula = OR(choiceRows[this.row].map(row => cellA1(row,COLUMN.CHECK)));
-            choiceInfo.options = choiceRows[this.row].map(optionRow => itemValues[optionRow]);
+            const choiceInfo = {
+              choiceCheckedFormula: OR(choiceRows[this.row].map(row => cellA1(row,COLUMN.CHECK))),
+              options: choiceRows[this.row].map(optionRow => itemValues[optionRow]),
+            };
             return choiceInfo;
           }
         }
@@ -224,9 +250,12 @@ const StatusTranspiler = (function(){
           return this.getCircularDependencies().has(this.row);
         }
       
-        getCircularDependencies(previous = []) {
+        private _lockCircular: boolean;
+        private _circularDependencies: ReadonlySet<number>;
+        private _isCircular: boolean;
+        getCircularDependencies(previous = []): ReadonlySet<number> {
           if (this._circularDependencies) return this._circularDependencies;
-          const circularDependencies = new Set();
+          const circularDependencies: Set<number> = new Set();
           if (this._lockCircular) {
             previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
           } else {
@@ -262,11 +291,15 @@ const StatusTranspiler = (function(){
         }
       }
 
-      class FormulaNode {
+      abstract class FormulaNode<T> {
+        protected readonly errors: Set<string> = new Set();
+        protected readonly children: FormulaNode<unknown>[] = [];
+        protected readonly text: string;
+        protected readonly row: number;
+        protected value: T;     
+        protected formulaType: formula;
     
-        constructor(text,row) {
-          this.errors = new Set();
-          this.children = [];
+        constructor(text: any, row: number) {
           this.text = text.toString().trim();
           this.row = row;
 
@@ -278,54 +311,56 @@ const StatusTranspiler = (function(){
           }
         }
 
-        get child() {
+        protected get child(): FormulaNode<any> {
           return this.children.length == 1 ? this.children[0] : undefined;
         }
 
-        set child(child) {
-          if (!this.children.length > 1) throw new Error("Cannot set child for multi-child node");
+        protected set child(child: FormulaNode<any>) {
+          if (this.children.length > 1) throw new Error("Cannot set child for multi-child node");
           this.children[0] = child;
         }
 
-        addError(message) {
+        addError(message: string): void {
           this.errors.add(message);
         }
 
-        addErrors(errors) {
+        addErrors(errors: Iterable<string>): void {
           for (const message of errors) {
             this.addError(message);
           }
         }
 
-        checkErrors() {
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        checkErrors(): void {
+
         }
 
-        getErrors() {
+        getErrors(): Set<string> {
           this.checkErrors();
           this.children.forEach(child => this.addErrors(child.getErrors()));
           return this.errors;
         }
 
-        hasErrors() {
+        hasErrors(): boolean {
           return this.getErrors().size > 0;
         }
 
-        hasValue() {
+        hasValue(): boolean {
           return typeof this.value !== "undefined";
         }
 
 
-        toErrorFormula() {
+        toErrorFormula(): string {
           return VALUE(this.hasErrors());
         }
 
-        toCheckedFormula() {
+        toCheckedFormula(): string {
           return A1(this.row, checklist.toColumnIndex(COLUMN.CHECK));
         }
 
 
-        toAvailableFormula() {
-          let formula;
+        toAvailableFormula(): string {
+          let formula: string;
           if (this.hasValue()) {
             return VALUE(this.value);
           } else if (this.formulaType) {
@@ -338,27 +373,20 @@ const StatusTranspiler = (function(){
           return formula;
         }
 
-        toPRUsedFormula() {
-          throw new Error(`AbstractMethod ${this.constructor.name}.${this.toPRUsedFormula.name}`);
-        }
+        abstract toPRUsedFormula(): string;
 
-        toRawMissedFormula() {
-          throw new Error(`AbstractMethod ${this.constructor.name}.${this.toRawMissedFormula.name}`);
-        }
+        abstract toRawMissedFormula(): string;
 
-        toMissedFormula() {
-          throw new Error(`AbstractMethod ${this.constructor.name}.${this.toMissedFormula.name}`);
-        }
+        abstract toMissedFormula(): string;
 
-        toUnknownFormula() {
-          throw `${new Error("AbstractMethod " + this.constructor.name)}.${this.toUnknownFormula.name}`;
-        }
+        abstract toUnknownFormula(): string;
 
-        isDirectlyMissable() {
+        isDirectlyMissable(): boolean {
           return this.children.reduce((directlyMissable,child) => directlyMissable || child.isDirectlyMissable(), false);
         }
 
-        getAllPossiblePreReqRows() {
+        protected _allPossiblePreReqRows: ReadonlySet<number>;
+        getAllPossiblePreReqRows():ReadonlySet<number> {
           if (!this._allPossiblePreReqRows) {
             let allPossiblePreReqs;
             if (this.isInCircularDependency()) {
@@ -369,25 +397,28 @@ const StatusTranspiler = (function(){
                 child.getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
               );
             }
-            Object.defineProperty(this,"_allPossiblePreReqRows",{value: allPossiblePreReqs});
+            this._allPossiblePreReqRows = allPossiblePreReqs;
           }
           return this._allPossiblePreReqRows;
         }
 
-        isInCircularDependency() {
+        isInCircularDependency(): boolean {
           return this.getCircularDependencies().has(this.row);
         }
 
-        getCircularDependencies(previous = []) {
+        protected _circularDependencies: ReadonlySet<number>;
+        protected _lockCircular: boolean;
+        protected _isCircular: boolean;
+        getCircularDependencies(previous: ReadonlyArray<number> = []): ReadonlySet<number> {
           if (this._circularDependencies) return this._circularDependencies;
-          const circularDependencies = new Set();
+          const circularDependencies: Set<number> = new Set();
           if (this._lockCircular) {
             previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
           } else {
-            previous.push(this.row);
+            const newChain = [...previous,this.row];
             this._lockCircular = true;
             this.children.forEach(child => {
-              child.getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+              child.getCircularDependencies(newChain).forEach(circularDependencies.add, circularDependencies);
             });
             this._lockCircular = false;
           }
@@ -397,8 +428,8 @@ const StatusTranspiler = (function(){
         }
       }
 
-      class BooleanFormulaNode extends FormulaNode {
-        constructor(text,row) {
+      class BooleanFormulaNode extends FormulaNode<boolean> {
+        constructor(text:string,row:number) {
           super(text,row);
           if (this.text) {
             for (const booleanFormulaTranslationHelper of [
@@ -434,7 +465,7 @@ const StatusTranspiler = (function(){
           }
         }
 
-        toPRUsedFormula() {
+        toPRUsedFormula(): string {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
           if (!this.formulaType) return this.child.toPRUsedFormula();
@@ -459,7 +490,7 @@ const StatusTranspiler = (function(){
           }
         }
 
-        toRawMissedFormula() {
+        toRawMissedFormula(): string {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
           if (!this.formulaType) return this.child.toRawMissedFormula();
@@ -476,7 +507,7 @@ const StatusTranspiler = (function(){
           }
         }
 
-        toMissedFormula() {
+        toMissedFormula(): string {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
           if (!this.formulaType) return this.child.toMissedFormula();
@@ -493,7 +524,7 @@ const StatusTranspiler = (function(){
           }
         }
 
-        toUnknownFormula() {
+        toUnknownFormula(): string {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.TRUE;
           if (!this.formulaType) return this.child.toUnknownFormula();
@@ -516,26 +547,26 @@ const StatusTranspiler = (function(){
           }
         }
 
-        isDirectlyMissable() {
-          if (this.type == NOT) return true;
+        isDirectlyMissable(): boolean {
+          if (this.formulaType == NOT) return true;
           else return super.isDirectlyMissable();
         }
       }
 
       class RootNode extends BooleanFormulaNode {
-        constructor(children,row) {
+        constructor(children:FormulaNode<any>[],row:number) {
           super("",row);
           if (children.length > 0) {
-            this.children = children;
+            this.children.push(...children);
             this.value = undefined;
             this.formulaType = AND;
           } else {
             this.value = true;
           }
         }
-        toStatusFormula() {
+        toStatusFormula(): string {
           const ifsArgs = [];
-          const order = [
+          const order: Array<[string,(()=>string)]> = [
             [STATUS.ERROR,      this.toErrorFormula],
             [STATUS.CHECKED,    this.toCheckedFormula],
             [STATUS.AVAILABLE,  this.toAvailableFormula],
@@ -583,8 +614,9 @@ const StatusTranspiler = (function(){
         } */
       }
 
-      class ComparisonFormulaNode extends FormulaNode {
-        constructor(text,row,formulaType) {
+      class ComparisonFormulaNode extends FormulaNode<boolean> {
+        protected children: NumberNode[];
+        constructor(text: string,row: number,formulaType: formula) {
           super(text,row);
         
           this.formulaType = formulaType;
@@ -592,8 +624,8 @@ const StatusTranspiler = (function(){
           this.children.push(...operands.map(operand => new NumberFormulaNode(operand,this.row)));
         }
 
-        checkErrors() {
-          let isError;
+        checkErrors(): void {
+          let isError: boolean;
           switch (this.formulaType) {
             case EQ:
               isError = this.children[0].getMaxValue() < this.children[1].getMinValue() || this.children[0].getMinValue() > this.children[1].getMaxValue();
@@ -620,58 +652,69 @@ const StatusTranspiler = (function(){
             this.addError("Formula cannot be satisfied: " + this.text);
           }
         }
-        toPRUsedFormula() {
+        toPRUsedFormula(): string {
           return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.PR_USED);
         }
-        toRawMissedFormula() {
+        toRawMissedFormula(): string {
           return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.MISSED);
         }
-        toMissedFormula() {
+        toMissedFormula(): string {
           return this._toFormulaByNotStatus(this.toUnknownFormula.name, [STATUS.MISSED,STATUS.PR_USED]);
         }
-        toUnknownFormula() {
+        toUnknownFormula(): string {
           if (this.isInCircularDependency()) return VALUE.TRUE;
           return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.UNKNOWN);
         }
-        _toFormulaByNotStatus(formulaTypeName,notStatusesForMax,statusesForMin = STATUS.CHECKED) {
+        private _toFormulaByNotStatus(formulaTypeName: string,notStatusesForMax: string|string[],statusesForMin: string|string[] = STATUS.CHECKED): string {
           if (this.hasErrors()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
           if (this.hasValue()) return VALUE(this.value);
           if (!this.formulaType) return this.child[formulaTypeName]();
-        
+
+          if (notStatusesForMax && !Array.isArray(notStatusesForMax)) notStatusesForMax = [notStatusesForMax];
+          const minStatuses: string[] = (statusesForMin && !Array.isArray(statusesForMin)) ? [statusesForMin] : statusesForMin as string[];
+          const maxNotStatuses: string[] = (notStatusesForMax && !Array.isArray(notStatusesForMax))  ? [notStatusesForMax] : notStatusesForMax as string[];
           switch (this.formulaType) {
             case LT: {
-              return GTE(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax));
+              return GTE(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses));
             }
             case LTE: {
-              return GT(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax));
+              return GT(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses));
             }
             case GT: {
-              return LTE(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin));
+              return LTE(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
             }
             case GTE: {
-              return LT(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin));
+              return LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
             }
             case EQ: {
               return OR([
-                LT(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)),
-                GT(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax))
+                LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
+                GT(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses))
               ]);
             }
             case NE: {
               return AND([
-                EQ(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[0].toFormulaByStatus(statusesForMin)),
-                EQ(this.children[0].toFormulaByNotStatus(notStatusesForMax),this.children[1].toFormulaByStatus(statusesForMin)),
-                EQ(this.children[0].toFormulaByStatus(statusesForMin),this.children[1].toFormulaByNotStatus(notStatusesForMax))
+                EQ(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[0].toFormulaByStatus(...minStatuses)),
+                EQ(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
+                EQ(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses))
               ]);
             }
           }
+        
         }
       }
-      
-      class NumberFormulaNode extends FormulaNode {
 
-        constructor(text,row) {
+      interface NumberNode extends FormulaNode<number> {
+        getMinValue: () => number;
+        getMaxValue: () => number;
+        toFormulaByStatus: (...status: string[]) => string;
+        toFormulaByNotStatus: (...status: string[]) => string;
+      }
+      
+      class NumberFormulaNode extends FormulaNode<number> implements NumberNode {
+        protected children: NumberNode[]
+        constructor(text: string,row: number) {
           super(text,row);
       
           for (const arithmeticFormulaTranslationHelper of [
@@ -691,8 +734,16 @@ const StatusTranspiler = (function(){
           this.child = new NumberFormulaValueNode(text,this.row);
         }
 
+        protected get child(): NumberFormulaValueNode {
+          return super.child as NumberFormulaValueNode;
+        }
+
+        protected set child(child: NumberFormulaValueNode) {
+          super.child = child;
+        }
+
         getMinValue() {
-          if (this.hasValue()) return this.value();
+          if (this.hasValue()) return this.value;
           if (!this.formulaType) {
             return this.child.getMinValue();
           } else switch(this.formulaType) {
@@ -704,7 +755,7 @@ const StatusTranspiler = (function(){
         }
 
         getMaxValue() {
-          if (this.hasValue()) return this.value();
+          if (this.hasValue()) return this.value;
           if (!this.formulaType) {
             return this.child.getMaxValue();
           } else switch(this.formulaType) {
@@ -715,20 +766,21 @@ const StatusTranspiler = (function(){
           }
         }
 
-        toFormulaByStatus(statuses) {
+        toPRUsedFormula(): string {
+          return this.toFormulaByStatus(STATUS.PR_USED);
+        }
+        toMissedFormula(): string {
+          return this.toFormulaByStatus(STATUS.PR_USED,STATUS.MISSED);
+        }
+        toFormulaByStatus(...statuses: string[]): string {
           if (this.hasValue()) return VALUE(this.value);
           if (!this.formulaType) return this.child.toFormulaByStatus(statuses);
-          return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(statuses)));
+          return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(...statuses)));
         }
-        toFormulaByNotStatus(statuses) {
+        toFormulaByNotStatus(...statuses: string[]): string {
           if (this.hasValue()) return VALUE(this.value);
           if (!this.formulaType) return this.child.toFormulaByNotStatus(statuses);
-          return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(statuses)));
-        }
-        toRawNotMissedFormula() {
-          if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.child.toRawNotMissedFormula();
-          return this.formulaType.generateFormula(this.children.map(child => child.toRawNotMissedFormula()));
+          return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(...statuses)));
         }
         toRawMissedFormula() {
           if (this.hasValue()) return VALUE(this.value);
@@ -740,18 +792,11 @@ const StatusTranspiler = (function(){
           if (!this.formulaType) return this.child.toUnknownFormula();
           return this.formulaType.generateFormula(this.children.map(child => child.toUnknownFormula()));
         }
-      
-        toNotUnknownFormula() {
-          if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.child.toNotUnknownFormula();
-          return this.formulaType.generateFormula(this.children.map(child => child.toNotUnknownFormula()));
-        }
-      
       }
 
       // Abstract intermediate class
       const valueInfoCache = {};
-      class FormulaValueNode extends FormulaNode {
+      abstract class FormulaValueNode<T> extends FormulaNode<T> {
         constructor(text,row) {
           super(text,row);
         }
@@ -760,11 +805,11 @@ const StatusTranspiler = (function(){
           const text = this.text;
           let valueInfo = valueInfoCache[text];
           if (!valueInfo) {
-            const rawParsed = PARSE_REGEX.exec(text);
+            const rawParsed: RegExpExecArray = PARSE_REGEX.exec(text);
             if (rawParsed) {
               valueInfo = {
                 numNeeded: rawParsed[1] || rawParsed[2] || 1,
-                isMulti: !!(rawParsed[1] > 0 || rawParsed[2] > 0 || rawParsed[5].indexOf("*") >= 0),
+                isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[2]) > 0 || rawParsed[5].indexOf("*") >= 0),
                 key: rawParsed[3],
                 altColumnName: rawParsed[4],
                 id: rawParsed[5],
@@ -847,6 +892,7 @@ const StatusTranspiler = (function(){
           }
         }
 
+        protected _allPossiblePreReqRows;
         getAllPossiblePreReqRows() {
           if (!this._allPossiblePreReqRows) {
             let allPossiblePreReqs;
@@ -858,14 +904,14 @@ const StatusTranspiler = (function(){
                 CellFormulaParser.getParserForRow(rowInfo.row).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
               );
             }
-            Object.defineProperty(this,"_allPossiblePreReqRows",{value: allPossiblePreReqs});
+            this._allPossiblePreReqRows = allPossiblePreReqs;
           }
           return this._allPossiblePreReqRows;
         }
       
         getCircularDependencies(previous = []) {
           if (this._circularDependencies) return this._circularDependencies;
-          const circularDependencies = new Set();
+          const circularDependencies: Set<number> = new Set();
           if (this._lockCircular) {
             previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
           } else {
@@ -888,21 +934,22 @@ const StatusTranspiler = (function(){
 
       }
       
-      class BooleanFormulaValueNode extends FormulaValueNode {
+      class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
+        protected readonly formulaType: formula = GTE;
         constructor(text,row) {
           super(text,row);
           if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
-            this.value = this.text;
+            this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
           } else {
           // CHECKED > NEEDED
             this.availableChild = new NumberFormulaValueNode(this.text,this.row);
             this.neededChild = new NumberFormulaValueNode(this.valueInfo.numNeeded,this.row); 
           }
         }
-        get availableChild() {
-          return this.children[0];
+        get availableChild(): NumberFormulaValueNode {
+          return this.children[0] as NumberFormulaValueNode;
         }
-        set availableChild(child) {
+        set availableChild(child: NumberFormulaValueNode) {
           this.children[0] = child;
         }
         get neededChild() {
@@ -910,10 +957,6 @@ const StatusTranspiler = (function(){
         }
         set neededChild(child) {
           this.children[1] = child;
-        }
-
-        get formulaType() {
-          return GTE;
         }
         toPRUsedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
@@ -946,10 +989,10 @@ const StatusTranspiler = (function(){
         }
       }
   
-      class NumberFormulaValueNode extends FormulaValueNode {
-        constructor(text,row) {
+      class NumberFormulaValueNode extends FormulaValueNode<number> implements NumberNode {
+        constructor(text: string,row: number) {
           super(text,row);
-          if (Number(this.text) || this.text === 0 || this.text === "0") {
+          if (Number(this.text) || this.text === "0") {
             this.value = Number(this.text);
           }
         }
@@ -975,7 +1018,7 @@ const StatusTranspiler = (function(){
        */
         toAvailableFormula() { 
         // Available should look directly at "check" column only to prevent circular references
-          return this._generateFormula(true,COLUMN.CHECK);
+          return this._generateFormula(VALUE.TRUE,COLUMN.CHECK);
         }
 
         /**
@@ -1050,15 +1093,15 @@ const StatusTranspiler = (function(){
           return this.toTotalFormula();
         }
 
-        _generateFormula(statuses = [], column = COLUMN.STATUS) {
+        _generateFormula(statuses: string|string[] = [], column:string = COLUMN.STATUS): string {
           if (this.hasValue()) {
             return VALUE(this.value);
           } else if (!statuses || statuses.length == 0) {
             return VALUE.ZERO;
           } else {
-            if (!Array.isArray(statuses)) statuses = [statuses];
+            const stats: string[] = Array.isArray(statuses) ? statuses : [statuses as string];
             const counts = Object.entries(rowInfosToA1Counts(this.valueInfo.rowInfos, column)).reduce((counts,[range,count]) => {
-              statuses.forEach(status => {
+              stats.forEach(status => {
                 const countIf = COUNTIF(range, VALUE(status));
                 counts.push(count == 1 ? countIf : MULT(countIf,count));
               });
@@ -1069,14 +1112,18 @@ const StatusTranspiler = (function(){
         }
       }
 
-      const usesInfo = {}; // Treating as static value in containing class since it is reset each populateAvailable call
+      const usesInfo: {[x:string]:{[x:number]: number}} = {}; // Treating as static value in containing class since it is reset each populateAvailable call
       class UsesFormulaNode extends BooleanFormulaValueNode {
         constructor(text,row) {
           super(text,row);
+          this.useInfo[this.row] = this.valueInfo.numNeeded;
+        }
+
+        get useInfo(): {[x:number]:number} {
           if (!usesInfo[this.valueInfo.key]) {
             usesInfo[this.valueInfo.key] = {};
           }
-          usesInfo[this.valueInfo.key][this.row] = this.valueInfo.numNeeded;
+          return usesInfo[this.valueInfo.key];
         }
 
         toPRUsedFormula() {
@@ -1084,7 +1131,7 @@ const StatusTranspiler = (function(){
             LT(
               MINUS(
                 this.availableChild.toTotalFormula(),
-                UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key)
+                this._getPRUsedAmountFormula()
               ),
               this.valueInfo.numNeeded
             ),
@@ -1092,15 +1139,15 @@ const StatusTranspiler = (function(){
           );
         }
 
-        static _getPRUsedAmountFormula(key) {
-          const usedAmoutArguments = Object.entries(usesInfo[key]).map(([row,numUsed]) => IF(cellA1(row,COLUMN.CHECK),numUsed));
+        private _getPRUsedAmountFormula() {
+          const usedAmoutArguments = Object.entries(this.useInfo).map(([row,numUsed]) => IF(cellA1(Number(row),COLUMN.CHECK),numUsed));
           return ADD(usedAmoutArguments);
         }
 
         toAvailableFormula() {
         // Parent => CHECKED >= NEEDED
         // This   => (CHECKED - USED) >= NEEDED
-          const usedAmountFormula = UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
+          const usedAmountFormula = this._getPRUsedAmountFormula();
           const checkedFormula = this.availableChild.toAvailableFormula();
           const availableAmountFormula = MINUS(checkedFormula,usedAmountFormula);
           const numNeededFormula = this.neededChild.toAvailableFormula();
@@ -1119,7 +1166,7 @@ const StatusTranspiler = (function(){
 
       const choiceInfos = {};
       const choiceRows = {};
-      class ChoiceFormulaNode extends FormulaValueNode {
+      class ChoiceFormulaNode extends FormulaValueNode<boolean> {
         constructor(text,row) {
           super(text,row);
 
@@ -1234,7 +1281,7 @@ const StatusTranspiler = (function(){
           }
         }
 
-        getCircularDependencies(previous) {
+        getCircularDependencies(previous: any[]): ReadonlySet<number> {
           if (this.isChoiceOnly) {
             return new Set();
           } else {
@@ -1247,7 +1294,7 @@ const StatusTranspiler = (function(){
         }
       }
       
-      class MissedFormulaNode extends FormulaNode {
+      class MissedFormulaNode extends FormulaNode<boolean> {
         constructor(text,row) {
           super(text,row);
           this.formulaType = NOT;
@@ -1272,7 +1319,7 @@ const StatusTranspiler = (function(){
       }
 
       timeEnd("get CellFormulaParser");
-      Object.defineProperty(this,"_CellFormulaParser",{value: CellFormulaParser}); // Prevents rewrite
+      this._CellFormulaParser = CellFormulaParser;
       return this._CellFormulaParser;
     }
       
@@ -1326,7 +1373,7 @@ const StatusTranspiler = (function(){
       }
       timeEnd("parseCells");
       time("getDebugColumns");
-      const debugColumns = {
+      const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
         "isAvailable": {
           formulaFunc: this.CellFormulaParser.prototype.toAvailableFormula,
         },

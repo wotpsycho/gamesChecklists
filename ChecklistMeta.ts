@@ -1,22 +1,19 @@
-/* exported META, ProcessMeta */
-// eslint-disable-next-line no-redeclare
 const ChecklistMeta = (function(){
-
   class ChecklistMetaError extends Error{}
 
   let createLock = true;
   const checklistMetaSheets = {};
   class ChecklistMeta {
 
-    static getFromActiveChecklist(_interactive = false) {
+    static getFromActiveChecklist(_interactive: boolean = false): typeof SheetBase & any {
       return ChecklistMeta.getFromChecklist(ChecklistApp.getActiveChecklist(),_interactive);
     }
 
-    static getFromChecklist(checklist = ChecklistApp.getActiveChecklist(), _interactive = false) {
+    static getFromChecklist(checklist = ChecklistApp.getActiveChecklist(), _interactive: boolean = false) {
       const key = `${checklist.sheetId}:${checklist.metaSheet.getSheetId()}`;
       if (typeof checklistMetaSheets[key] == "undefined") {
         if (!checklist.isChecklist || !checklist.metaSheet) {
-          const checklistFromMeta = ChecklistApp.checklistFromMeta(checklist.sheet);
+          const checklistFromMeta = ChecklistApp.getChecklistByMetaSheet(checklist.sheet);
           if (checklistFromMeta) checklist = checklistFromMeta;
         } 
         if (!checklist.metaSheet && _interactive) {
@@ -35,12 +32,12 @@ const ChecklistMeta = (function(){
       return checklistMetaSheets[key];
     }
 
-    static getFromSheet(sheet) {
+    static getFromSheet(sheet: Sheet) {
       const checklist = ChecklistApp.getChecklistByMetaSheet(sheet);
       return checklist && checklist.meta;
     }
 
-    static promptMetaSheetCreate(checklist, title = "Meta Sheet Create") {
+    static promptMetaSheetCreate(checklist: { name: string; createMetaSheet: (arg0: string) => void; }, title: string = "Meta Sheet Create"): void {
       const ui = SpreadsheetApp.getUi();
       const defaultMetaSheetName = checklist.name + " Meta";
       const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
@@ -50,22 +47,31 @@ const ChecklistMeta = (function(){
   }
   let _MetaSheet;
   function getMetaSheet() {
-    if (!_MetaSheet) {
-      class MetaSheet extends SheetBase {
+    if (!this._MetaSheet) {
+        
+  type columnMetadata = {
+    column: any;
+    range: Range;
+    metaColumn: number;
+    formatHeaders: string[];
+    metaValueCells: {
+      any: Range,
+    };
+    lastMetaRow: number;
+    missingValues: {[x:string]:true};
+    metaRange: Range;
+};
+
+  class MetaSheet extends SheetBase {
+        readonly checklist
         constructor(checklist) {
           if (createLock) throw new ChecklistMetaError("Cannot create directly, use the static methods instead");
           super(checklist.metaSheet);
-          Object.defineProperties(this, {
-            checklist: {value: checklist},
-            // sheet    : {value: checklist.metaSheet},
-          });
+          this.checklist = checklist;
         }
 
-        get lastRow() {
-          return this.sheet.getLastRow();
-        }
-
-        get columnMetadata() {
+        private _columnMetadata: {[x:string]: columnMetadata}
+        private get columnMetadata(): {[x:string]: columnMetadata} {
           if (!this._columnMetadata) {
             time("get headerMetadata");
             const columnMetadata = {};
@@ -73,7 +79,7 @@ const ChecklistMeta = (function(){
             for (let column = 1; column <= metaHeaderValues.length; column++) {
               const rawMetaHeader = metaHeaderValues[column-1];
               if (rawMetaHeader && rawMetaHeader.toString().trim()) {
-                const [, checklistColumnName,  additionalChecklistColumns] = /^(.+?)(?:\[(.+)\])?$/.exec(rawMetaHeader);
+                const [, checklistColumnName,  additionalChecklistColumns] = /^(.+?)(?:\[(.+)\])?$/.exec(rawMetaHeader.toString());
                 const formatColumns = [checklistColumnName];
                 if (additionalChecklistColumns) {
                   const additionalFormatColumns = additionalChecklistColumns.split(/ *, */);
@@ -101,7 +107,7 @@ const ChecklistMeta = (function(){
                     break; // Don't allow empty spaces
                   }
                 }
-                columnMetadata[checklistColumnName] = {
+                const a = {
                   metaColumn: column,
                   formatHeaders: formatColumns,
                   metaValueCells: metaValueCells,
@@ -113,15 +119,18 @@ const ChecklistMeta = (function(){
                     range: this.checklist.getColumnDataRange(this.checklist.columnsByHeader[checklistColumnName]),
                   })
                 };
+                
+                columnMetadata[checklistColumnName] = a;
               }
             }
-            Object.defineProperty(this,"_columnMetadata",{value: columnMetadata});
+            this._columnMetadata = columnMetadata;
             timeEnd("get headerMetadata");
           }
           return this._columnMetadata;
         }
 
-        get missingValues() {
+        private _missingValues
+        private get missingValues() {
           if (!this._missingValues) {
             time("meta missingValues");
             const missingValues = {};
@@ -129,32 +138,32 @@ const ChecklistMeta = (function(){
               const metadata = this.columnMetadata[checklistColumnName]; 
               return checklistColumn != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && metadata && metadata.metaColumn && metadata.metaValueCells;
             }).forEach(([checklistColumnName, checklistColumn]) => {
-              const columnMissingValues = {};
+              const columnMissingValues: {[x:string]:true} = {};
               const metadata = this.columnMetadata[checklistColumnName];
               const checklistValues = this.checklist.getColumnDataValues(checklistColumn);
               checklistValues
-                .filter(checklistValue => checklistValue && checklistValue.toString().trim())
-                .map(checklistValue => checklistValue.split("\n")).flat()// Handle multi-value entries
-                .filter(checklistValue => checklistValue && checklistValue.toString().trim() && !metadata.metaValueCells[checklistValue])
-                .forEach(function(checklistValue){
+                .filter((checklistValue: { toString: () => string; }) => checklistValue && checklistValue.toString().trim())
+                .map((checklistValue: string) => checklistValue.split("\n")).flat()// Handle multi-value entries
+                .filter((checklistValue: string | number) => checklistValue && checklistValue.toString().trim() && !metadata.metaValueCells[checklistValue])
+                .forEach(function(checklistValue: string | number){
                   columnMissingValues[checklistValue] = true;
                 });
               missingValues[checklistColumnName] = columnMissingValues;
             });
-            Object.defineProperty(this,"_missingValues",{value: missingValues});
+            this._missingValues = missingValues;
             timeEnd("meta missingValues");
           }
           return this._missingValues;
         }
         
         // eslint-disable-next-line no-unused-vars
-        handleEdit(event) {
+        handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
           time("meta handleEdit");
           // TODO possibly do things here to reduce need for syncing
           timeEnd("meta handleEdit");
         }
 
-        syncWithChecklist(_toastTitle = "Syncing Metadata") {
+        syncWithChecklist(_toastTitle: string = "Syncing Metadata"): void {
           this.checklist.toast("Syncing Metadata...",_toastTitle);
           this.updateChecklistDataValidation();
           this.updateWithMissingValues();
@@ -162,16 +171,16 @@ const ChecklistMeta = (function(){
           this.checklist.toast("Done!", _toastTitle);
         }
 
-        updateChecklistDataValidation() {
+        updateChecklistDataValidation(): void {
           time("meta setChecklistDataValidation");
           Object.values(this.columnMetadata).forEach((metadata) => {
             if (metadata.metaValueCells && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
-              metadata.rangeValidation = SpreadsheetApp
+              const rangeValidation = SpreadsheetApp
                 .newDataValidation()
                 .requireValueInList(Object.keys(metadata.metaValueCells), true)
                 .setAllowInvalid(true)
                 .build();
-              metadata.range.setDataValidation(metadata.rangeValidation);
+              metadata.range.setDataValidation(rangeValidation);
             }
           });
           timeEnd("meta setChecklistDataValidation");
@@ -203,7 +212,7 @@ const ChecklistMeta = (function(){
             // Conditional formatting rules for given columns
             if (metadata.formatHeaders && metadata.range) {
               const formatRanges = [];
-              metadata.formatHeaders.forEach((headerName) => {
+              metadata.formatHeaders.forEach((headerName: string | number) => {
                 if (this.columnMetadata[headerName] && this.columnMetadata[headerName].range) {
                   formatRanges.push(this.columnMetadata[headerName].range);
                 }
@@ -239,7 +248,7 @@ const ChecklistMeta = (function(){
                     ruleBuilder.setItalic(true);
                   }
                   if (isUnderline) {
-                    ruleBuilder.setUnderline();
+                    ruleBuilder.setUnderline(true);
                   } else if (isStrikethrough) {
                     ruleBuilder.setStrikethrough(true);
                   }
@@ -288,10 +297,9 @@ const ChecklistMeta = (function(){
             protections && protections[0] && protections[0].remove();
           }
         }
-      }
-  
+  }
+  _MetaSheet = MetaSheet;
 
-      _MetaSheet = MetaSheet;
     }
     return _MetaSheet;
   }

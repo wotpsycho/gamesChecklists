@@ -1,5 +1,5 @@
 /* exported onOpen, onSelectionChange, onEdit, handleEdit, handleChange,AttachTriggers */
-function onEdit(event) {
+function onEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
   const trigger = ScriptApp.getProjectTriggers().filter(trigger => 
     trigger.getEventType() == ScriptApp.EventType.ON_EDIT
       && trigger.getHandlerFunction() == handleEdit.name 
@@ -10,7 +10,7 @@ function onEdit(event) {
   }
 }
   
-function handleEdit(event) {
+function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
   time();
   try {
     // static imports
@@ -76,18 +76,19 @@ function AttachTriggers() {
   time("getTriggers","getEditTrigger",true);
   const triggers = ScriptApp.getProjectTriggers();
   timeEnd("getTriggers");
-  const getTrigger = (type, handlerName) => {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const getTrigger = (type: GoogleAppsScript.Script.EventType, handlerName: string) => {
     const myTriggers = triggers.filter(trigger => 
       trigger.getEventType() == type
         && trigger.getHandlerFunction() == handlerName 
-        && trigger.getTriggerSourceId() == event.source.getId()
+        && trigger.getTriggerSourceId() == spreadsheet.getId()
     );
     return myTriggers && myTriggers.length > 0 && myTriggers[0];
   };
   const trigger = getTrigger(ScriptApp.EventType.ON_EDIT, "handleEdit");
   timeEnd("getEditTrigger");
   if (!trigger) {
-    ScriptApp.newTrigger("handleEdit").forSpreadsheet(event.source).onEdit().create();
+    ScriptApp.newTrigger("handleEdit").forSpreadsheet(spreadsheet).onEdit().create();
   }  
   timeEnd();
 }

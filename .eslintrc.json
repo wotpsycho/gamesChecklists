@@ -3,7 +3,14 @@
         "browser": true,
         "es2020": true
     },
-    "extends": "eslint:recommended",
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended"
+    ],
     "parserOptions": {
         "ecmaVersion": 11
     },
@@ -23,7 +30,8 @@
             "always"
         ],
         "no-var": "error",
-        "prefer-const": "error"
+        "prefer-const": "error",
+        "@typescript-eslint/no-inferrable-types": "off"
     },
     "globals": {
         "SpreadsheetApp": false,

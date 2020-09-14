@@ -2,29 +2,31 @@
 // eslint-disable-next-line no-redeclare
 const ChecklistApp = (function(){
 
-  const COLUMN = Object.freeze({
-    CHECK: "CHECK",
-    TYPE: "TYPE",
-    ITEM: "ITEM",
-    NOTES: "NOTES",
-    PRE_REQS: "PRE_REQS",
-    STATUS: "STATUS",
-  });
-  const ROW = Object.freeze({
-    TITLE: "TITLE",
-    SETTINGS: "SETTINGS",
-    QUICK_FILTER: "QUICK_FILTER",
-    HEADERS: "HEADERS",
-  });
-  const STATUS = Object.freeze({
-    CHECKED: "CHECKED",
-    AVAILABLE: "TRUE",
-    MISSED: "MISSED",
-    PR_USED: "PR_USED",
-    PR_NOT_MET: "FALSE",
-    UNKNOWN: "UNKNOWN",
-    ERROR: "ERROR",
-  });
+  enum COLUMN {
+    CHECK= "CHECK",
+    TYPE= "TYPE",
+    ITEM= "ITEM",
+    NOTES= "NOTES",
+    PRE_REQS= "PRE_REQS",
+    STATUS= "STATUS",
+  }
+  type column = number|COLUMN
+
+  enum ROW {
+    TITLE= "TITLE",
+    SETTINGS= "SETTINGS",
+    QUICK_FILTER= "QUICK_FILTER",
+    HEADERS= "HEADERS",
+  }
+  enum STATUS {
+    CHECKED= "CHECKED",
+    AVAILABLE= "TRUE",
+    MISSED= "MISSED",
+    PR_USED= "PR_USED",
+    PR_NOT_MET= "FALSE",
+    UNKNOWN= "UNKNOWN",
+    ERROR= "ERROR",
+  }
   
   const COLUMN_HEADERS = Object.freeze({
     [COLUMN.CHECK]: "✓",
@@ -63,7 +65,7 @@ const ChecklistApp = (function(){
       throw new ChecklistAppError("App should not be created with new, use the class directly");
     }
     // APP SECTION
-    static getChecklistBySheet(sheet = ChecklistApp.getActiveSheet()) {
+    static getChecklistBySheet(sheet: Sheet = ChecklistApp.getActiveSheet()) {
       const sheetId = sheet.getSheetId();
       if (!checklists[sheetId]) {
         checklists[sheetId] = new (getChecklist())(sheet);
@@ -71,7 +73,7 @@ const ChecklistApp = (function(){
       return checklists[sheetId];
     }
 
-    static getChecklistByMetaSheet(metaSheet) {
+    static getChecklistByMetaSheet(metaSheet: Sheet) {
       const metaDevMeta = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (metaDevMeta && metaDevMeta[0]) {
         const sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
@@ -91,19 +93,19 @@ const ChecklistApp = (function(){
       return ChecklistApp.getChecklistBySheet(ChecklistApp.getActiveSheet());
     }
 
-    static get activeSheet() {
+    static get activeSheet(): Sheet {
       return ChecklistApp.getActiveSheet();
     }
 
-    static set activeSheet(sheet) {
+    static set activeSheet(sheet: Sheet) {
       ChecklistApp.setActiveSheet(sheet);
     }
 
-    static getActiveSheet() {
+    static getActiveSheet():Sheet {
       return SpreadsheetApp.getActiveSheet();
     }
 
-    static setActiveSheet(sheet) {
+    static setActiveSheet(sheet: Sheet) {
       if (ChecklistApp.getActiveSheet().getSheetId() !== sheet.getSheetId()) {
         sheet.activate();
         SpreadsheetApp.setActiveSheet(sheet);
@@ -112,17 +114,11 @@ const ChecklistApp = (function(){
     }
     // END APP SECTION
 
-    static get ROW() {
-      return ROW;
-    }
+    static readonly ROW = ROW;
 
-    static get COLUMN() {
-      return COLUMN;
-    }
+    static readonly COLUMN = COLUMN;
 
-    static get STATUS() {
-      return STATUS;
-    }
+    static readonly STATUS = STATUS;
   }
 
   
@@ -133,45 +129,48 @@ const ChecklistApp = (function(){
     if (!_Checklist) {
       class ChecklistError extends SheetBase.ChecklistSheetError {}
       class Checklist extends SheetBase {
-        constructor(sheet) {
+        constructor(sheet: Sheet) {
           super(sheet,COLUMN_HEADERS,ROW_HEADERS);
           // Object.defineProperty(this,"sheet",{value: sheet});
         }
     
         // PROPERTIES SECTION
 
-        get title() {
+        private _title: string
+        private _titleColumn: number
+        get title(): string {
           if (typeof this._title == "undefined") {
             const titleValues = this.getRowValues(ROW.TITLE, 2);
             const titleIndex = titleValues.findIndex(value => value);
-            Object.defineProperty(this,"_title",      {configurable: true, value: titleIndex >= 0 ? titleValues[titleIndex] : null});
-            Object.defineProperty(this,"_titleColumn",{configurable: true, value: titleIndex >= 0 ? titleIndex + 2          : 3});
+            this._title = titleIndex >= 0 ? titleValues[titleIndex] as string : null;
+            this._titleColumn = titleIndex >= 0 ? titleIndex + 2 : 3;
           }
           return this._title;
         }
 
-        set title(newTitle) {
+        set title(newTitle: string) {
           if (newTitle != this.title) {
-            Object.defineProperty(this,"_title",{configurable: true, value: newTitle});
+            this._title = newTitle;
             this.setValue(ROW.TITLE,this._titleColumn,newTitle);
           }
         }
     
-        get isChecklist() {
+        get isChecklist(): boolean {
           return !!this.rows[ROW.HEADERS];
         }
 
-        get headerRow() {
+        get headerRow(): number {
           return this.rows[ROW.HEADERS] || super.headerRow;
         }
 
-        get rows() {
+        get rows(): {[x:string]: number} {
           const rows = super.rows;
           if (!rows[ROW.TITLE] && !Object.values(rows).includes(1)) rows[ROW.TITLE] = 1;
           return rows;
         }
 
-        get metaSheet() {
+        private _metaSheet: Sheet;
+        get metaSheet(): Sheet {
           if (typeof this._metaSheet == "undefined") {
             time("get metaSheet");
             let metaSheet;
@@ -193,14 +192,14 @@ const ChecklistApp = (function(){
               }
             }
             if (!metaSheet) metaSheet = null;
-            Object.defineProperty(this,"_metaSheet",{configurable: true, value: metaSheet});
+            this._metaSheet = metaSheet;
             timeEnd("get metaSheet");
           }
           return this._metaSheet;
         }
         set metaSheet(metaSheet) {
           time("set metaSheet");
-          Object.defineProperty(this,"_metaSheet",{configurable: true, value: metaSheet});
+          this._metaSheet = metaSheet;
           const devMeta = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
           if (devMeta && devMeta[0]) {
             devMeta[0].setValue(this._metaSheet.getName());
@@ -244,16 +243,17 @@ const ChecklistApp = (function(){
           this.meta && this.meta.setEditable(isEditable);
         }
 
+        private _settings
         get settings() {
           if (!this._settings) {
-            Object.defineProperty(this,"_settings",{value: ChecklistSettings.getSettingsForChecklist(this)});
+            this._settings = ChecklistSettings.getSettingsForChecklist(this);
           }
           return this._settings;
         }
         // END PROPERTY SECTIONS
 
         // Handlers
-        handleEdit(event) {
+        handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
           time("checklist handleEdit");
           const range = event.range;
           
@@ -280,7 +280,7 @@ const ChecklistApp = (function(){
           
           time("populateAvailable");
           if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
-            StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(this, event);
+            StatusTranspiler.validateAndGenerateStatusFormulasForChecklist(this);
           }
           timeEnd("populateAvailable");
           
@@ -315,15 +315,15 @@ const ChecklistApp = (function(){
         // /Handlers
 
         // Settings section
-        getSetting(setting) {
+        getSetting(setting: string): string {
           return this.settings.getSetting(setting);
         }
 
-        setSetting(setting, value) {
+        setSetting(setting: string, value: string): void {
           this.settings.setSetting(setting, value);
         }
 
-        resetSetting(_oldMode) {
+        resetSetting(_oldMode: string): void {
           this.setSetting(ChecklistSettings.SETTING.MODE,_oldMode);
           this.settings.setDataValidation();
         }
@@ -331,7 +331,7 @@ const ChecklistApp = (function(){
         // END Settings Section
 
         // NOTES SECTION
-        syncNotes(range) {
+        syncNotes(range: Range = undefined): void {
           time("syncNotes");
           const itemRange = this.getColumnDataRangeFromRange(COLUMN.ITEM,range);
           const notesRange = this.getColumnDataRangeFromRange(COLUMN.NOTES,range);
@@ -343,14 +343,14 @@ const ChecklistApp = (function(){
         // NOTES SECTION
 
         // META SECTION
-        syncMeta() {
+        syncMeta(): void {
           this.meta && this.meta.syncWithChecklist();
         }
         // END META SECTION
 
         // RESET/INIT/STRUCTURE SECTION
 
-        reset(_resetData = false) {
+        reset(_resetData: boolean = false): void {
           time("checklist reset");
           const type = !this.isChecklist ? "Initializing" : _resetData ? "Resetting" : "Refreshing";
           
@@ -450,7 +450,7 @@ const ChecklistApp = (function(){
 
         // STRUCTURE UTILITIES
 
-        insertColumn(columnIndex) {
+        insertColumn(columnIndex: number): void {
           super.insertColumn(columnIndex);
           if (columnIndex < this.lastColumn) {
             [ROW.TITLE, ROW.SETTINGS].forEach(rowType =>{
@@ -462,49 +462,49 @@ const ChecklistApp = (function(){
           }
         }
 
-        ensureCheckColumn() {
+        ensureCheckColumn(): void {
           this.ensureColumn(COLUMN.CHECK,1);
         }
 
-        ensureTypeColumn() {
+        ensureTypeColumn(): void {
           this.ensureColumn(COLUMN.TYPE,this._determineLastNamedColumn(COLUMN.CHECK) + 1);
         }
 
-        ensureItemColumn() {
+        ensureItemColumn(): void {
           this.ensureColumn(COLUMN.ITEM, this._determineLastNamedColumn(COLUMN.TYPE,COLUMN.CHECK) + 1);
         }
 
-        ensurePreReqsColumn() {
+        ensurePreReqsColumn(): void {
           this.ensureColumn(COLUMN.PRE_REQS, this._determineLastNamedColumn(COLUMN.ITEM,COLUMN.TYPE,COLUMN.CHECK) + 1);
         }
 
-        ensureNotesColumn() {
+        ensureNotesColumn(): void {
           this.ensureColumn(COLUMN.NOTES, this._determineLastNamedColumn(COLUMN.PRE_REQS,COLUMN.ITEM,COLUMN.TYPE,COLUMN.CHECK) + 1);
         }
 
-        ensureStatusColumn() {
+        ensureStatusColumn(): void {
           this.ensureColumn(COLUMN.STATUS);
         }
 
-        isColumnHidden(column) {
+        isColumnHidden(column: column): boolean {
           return this.sheet.isColumnHiddenByUser(this.toColumnIndex(column));
         }
 
-        ensureTitleRow() {
+        ensureTitleRow(): void {
           this.ensureHeaderRow();
           this.ensureRow(ROW.TITLE,1);
         }
 
-        ensureSettingsRow() {
+        ensureSettingsRow(): void {
           this.ensureHeaderRow();
           this.ensureRow(ROW.SETTINGS);
         }
 
-        ensureHeaderRow() {
+        ensureHeaderRow(): void {
           this.ensureRow(ROW.HEADERS, this._determineLastNamedRow(ROW.TITLE,ROW.SETTINGS,ROW.QUICK_FILTER) + 1);
         }
 
-        toggleQuickFilterRow(show = !this.hasRow(ROW.QUICK_FILTER)) {
+        toggleQuickFilterRow(show:boolean = !this.hasRow(ROW.QUICK_FILTER)): void {
           const hasQuickFilter = this.hasRow(ROW.QUICK_FILTER);
           if (hasQuickFilter && !show) {
             this._removeRow(ROW.QUICK_FILTER);
@@ -516,15 +516,15 @@ const ChecklistApp = (function(){
             }
           } else if (!hasQuickFilter && show) {
             this.ensureRow(ROW.QUICK_FILTER);
-            const filterValueRange = this.getRowRange(ChecklistApp.ROW.QUICK_FILTER, 2);
-            const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString();
+            const filterValueRange: Range & {getBackgroundObject?: () => GoogleAppsScript.Spreadsheet.Color} = this.getRowRange(ChecklistApp.ROW.QUICK_FILTER, 2);
+            const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString(); // Type not updated?
             // HACK lighten the color
             const r = parseInt(color.slice(1,3),16);
             const g = parseInt(color.slice(3,5),16);
             const b = parseInt(color.slice(5,7),16);
-            const newR = parseInt((r+255)/2);
-            const newG = parseInt((g+255)/2);
-            const newB = parseInt((b+255)/2);
+            const newR = Math.floor((r+255)/2);
+            const newG = Math.floor((g+255)/2);
+            const newB = Math.floor((b+255)/2);
             const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
             filterValueRange.setBackground(newColor);
           }
@@ -534,7 +534,7 @@ const ChecklistApp = (function(){
         }
 
 
-        trim() {
+        trim(): void {
           time("trim checklist");
           const itemValues = this.getColumnDataValues(COLUMN.ITEM);
           const firstRow = this.firstDataRow;
@@ -556,20 +556,20 @@ const ChecklistApp = (function(){
 
         // END STRUCTURE UTILITIES
 
-        resetCheckmarks() {
+        resetCheckmarks(): void {
           this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(() => false));
         }
         
-        removeNotes() {
+        removeNotes(): void {
           this.getRange(1,1,this.maxRows,this.maxColumns).clearNote();
         }
 
         // DATA VALIDATION UTILITIES
-        removeValidations() {
+        removeValidations(): void {
           this.getRange(1,1,this.maxRows,this.maxColumns).setDataValidation(null);
         }
 
-        resetDataValidation(_skipMeta = false) {
+        resetDataValidation(_skipMeta: boolean = false): void {
           time("checklist resetDataValidation");
           const {COUNTIF,A1,CONCAT,VALUE,LT} = FORMULA;
           const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
@@ -609,7 +609,7 @@ const ChecklistApp = (function(){
         // END DATA VALIDATION UTILITIES
 
         // CONDITIONAL FORMATTING UTILITIES
-        resetConditionalFormatting(_skipMeta = false) {
+        resetConditionalFormatting(_skipMeta: boolean = false): void {
           time("checklist resetConditionalFormatting");
           const {NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = FORMULA;
           const prettyPrint = FORMULA.togglePrettyPrint(false);
@@ -704,10 +704,10 @@ const ChecklistApp = (function(){
         // RESET/INIT/STRUCTURE SECTION
 
         // FILTER SECTION
-        removeFilter() {
+        removeFilter(): void {
           if (this.filter) this.filter.remove();
         }
-        refreshFilter() {
+        refreshFilter(): void {
           time("refreshFilter");
           try {
             if (this.filter) {
@@ -724,7 +724,7 @@ const ChecklistApp = (function(){
             timeEnd("refreshFilter");
           }
         }
-        createFilter(_oldFilter) {
+        createFilter(_oldFilter: Filter = undefined): void {
           this.removeFilter();
           const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);//,1,this.maxRows-this.headerRow+1,this.lastColumn);
           filterRange.createFilter();
@@ -738,7 +738,7 @@ const ChecklistApp = (function(){
             }
           }
         }
-        ensureFilterSize() {
+        ensureFilterSize(): void {
           const filterRange = this.filter.getRange();
           if (filterRange.getRow()        != this.headerRow 
           ||  filterRange.getColumn()     != 1 
@@ -752,7 +752,7 @@ const ChecklistApp = (function(){
         // END FILTER SECTION
 
         // QUICK FILTER SECTION
-        clearQuickFilterValues() {
+        clearQuickFilterValues(): void {
           time("QUICK_FILTER clear");
           if (this.hasRow(ROW.QUICK_FILTER)) {
             const quickFilterCells = this.getRowRange(ROW.QUICK_FILTER, 2);
@@ -760,7 +760,7 @@ const ChecklistApp = (function(){
           }
           timeEnd("QUICK_FILTER clear");
         }
-        quickFilterChange(event) {
+        quickFilterChange(event: EditEvent): void {
           time("quickFilterChange");
           const {REGEXMATCH,A1,VALUE} = FORMULA;
           const range = event.range;
@@ -771,10 +771,11 @@ const ChecklistApp = (function(){
           for (let column = firstChangedColumn; column <= lastChangedColumn; column++) {
             if (column == 1) continue; // First column is header
             const changedValue = changedValues[column-firstChangedColumn];
-            let criteria = this.filter.getColumnFilterCriteria(column);
+            const existingCriteria = this.filter.getColumnFilterCriteria(column);
             if (changedValue) {
+              let criteria: GoogleAppsScript.Spreadsheet.FilterCriteriaBuilder;
               if (criteria) {
-                criteria = criteria.copy();
+                criteria = existingCriteria.copy();
               } else {
                 criteria = SpreadsheetApp.newFilterCriteria();
               }
@@ -784,10 +785,10 @@ const ChecklistApp = (function(){
               FORMULA.togglePrettyPrint(prettyPrint);
               this.filter.setColumnFilterCriteria(column, criteria);
             } else {
-              if (criteria && criteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
+              if (existingCriteria && existingCriteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
                 // Remove it, but don't remove the hiddenValues criteria
-                if (criteria.getHiddenValues()) {
-                  this.filter.setColumnFilterCriteria(column, SpreadsheetApp.newFilterCriteria().setHiddenValues(criteria.getHiddenValues()));
+                if (existingCriteria.getHiddenValues()) {
+                  this.filter.setColumnFilterCriteria(column, SpreadsheetApp.newFilterCriteria().setHiddenValues(existingCriteria.getHiddenValues()));
                 } else {
                   this.filter.removeColumnFilterCriteria(column);
                 }
@@ -798,7 +799,7 @@ const ChecklistApp = (function(){
         }
         // END QUICK FILTER SECTION
         // REPORTING SECTION
-        ensureTotalFormula() {
+        ensureTotalFormula(): void {
           time("totalFormula");
           // static imports
           const {CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ} = FORMULA;

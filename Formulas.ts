@@ -1,6 +1,14 @@
 /* exported FORMULA */
 // eslint-disable-next-line no-redeclare
-const FORMULA = (function initFormula(){
+type formula = ((...value: any[]) => string) & {
+  identify: (text:string) => boolean;
+  parseOperands: (text:string) => string[];
+  generateFormula: (...value: any[]) => string;
+} & {[x:string]: string};
+
+const FORMULA: ((text:string) => string) & {
+  [x:string]: formula;
+} & {togglePrettyPrint: (value:boolean) => boolean} = (function initFormula(){
 
   let prettyPrint = true;
   const togglePrettyPrint = (value = !prettyPrint) => {
@@ -10,26 +18,28 @@ const FORMULA = (function initFormula(){
   };
   // FORMULA ENUM DEFINIOTNS
   class FormulaTranslationHelper {
-    constructor(regEx, formulaName) {
+    readonly regEx: RegExp;
+    readonly formulaName: string;
+    constructor(regEx: RegExp, formulaName: string) {
       this.regEx = regEx;
       this.formulaName = formulaName;
     }
     
-    identify(text) {
+    identify(text: string): boolean {
       return !!(text && this.regEx && text.match(this.regEx));
     }
 
-    parseOperands(text) {
+    parseOperands(text: string): string[] {
       if (!text || !this.regEx) return;
       const match = text.match(this.regEx);
       return (match && match.slice(1));
     }
-    _shouldPrettyPrint(values) {
+    _shouldPrettyPrint(values: any[]): boolean {
       // TODO pull from config
       return prettyPrint && values.length > 1;
     }
-    _deepFlat(values) {
-      let oldLength;
+    _deepFlat(values: any[]): any[] {
+      let oldLength: number;
       do {
         oldLength = values.length;
         values = values.flat();
@@ -37,7 +47,7 @@ const FORMULA = (function initFormula(){
       return values;
     }
 
-    generateFormula(...values) {
+    generateFormula(...values: any[]): string {
       values = this._deepFlat(values);
       const _prettyPrint = this._shouldPrettyPrint(values);
 
@@ -58,7 +68,7 @@ const FORMULA = (function initFormula(){
   }
   // Since certain formulas accept 0-N arguments, handle that instead of nested groups
   class FlexibleFormulaTranslationHelper extends FormulaTranslationHelper {
-    parseOperands(text) {
+    parseOperands(text: string): string[] {
       if (!text) return;
 
       const match = text.match(this.regEx);
@@ -77,21 +87,21 @@ const FORMULA = (function initFormula(){
 
       return results;
     }
-    generateFormula(...values) {
+    generateFormula(...values: any[]): string {
       values = this._deepFlat(values);
       if (values.length == 1) return values[0];
-      else return super.generateFormula(values);
+      else return super.generateFormula(...values);
     }
   }
 
   class SimpleFormulaHelper extends FormulaTranslationHelper {
-    constructor(formulaName) {
+    constructor(formulaName: string = "") {
       super(undefined, formulaName);
     }
   }
 
   class InlineFormulaTranslationHelper extends FormulaTranslationHelper {
-    generateFormula(...values) {
+    generateFormula(...values: any[]): string {
       values = this._deepFlat(values);
       const _prettyPrint = this._shouldPrettyPrint(values);
 
@@ -107,15 +117,18 @@ const FORMULA = (function initFormula(){
     }
   }
 
-  const isNumber = value => typeof value == "number" || Number(value) || value === "0";
+  function isNumber(value: any): boolean {
+    return typeof value == "number" || Number(value) > 0 || Number(value) < 0 || value === "0";
+  }
   
 
   class ValueFormulaTranslationHelper extends SimpleFormulaHelper {
-    generateFormula(value) {
+    generateFormula(...values: any[]): string {
+      const value = values[0];
       if (typeof value == "boolean" || value.toString().toUpperCase() == "TRUE" || value.toString().toUpperCase() == "FALSE") {
         return value.toString().toUpperCase();
       } else if (isNumber(value)) {
-        return Number(value);
+        return Number(value).toString();
       } else {
         return `"${value.toString()}"`;
       }
@@ -123,19 +136,15 @@ const FORMULA = (function initFormula(){
     }
   }
 
-  class RangeTranslationHelper extends SimpleFormulaHelper {
-
-    // eslint-disable-next-line no-unused-vars
-    _rowColumnToRangeFormula(row, column, isRowRelative = false, isColumnRelative = false) {
-      // abstract
-    }
+  abstract class RangeTranslationHelper extends SimpleFormulaHelper {
+    abstract _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean, isColumnRelative: boolean): string
     // Assumes absolute unless settings object passed
     // Arguments: range|startRow, column, [endColumn], [endRow], [startRowRelative], [startColumnRelative],[]
-    generateFormula(rangeOrRow, ...rest) {
+    generateFormula(rangeOrRow: Range|number, ...rest: (number|boolean)[]): string {
       const booleanStart = [rest.indexOf(true),rest.indexOf(false)].filter(index => index >= 0).reduce((a,b) => Math.min(a,b),rest.length);
       const [rowRelative,columnRelative,endRowRelative,endColumnRelative] = Object.assign([false,false,false,false],rest.splice(booleanStart));
-      let [column,endRow,endColumn] = rest;
-      let row;
+      let [column,endRow,endColumn]: number[] = rest as number[];
+      let row: number;
       if (typeof rangeOrRow == "object") {
         const range = rangeOrRow;
 
@@ -160,7 +169,7 @@ const FORMULA = (function initFormula(){
   }
 
   class RangeR1C1TranslationHelper extends RangeTranslationHelper {
-    _rowColumnToRangeFormula(row, column, isRowRelative = false, isColumnRelative = false) {
+    _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string {
       let address = "";
       if (isNumber(row)) {
         address += "R" + (isRowRelative ? `[${row}]` : row);
@@ -172,17 +181,18 @@ const FORMULA = (function initFormula(){
     }
   }
 
-  const columnToA1 = column => {
+  function columnToA1(column: number): string {
     column--;
-    const rest = Math.floor(column/26);
-    if (rest < 0) return "";
+    const rest = Math.floor(column / 26);
+    if (rest < 0)
+      return "";
     const leastSig = column % 26;
     const leastSigLet = String.fromCharCode("A".charCodeAt(0) + leastSig);
     return columnToA1(rest) + leastSigLet;
-  };
+  }
 
   class RangeA1TranslationHelper extends RangeTranslationHelper {
-    _rowColumnToRangeFormula(row, column, isRowRelative = false, isColumnRelative = false) {
+    _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string {
       let address = "";
       if (isNumber(column)) {
         if (!isColumnRelative) address += "$";
@@ -196,20 +206,33 @@ const FORMULA = (function initFormula(){
     }
   }
   
-  function _helpersToGenerateFunctions(helpers) {
+  function _helpersToGenerateFunctions(helpers: {[x:string]: FormulaTranslationHelper|{formula:FormulaTranslationHelper,consts: {[x:string]: any}}}): {[x:string]:formula} {
     const toFuncs = {};
-    Object.entries(helpers).forEach(([key,helper]) => {
+    Object.entries(helpers).forEach(([key,helperOrMap]) => {
+      let helper: FormulaTranslationHelper;
+      let consts: { [x: string]: any; };
+      if (helperOrMap instanceof FormulaTranslationHelper) {
+        helper = helperOrMap;
+      } else {
+        helper = helperOrMap.formula;
+        consts = helperOrMap.consts;
+      }
       const generate = Object.assign((...args) => helper.generateFormula(...args),helper);
       generate.identify = (...args) => helper.identify(...args);
       generate.parseOperands = (...args) => helper.parseOperands(...args);
       generate.generateFormula = generate;
+      if (consts) {
+        Object.entries(consts).forEach(([constName,value]) => {
+          generate[constName] = generate(value);
+        });
+      }
       toFuncs[key] = generate;
     });
     return toFuncs;
   }
   
 
-  const FORMULA = Object.assign((value) => "=" + value,_helpersToGenerateFunctions({
+  const FORMULA = Object.assign((value: any): string => "=" + value,_helpersToGenerateFunctions({
     AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/, "AND"),
     OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/, "OR"),
     NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
@@ -237,22 +260,37 @@ const FORMULA = (function initFormula(){
     REGEXMATCH: new SimpleFormulaHelper("REGEXMATCH"),
 
     CONCAT: new SimpleFormulaHelper("CONCATENATE"),
-    CHAR: new SimpleFormulaHelper("CHAR"),
+    CHAR: {
+      formula: new SimpleFormulaHelper("CHAR"),
+      consts: {
+        NEWLINE: 10,
+      }
+    },
 
     R1C1: new RangeR1C1TranslationHelper(),
     A1: new RangeA1TranslationHelper(),
-    VALUE: new ValueFormulaTranslationHelper(),
+    VALUE: {
+      formula: new ValueFormulaTranslationHelper(),
+      consts: {
+        TRUE: true,
+        FALSE: false,
+        ZERO: 0,
+        ONE: 1,
+        EMPTYSTRING: "",
+        EMPTYSTR: "",
+      },
+    },
   }));
   
-  FORMULA.VALUE.TRUE = FORMULA.VALUE(true);
-  FORMULA.VALUE.FALSE = FORMULA.VALUE(false);
-  FORMULA.VALUE.ZERO = FORMULA.VALUE(0);
-  FORMULA.VALUE.ONE = FORMULA.VALUE(1);
-  FORMULA.VALUE.EMPTYSTRING = FORMULA.VALUE.EMPTYSTR = FORMULA.VALUE("");
+  // FORMULA.VALUE.TRUE = FORMULA.VALUE(true);
+  // FORMULA.VALUE.FALSE = FORMULA.VALUE(false);
+  // FORMULA.VALUE.ZERO = FORMULA.VALUE(0);
+  // FORMULA.VALUE.ONE = FORMULA.VALUE(1);
+  // FORMULA.VALUE.EMPTYSTRING = FORMULA.VALUE.EMPTYSTR = FORMULA.VALUE("");
 
-  FORMULA.CHAR.NEWLINE = FORMULA.CHAR(10);
-  FORMULA.togglePrettyPrint = togglePrettyPrint;
+  // FORMULA.CHAR.NEWLINE = FORMULA.CHAR(10);
+  // FORMULA.togglePrettyPrint = togglePrettyPrint;
 
   Object.values(FORMULA).forEach(formula => Object.freeze(formula));
-  return FORMULA;
+  return Object.assign(FORMULA,{togglePrettyPrint});
 })();

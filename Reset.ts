@@ -1,5 +1,4 @@
 /* exported ResetChecklist */
-
 function ResetChecklist(checklist = ChecklistApp.getActiveChecklist()) {
   let title = "Refreshing Checklist";
   try{
