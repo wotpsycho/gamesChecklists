@@ -374,6 +374,10 @@ const ChecklistApp = (function(){
           time("removeValidation");
           this.removeValidations();
           timeEnd("removeValidation");
+
+          time("removeNotes");
+          this.removeNotes();
+          timeEnd("removeNotes");
           
           
           time("row/column existence");
@@ -554,6 +558,10 @@ const ChecklistApp = (function(){
 
         resetCheckmarks() {
           this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(() => false));
+        }
+        
+        removeNotes() {
+          this.getRange(1,1,this.maxRows,this.maxColumns).clearNote();
         }
 
         // DATA VALIDATION UTILITIES

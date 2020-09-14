@@ -1,6 +1,11 @@
 /* exported StatusTranspiler */
 // eslint-disable-next-line no-redeclare
 const StatusTranspiler = (function(){
+  const SPECIAL_PREFIXES = {
+    USES  : "USES",
+    MISSED: "MISSED",
+    CHOICE: "CHOICE",
+  };
 
   let transpilerCreationLock = true;
   const checklistTranspilers = {};
@@ -102,6 +107,7 @@ const StatusTranspiler = (function(){
         return columnInfo[columnIndex];
       };
 
+      const PREFIX_REGEX = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) `, "i");
       const parsersByRow = {};
       class CellFormulaParser {
         static getParserForRow(row) {
@@ -145,24 +151,28 @@ const StatusTranspiler = (function(){
               line = line.replace(parenMatcher, placeholder);
             }
 
-            let childFormula;
-            const prefixCheck = line.match(/^(USES|MISSED) /i);
+            let childFormulaNode;
+            const prefixCheck = line.match(PREFIX_REGEX);
             if (prefixCheck) { 
               const content = line.substring(line.indexOf(" ")).trim();
               switch (prefixCheck[1].toUpperCase()) {
-                case "USES":
-                  childFormula = new CellFormulaParser.UsesFormulaNode(content,row);
+                case SPECIAL_PREFIXES.USES.toUpperCase():
+                  childFormulaNode = new UsesFormulaNode(content,row);
                   break;
-                case "MISSED":
-                  childFormula = new CellFormulaParser.MissedFormulaNode(content,row);
+                case SPECIAL_PREFIXES.MISSED.toUpperCase():
+                  childFormulaNode = new MissedFormulaNode(content,row);
+                  break;
+                case SPECIAL_PREFIXES.CHOICE.toUpperCase():
+                  childFormulaNode = new ChoiceFormulaNode(content,row);
+                  (this.choiceNodes || (this.choiceNodes = [])).push(childFormulaNode);
                   break;
               }
             } else {
-              childFormula = new CellFormulaParser.BooleanFormulaNode(line,row);
+              childFormulaNode = new BooleanFormulaNode(line,row);
             }
-            children.push(childFormula);
+            children.push(childFormulaNode);
           }
-          this.rootNode = new CellFormulaParser.RootNode(children,row);
+          this.rootNode = new RootNode(children,row);
         }
 
         toFormula() {
@@ -186,6 +196,20 @@ const StatusTranspiler = (function(){
           const allMissableRows = [...this.getAllPossiblePreReqRows()].filter(row => parsersByRow[row].isDirectlyMissable());
           const itemValues = getColumnValues(COLUMN.ITEM).byRow;
           return [...allMissableRows].map(row => itemValues[row].value);
+        }
+
+        hasChoices() {
+          return !!choiceRows[this.row];
+        }
+
+        getChoiceInfo() {
+          if (this.hasChoices()) {
+            const itemValues = getColumnValues(COLUMN.ITEM).byRow;
+            const choiceInfo = {};
+            choiceInfo.choiceCheckedFormula = OR(choiceRows[this.row].map(row => cellA1(row,COLUMN.CHECK)));
+            choiceInfo.options = choiceRows[this.row].map(optionRow => itemValues[optionRow]);
+            return choiceInfo;
+          }
         }
 
         getAllPossiblePreReqRows() {
@@ -216,35 +240,33 @@ const StatusTranspiler = (function(){
           return this._circularDependencies;
         }
         toAvailableFormula() {
-          return FORMULA(this.rootNode.toAvailableFormula());
+          return this.rootNode.toAvailableFormula();
         }
         toRawMissedFormula() {
-          return FORMULA(this.rootNode.toRawMissedFormula());
+          return this.rootNode.toRawMissedFormula();
         }
         toMissedFormula() {
-          return FORMULA(this.rootNode.toMissedFormula());
+          return this.rootNode.toMissedFormula();
         }
         toPRUsedFormula() {
-          return FORMULA(this.rootNode.toPRUsedFormula());
+          return this.rootNode.toPRUsedFormula();
         }
         toUnknownFormula() {
-          return FORMULA(this.rootNode.toUnknownFormula());
+          return this.rootNode.toUnknownFormula();
         }
         toErrorFormula() {
-          return FORMULA(this.rootNode.toErrorFormula());
+          return this.rootNode.toErrorFormula();
         }
         toStatusFormula() {
-          return FORMULA(this.rootNode.toStatusFormula());
+          return this.rootNode.toStatusFormula();
         }
       }
 
-      CellFormulaParser.FormulaNode = class FormulaNode {
+      class FormulaNode {
     
         constructor(text,row) {
           this.errors = new Set();
           this.children = [];
-          this.value = undefined;
-          this.formulaType = undefined;
           this.text = text.toString().trim();
           this.row = row;
 
@@ -254,6 +276,15 @@ const StatusTranspiler = (function(){
           if (quoteMapping[text]) {
             this.text = quoteMapping[text];
           }
+        }
+
+        get child() {
+          return this.children.length == 1 ? this.children[0] : undefined;
+        }
+
+        set child(child) {
+          if (!this.children.length > 1) throw new Error("Cannot set child for multi-child node");
+          this.children[0] = child;
         }
 
         addError(message) {
@@ -295,12 +326,12 @@ const StatusTranspiler = (function(){
 
         toAvailableFormula() {
           let formula;
-          if (this.formulaType) {
+          if (this.hasValue()) {
+            return VALUE(this.value);
+          } else if (this.formulaType) {
             formula = this.formulaType.generateFormula(this.children.map(child => child.toAvailableFormula()));
-          } else if (this.children.length === 1) {
-            formula = this.children[0].toAvailableFormula();
-          } else if (this.hasValue()) {
-            formula = VALUE(this.value);
+          } else if (this.child) {
+            formula = this.child.toAvailableFormula();
           } else {
             this.addError(`Could not determine formula for "${this.text}"`);
           }
@@ -364,9 +395,9 @@ const StatusTranspiler = (function(){
           this._circularDependencies = circularDependencies;
           return this._circularDependencies;
         }
-      };
+      }
 
-      CellFormulaParser.BooleanFormulaNode = class BooleanFormulaNode extends CellFormulaParser.FormulaNode {
+      class BooleanFormulaNode extends FormulaNode {
         constructor(text,row) {
           super(text,row);
           if (this.text) {
@@ -393,11 +424,11 @@ const StatusTranspiler = (function(){
             ]) {
             // Recursively handle comparison operators
               if (comparisonFormulaTranslationHelper.identify(this.text)) {
-                this.children.push(new CellFormulaParser.ComparisonFormulaNode(this.text,this.row,comparisonFormulaTranslationHelper));
+                this.child = new ComparisonFormulaNode(this.text,this.row,comparisonFormulaTranslationHelper);
                 return;
               }
             } 
-            this.children.push(new CellFormulaParser.BooleanFormulaValueNode(this.text,this.row));
+            this.child = new BooleanFormulaValueNode(this.text,this.row);
           } else {
             this.value = true;
           }
@@ -406,14 +437,14 @@ const StatusTranspiler = (function(){
         toPRUsedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
-          if (!this.formulaType) return this.children[0].toPRUsedFormula();
+          if (!this.formulaType) return this.child.toPRUsedFormula();
           switch (this.formulaType) {
             case AND: {
               return OR(
                 this.children.map(child => AND(
                   NOT(child.toRawMissedFormula()),
                   child.toPRUsedFormula()
-                )));
+                )));  
             }
             case OR: {
               return AND(
@@ -423,7 +454,7 @@ const StatusTranspiler = (function(){
                 )));
             }
             case NOT: {
-              return this.children[0].toPRUsedFormula(); // TODO ???
+              return this.child.toPRUsedFormula(); // TODO ???
             }
           }
         }
@@ -431,7 +462,7 @@ const StatusTranspiler = (function(){
         toRawMissedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
-          if (!this.formulaType) return this.children[0].toRawMissedFormula();
+          if (!this.formulaType) return this.child.toRawMissedFormula();
           switch (this.formulaType) {
             case AND: {
               return OR(this.children.map(child => child.toRawMissedFormula()));
@@ -440,7 +471,7 @@ const StatusTranspiler = (function(){
               return AND(this.children.map(child => child.toRawMissedFormula()));
             }
             case NOT: {
-              return this.children[0].toRawMissedFormula(); // TODO ???
+              return this.child.toRawMissedFormula(); // TODO ???
             }
           }
         }
@@ -448,7 +479,7 @@ const StatusTranspiler = (function(){
         toMissedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
-          if (!this.formulaType) return this.children[0].toMissedFormula();
+          if (!this.formulaType) return this.child.toMissedFormula();
           switch (this.formulaType) {
             case AND: {
               return OR(this.children.map(child => child.toMissedFormula()));
@@ -457,7 +488,7 @@ const StatusTranspiler = (function(){
               return AND(this.children.map(child => child.toMissedFormula()));
             }
             case NOT: {
-              return this.children[0].toMissedFormula(); // TODO ???
+              return this.child.toMissedFormula(); // TODO ???
             }
           }
         }
@@ -465,7 +496,7 @@ const StatusTranspiler = (function(){
         toUnknownFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.TRUE;
-          if (!this.formulaType) return this.children[0].toUnknownFormula();
+          if (!this.formulaType) return this.child.toUnknownFormula();
           switch (this.formulaType) {
             case AND: {
               return AND(
@@ -480,7 +511,7 @@ const StatusTranspiler = (function(){
               );
             }
             case NOT: {
-              return this.children[0].toUnknownFormula(); // TODO ???
+              return this.child.toUnknownFormula(); // TODO ???
             }
           }
         }
@@ -489,9 +520,9 @@ const StatusTranspiler = (function(){
           if (this.type == NOT) return true;
           else return super.isDirectlyMissable();
         }
-      };
+      }
 
-      CellFormulaParser.RootNode = class RootNode extends CellFormulaParser.BooleanFormulaNode {
+      class RootNode extends BooleanFormulaNode {
         constructor(children,row) {
           super("",row);
           if (children.length > 0) {
@@ -524,15 +555,41 @@ const StatusTranspiler = (function(){
           }
           return IFS(ifsArgs);
         }
-      };
+        // Spike decided against, consider for future if running into cycles
+        /* toChoiceStatusFormula() {
+          // Choice rows become inverted, depending directly on option rows only, and option rows adoping these pre-reqs
+          const ifsArgs = [];
+          const order = [
+            [STATUS.ERROR     , OR ]                , // Any error       => error
+            [STATUS.CHECKED   , OR ]                , // Any checked     => checked
+            [STATUS.AVAILABLE , OR ]                , // Any available   => available
+            [STATUS.PR_NOT_MET, AND]                , // All unavailable => unavailable
+            [STATUS.PR_USED   , AND]                , // All used        => used
+            [STATUS.MISSED    , AND, STATUS.PR_USED], // All missed/used => missed
+          ];
+          const rowStatusA1s = choiceRows[this.row].map(row => cellA1(row,COLUMN.STATUS));
+          order.forEach(([status,formulaType,...additionalStatuses]) => {
+            additionalStatuses.push(status);
+            const formula = formulaType(
+              rowStatusA1s.map(a1 => 
+                OR(additionalStatuses.map(
+                  additionalStatus => EQ(a1,VALUE(additionalStatus))))
+              )
+            );
+            ifsArgs.push(formula,VALUE(status));
+          });
+          ifsArgs.push(VALUE.TRUE,VALUE(STATUS.UNKNOWN));
+          return IFS(ifsArgs);
+        } */
+      }
 
-      CellFormulaParser.ComparisonFormulaNode = class ComparisonFormulaNode extends CellFormulaParser.FormulaNode {
+      class ComparisonFormulaNode extends FormulaNode {
         constructor(text,row,formulaType) {
           super(text,row);
         
           this.formulaType = formulaType;
           const operands = formulaType.parseOperands(this.text);
-          this.children.push(...operands.map(operand => new CellFormulaParser.NumberFormulaNode(operand,this.row)));
+          this.children.push(...operands.map(operand => new NumberFormulaNode(operand,this.row)));
         }
 
         checkErrors() {
@@ -580,7 +637,7 @@ const StatusTranspiler = (function(){
           if (this.hasErrors()) return VALUE.FALSE;
           if (this.isInCircularDependency()) return VALUE.FALSE;
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0][formulaTypeName]();
+          if (!this.formulaType) return this.child[formulaTypeName]();
         
           switch (this.formulaType) {
             case LT: {
@@ -610,9 +667,9 @@ const StatusTranspiler = (function(){
             }
           }
         }
-      };
-
-      CellFormulaParser.NumberFormulaNode = class NumberFormulaNode extends CellFormulaParser.FormulaNode {
+      }
+      
+      class NumberFormulaNode extends FormulaNode {
 
         constructor(text,row) {
           super(text,row);
@@ -631,13 +688,13 @@ const StatusTranspiler = (function(){
               return;
             }
           }
-          this.children.push(new CellFormulaParser.NumberFormulaValueNode(text,this.row));
+          this.child = new NumberFormulaValueNode(text,this.row);
         }
 
         getMinValue() {
           if (this.hasValue()) return this.value();
           if (!this.formulaType) {
-            return this.children[0].getMinValue();
+            return this.child.getMinValue();
           } else switch(this.formulaType) {
             case ADD: return this.children.map(child => child.getMinValue()).reduce((min, childMin) => min + childMin);
             case MINUS: return this.children[0].getMinValue() - this.children.slice(1).map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
@@ -649,7 +706,7 @@ const StatusTranspiler = (function(){
         getMaxValue() {
           if (this.hasValue()) return this.value();
           if (!this.formulaType) {
-            return this.children[0].getMaxValue();
+            return this.child.getMaxValue();
           } else switch(this.formulaType) {
             case ADD: return this.children.map(child => child.getMaxValue()).reduce((max, childMax) => max + childMax);
             case MINUS: return this.children[0].getMaxValue() - this.children.map(child => child.getMinValue()).slice(1).reduce((min, childMin) => min + childMin);
@@ -660,47 +717,47 @@ const StatusTranspiler = (function(){
 
         toFormulaByStatus(statuses) {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toFormulaByStatus(statuses);
+          if (!this.formulaType) return this.child.toFormulaByStatus(statuses);
           return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(statuses)));
         }
         toFormulaByNotStatus(statuses) {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toFormulaByNotStatus(statuses);
+          if (!this.formulaType) return this.child.toFormulaByNotStatus(statuses);
           return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(statuses)));
         }
         toRawNotMissedFormula() {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toRawNotMissedFormula();
+          if (!this.formulaType) return this.child.toRawNotMissedFormula();
           return this.formulaType.generateFormula(this.children.map(child => child.toRawNotMissedFormula()));
         }
         toRawMissedFormula() {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toRawMissedFormula();
+          if (!this.formulaType) return this.child.toRawMissedFormula();
           return this.formulaType.generateFormula(this.children.map(child => child.toRawMissedFormula()));
         }
         toUnknownFormula() {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toUnknownFormula();
+          if (!this.formulaType) return this.child.toUnknownFormula();
           return this.formulaType.generateFormula(this.children.map(child => child.toUnknownFormula()));
         }
       
         toNotUnknownFormula() {
           if (this.hasValue()) return VALUE(this.value);
-          if (!this.formulaType) return this.children[0].toNotUnknownFormula();
+          if (!this.formulaType) return this.child.toNotUnknownFormula();
           return this.formulaType.generateFormula(this.children.map(child => child.toNotUnknownFormula()));
         }
       
-      };
+      }
 
       // Abstract intermediate class
       const valueInfoCache = {};
-      CellFormulaParser.FormulaValueNode = class FormulaValueNode extends CellFormulaParser.FormulaNode {
+      class FormulaValueNode extends FormulaNode {
         constructor(text,row) {
           super(text,row);
-          this.parseValue(this.text);
         }
 
-        parseValue(text) {
+        get valueInfo() {
+          const text = this.text;
           let valueInfo = valueInfoCache[text];
           if (!valueInfo) {
             const rawParsed = PARSE_REGEX.exec(text);
@@ -753,18 +810,29 @@ const StatusTranspiler = (function(){
           if (valueInfo) {
             valueInfo = Object.assign({},valueInfo);
             if (valueInfo.rowInfos) {
+              if (choiceInfos[valueInfo.key]) {
+                valueInfo.isChoice = true;
+                if (valueInfo.rowInfos.length == 0) {
+                // Is a choice with no row, set rows to choice's rows
+                //num vlaue row
+                  const columnValues = getColumnValues(COLUMN.ITEM).byRow;
+                  valueInfo.rowInfos = choiceInfos[valueInfo.key].options.map(optionRow => columnValues[optionRow]);
+                  valueInfo.numPossible = 1;
+                  valueInfo.isChoiceOnly = true;
+                }
+              }
               valueInfo.rowInfos = [...valueInfo.rowInfos.map(rowInfo => Object.assign({},rowInfo))];
               // Remove self reference (simplest dependency resolution, v0)
               const rowIndex = valueInfo.rowInfos.findIndex(rowInfo => rowInfo.row == this.row);
               if (rowIndex >= 0) {
                 const removed = valueInfo.rowInfos.splice(rowIndex,1);
                 valueInfo.wasSelfReferential = true;
-                valueInfo.numPossible -= removed[0].num;
+                if (!valueInfo.isChoiceOnly) valueInfo.numPossible -= removed[0].num;
               }
             }
           }
 
-          this.valueInfo = valueInfo;
+          return valueInfo;
         }
 
         checkErrors() {
@@ -813,59 +881,76 @@ const StatusTranspiler = (function(){
           return this._circularDependencies;
         }
 
-      };
+        isDirectlyMissable() {
+          if (this.valueInfo.isChoiceOnly) return false;
+          return super.isDirectlyMissable(); 
+        }
 
-      CellFormulaParser.BooleanFormulaValueNode = class BooleanFormulaValueNode extends CellFormulaParser.FormulaValueNode {
+      }
+      
+      class BooleanFormulaValueNode extends FormulaValueNode {
         constructor(text,row) {
           super(text,row);
           if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
             this.value = this.text;
-          } else if (this.hasErrors()) {
-            this.value = false;
           } else {
           // CHECKED > NEEDED
-            this.formulaType = GTE;
-            this.children = [new CellFormulaParser.NumberFormulaValueNode(this.text,this.row), new CellFormulaParser.NumberFormulaValueNode(this.valueInfo.numNeeded,this.row)]; 
+            this.availableChild = new NumberFormulaValueNode(this.text,this.row);
+            this.neededChild = new NumberFormulaValueNode(this.valueInfo.numNeeded,this.row); 
           }
+        }
+        get availableChild() {
+          return this.children[0];
+        }
+        set availableChild(child) {
+          this.children[0] = child;
+        }
+        get neededChild() {
+          return this.children[1];
+        }
+        set neededChild(child) {
+          this.children[1] = child;
+        }
+
+        get formulaType() {
+          return GTE;
         }
         toPRUsedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           return AND(
             GTE(
-              MINUS(this.children[0].toTotalFormula(),this.children[0].toRawMissedFormula()),
+              MINUS(this.availableChild.toTotalFormula(),this.availableChild.toRawMissedFormula()),
               this.valueInfo.numNeeded
             ),
-            LT(this.children[0].toPRNotUsedFormula(),this.valueInfo.numNeeded)
+            LT(this.availableChild.toPRNotUsedFormula(),this.valueInfo.numNeeded)
           );
         }
         toRawMissedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
-          return LT(this.children[0].toRawNotMissedFormula(),this.valueInfo.numNeeded);
+          return LT(this.availableChild.toRawNotMissedFormula(),this.valueInfo.numNeeded);
 
         }
         toMissedFormula() {
           if (this.hasValue()) return VALUE.FALSE;
-          return LT(this.children[0].toNotMissedFormula(),this.valueInfo.numNeeded);
+          return LT(this.availableChild.toNotMissedFormula(),this.valueInfo.numNeeded);
         }
         toUnknownFormula() {
           if (this.hasValue()) return VALUE.FALSE;
           return AND(
             NOT(this.toMissedFormula()),
             LT(
-              MINUS(this.children[0].toTotalFormula(),this.children[0].toMissedFormula(),this.children[0].toUnknownFormula()),
+              MINUS(this.availableChild.toTotalFormula(),this.availableChild.toMissedFormula(),this.availableChild.toUnknownFormula()),
               this.valueInfo.numNeeded
             )
           );
         }
-      };
+      }
   
-      CellFormulaParser.NumberFormulaValueNode = class NumberFormulaValueNode extends CellFormulaParser.FormulaValueNode {
+      class NumberFormulaValueNode extends FormulaValueNode {
         constructor(text,row) {
           super(text,row);
           if (Number(this.text) || this.text === 0 || this.text === "0") {
             this.value = Number(this.text);
-          } else if (this.hasErrors()) {
-            this.value = -1;
           }
         }
 
@@ -982,10 +1067,10 @@ const StatusTranspiler = (function(){
             return ADD(counts);
           }
         }
-      };
+      }
 
-      const usesInfo = {}; // Treating as value in containing class since it is reset each populateAvailable call
-      CellFormulaParser.UsesFormulaNode = class UsesFormulaNode extends CellFormulaParser.BooleanFormulaValueNode {
+      const usesInfo = {}; // Treating as static value in containing class since it is reset each populateAvailable call
+      class UsesFormulaNode extends BooleanFormulaValueNode {
         constructor(text,row) {
           super(text,row);
           if (!usesInfo[this.valueInfo.key]) {
@@ -998,12 +1083,12 @@ const StatusTranspiler = (function(){
           return OR(
             LT(
               MINUS(
-                this.children[0].toTotalFormula(),
-                CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key)
+                this.availableChild.toTotalFormula(),
+                UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key)
               ),
               this.valueInfo.numNeeded
             ),
-            this.children[0].toPRUsedFormula()
+            super.toPRUsedFormula()
           );
         }
 
@@ -1015,81 +1100,212 @@ const StatusTranspiler = (function(){
         toAvailableFormula() {
         // Parent => CHECKED >= NEEDED
         // This   => (CHECKED - USED) >= NEEDED
-          const usedAmountFormula = CellFormulaParser.UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
-          const checkedFormula = this.children[0].toAvailableFormula();
+          const usedAmountFormula = UsesFormulaNode._getPRUsedAmountFormula(this.valueInfo.key);
+          const checkedFormula = this.availableChild.toAvailableFormula();
           const availableAmountFormula = MINUS(checkedFormula,usedAmountFormula);
-          const numNeededFormula = this.children[1].toAvailableFormula();
+          const numNeededFormula = this.neededChild.toAvailableFormula();
           return this.formulaType.generateFormula(availableAmountFormula, numNeededFormula);
         }
 
         isDirectlyMissable() {
-          if (Object.values(usesInfo[this.valueInfo.key]).reduce((total,needed) => total+needed,0) > this.children[0].getMaxValue()) {
+          if (Object.values(usesInfo[this.valueInfo.key]).reduce((total,needed) => total+needed,0) > this.availableChild.getMaxValue()) {
             // if TOTAL_NEEDED > TOTAL_AVAILABLE
             return true;
           } else {
             return super.isDirectlyMissable();
           }
         }
-      };
+      }
 
-      CellFormulaParser.MissedFormulaNode = class MissedFormulaNode extends CellFormulaParser.FormulaNode {
+      const choiceInfos = {};
+      const choiceRows = {};
+      class ChoiceFormulaNode extends FormulaValueNode {
+        constructor(text,row) {
+          super(text,row);
+
+          this.choiceInfo.options.push(this.row);
+        }
+
+        get isChoiceOnly() {
+          return this.valueInfo.isChoiceOnly || !this.valueInfo.rowInfos.length;
+        }
+        get choiceRow() {
+          return this.isChoiceOnly ? undefined : this.valueInfo.rowInfos[0].row;
+        }
+        get choiceInfo() {
+          if (!choiceInfos[this.valueInfo.key]) {
+            // Handles cache
+            const choiceInfo = {
+              isChoiceOnly: this.isChoiceOnly,
+              choiceRow: this.choiceRow,
+              options: [],
+            };
+            choiceInfos[this.valueInfo.key] = choiceInfo;
+            if (this.choiceRow) {
+              choiceRows[this.choiceRow] = choiceInfo.options;
+            }
+          }
+          return choiceInfos[this.valueInfo.key];
+        }
+        checkErrors() {
+          if (this.choiceInfo.options.length < 2) {
+            this.addError(`CHOICE "${this.valueInfo.key}" only has this option`);
+          }
+          if (!this.isChoiceOnly) {
+            if (this.valueInfo.rowInfos.length != 1) {
+              this.addError("CHOICE must match either a single item, or have an identifier that matches no items but ties the options together.");
+            }
+            super.checkErrors();
+          }
+        }
+
+        toAvailableFormula() {
+          return this._determineFormula(
+            NOT(this.toPRUsedFormula()),
+            STATUS.AVAILABLE
+          );
+        }
+
+        toPRUsedFormula() {
+          return this._determineFormula(
+            OR(this.choiceInfo.options.map(row => cellA1(row, COLUMN.CHECK))),
+            STATUS.PR_USED,STATUS.CHECKED
+          );
+        }
+
+        toRawMissedFormula() {
+          return VALUE.FALSE;
+        }
+
+        toMissedFormula() {
+          return this._determineFormula(VALUE.FALSE,STATUS.MISSED);
+        }
+
+        toUnknownFormula() {
+          return this._determineFormula(VALUE.FALSE,STATUS.UNKNOWN);
+        }
+
+        _determineFormula(choiceOnlyFormula,...statuses) {
+          return this.isChoiceOnly ? choiceOnlyFormula : this._getChoiceRowStatusFormula(...statuses);
+        }
+
+        _getChoiceRowStatusFormula(...statuses) {
+          return OR(statuses.map(status => EQ(cellA1(this.choiceRow,COLUMN.STATUS),VALUE(status))));
+        }
+        /* Part of spike reversing dependencies, currently obsolute but keeping until checkin so there is record
+        toAvailableFormula() {
+          const andArguments = [NOT(this._getChoiceUsedFormula())];
+          if (!this.isChoiceOnly) {
+            andArguments.push(this._getChoiceStatusFormula(this.toAvailableFormula));
+          }
+          return AND(andArguments);
+        }
+        toPRUsedFormula() {
+          // If any of the others with the same choice ID are checked, this is PR_USED aka Missed By Choice
+          return this._getChoiceUsedFormula(true);
+        }
+        toRawMissedFormula() {
+          return AND(NOT(this._getChoiceUsedFormula()),this._getChoiceStatusFormula(this.toRawMissedFormula));
+        }
+        toMissedFormula() {
+          return this._getChoiceStatusFormula(this.toMissedFormula);
+        }
+        toUnknownFormula() {
+          return this._getChoiceStatusFormula(this.toUnknownFormula);
+        }
+
+        _getChoiceStatusFormula(formulaFunction, _choiceOnlyValue = VALUE.FALSE) {
+          return this.isChoiceOnly ? _choiceOnlyValue : parsersByRow[this.choiceRow][formulaFunction.name || formulaFunction]();// EQ(cellA1(this.choiceInfo.choiceRow,COLUMN.STATUS),VALUE(status));
+        }
+        
+        _getChoiceUsedFormula(_includePRUsed = false) {
+          const orArguments = this.choiceInfo.options.filter(row => row != this.row).map(row => cellA1(row,COLUMN.CHECK));
+          if (_includePRUsed) {
+            orArguments.push(this._getChoiceStatusFormula(this.toPRUsedFormula));
+          }
+          return OR(...orArguments);
+        } */
+
+        getAllPossiblePreReqRows() {
+          if (this.isChoiceOnly) {
+            return new Set();
+          } else {
+            return super.getAllPossiblePreReqRows();
+          }
+        }
+
+        getCircularDependencies(previous) {
+          if (this.isChoiceOnly) {
+            return new Set();
+          } else {
+            return super.getCircularDependencies(previous);
+          }
+        }
+
+        isDirectlyMissable() {
+          return true;
+        }
+      }
+      
+      class MissedFormulaNode extends FormulaNode {
         constructor(text,row) {
           super(text,row);
           this.formulaType = NOT;
-          this.children.push(new CellFormulaParser.BooleanFormulaNode(this.text,this.row));
+          this.child = new BooleanFormulaNode(this.text,this.row);
         } 
 
         toMissedFormula() {
-          return this.children[0].toAvailableFormula();
+          return this.child.toAvailableFormula();
         }
         toRawMissedFormula() {
-          return this.children[0].toAvailableFormula();
+          return this.child.toAvailableFormula();
         }
         toPRUsedFormula() {
-          return this.children[0].toPRUsedFormula();
+          return this.child.toPRUsedFormula();
         }
         toUnknownFormula() {
-          return this.children[0].toUnknownFormula();
+          return this.child.toUnknownFormula();
         }
         isDirectlyMissable() {
           return true;
         }
-      };
+      }
 
       timeEnd("get CellFormulaParser");
       Object.defineProperty(this,"_CellFormulaParser",{value: CellFormulaParser}); // Prevents rewrite
       return this._CellFormulaParser;
     }
-
+      
     // PUBLIC FUNCTIONS
-    validateAndGenerateStatusFormulas(_event) {
+    validateAndGenerateStatusFormulas() {
       time("validateAndGenerateStatusFormulas");
       const COLUMN = ChecklistApp.COLUMN; // static import
-      let filteredRange;
-      if (_event
-      && _event.range
-      && this.checklist.isColumnInRange([COLUMN.PRE_REQS,COLUMN.STATUS],_event.range)
-      && (_event.value || _event.oldValue) // Single cell update
-      && _event.range.getRow() >= this.checklist.firstDataRow // In data range
-      && (!_event.value || !_event.value.toString().match(/USES/i))  // NOT uses
-      && (!_event.oldValue || !_event.oldValue.toString().match(/USES/i)) // WASN'T uses
-      ) {
-      // If it's a single, non-"USES" cell, only update it
-        filteredRange = _event.range;
-      }
   
       // Must have required columns
       if (!this.checklist.hasColumn(COLUMN.STATUS, COLUMN.CHECK, COLUMN.ITEM, COLUMN.PRE_REQS)) return;
     
-      const preReqRange = this.checklist.getColumnDataRangeFromRange(COLUMN.PRE_REQS, filteredRange);
-      const availableDataRange = this.checklist.getColumnDataRangeFromRange(COLUMN.STATUS, filteredRange);
+      time("getStatusRanges", "getStatusRanges preReqRange");
+      const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS);
+      timeEnd("getStatusRanges preReqRange");
+      time("getStatusRanges statusRange");
+      const availableDataRange = this.checklist.getColumnDataRange(COLUMN.STATUS);
+      timeEnd("getStatusRanges statusRange");
+      time("getStatusRanges checkRange");
+      const checkRange = this.checklist.getColumnDataRange(COLUMN.CHECK);
+      timeEnd("getStatusRanges checkRange", "getStatusRanges");
 
-      if (!preReqRange || !availableDataRange) return; // filteredRange had no data rows; shouldn't be hit
-
+      time("getStatusValues", "getStatusValues preReqFirstRow");
       const firstRow = preReqRange.getRow();
+      timeEnd("getStatusValues preReqFirstRow");
+      time("getStatusValues preReqValues");
       const preReqValues = preReqRange.getValues();
-      // if (!filteredRange) _allPreReqValuesCache = preReqValues;
+      timeEnd("getStatusValues preReqValues");
+      time("getStatusValues preReqFormulas");
       const preReqFormulas = preReqRange.getFormulas();
+      timeEnd("getStatusValues preReqFormulas");
+      time("getStatusValues checkFormulas");
+      const checkFormulas = checkRange.getFormulas();
+      timeEnd("getStatusValues checkFormulas", "getStatusValues");
 
       // TODO add interactive validation?
       //const preReqValidations = preReqRange.getDataValidations(); 
@@ -1109,6 +1325,7 @@ const StatusTranspiler = (function(){
         }
       }
       timeEnd("parseCells");
+      time("getDebugColumns");
       const debugColumns = {
         "isAvailable": {
           formulaFunc: this.CellFormulaParser.prototype.toAvailableFormula,
@@ -1138,10 +1355,14 @@ const StatusTranspiler = (function(){
           delete debugColumns[debugColumn];
         }
       });
+      const hasDebugColumns = Object.keys(debugColumns).length > 0;
+      timeEnd("getDebugColumns");
       time("generateFormulas");
       for (let i = 0; i < preReqValues.length; i++) {
+        hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
         const parser = parsers[i];
         let note = null;
+        let checkChoiceInfos;
         if (parser) {
           statusFormulas[i] = parser.toFormula();
           if (parser.hasErrors()) {
@@ -1152,8 +1373,29 @@ const StatusTranspiler = (function(){
               note = "Possible to miss Pre-Reqs\n------------------------------\n" + allMissablePreReqs.join("\n");
             } 
           }
+          if (parser.hasChoices()) {
+            checkChoiceInfos = parser.getChoiceInfo();
+          }
         }
-        Object.values(debugColumns).forEach(value => value.formulas.push([parser ? value.formulaFunc.call(parser) : null]));
+        if (checkChoiceInfos) {
+          const checkNotes = ["Check one of the following options to check this item:"];
+          checkChoiceInfos.options.forEach(({row,value}) => {
+            checkNotes.push(`•${value} (Row ${row})`);
+          });
+          const checkCell = checkRange.getCell(i+1,1);
+          checkCell.setFormula(FORMULA(checkChoiceInfos.choiceCheckedFormula));
+          checkCell.setNote(checkNotes.join("\n"));
+        } else if (checkFormulas[i][0]) {
+          const checkCell = checkRange.getCell(i+1,1);
+          checkCell.setValue(checkCell.getValue()); // overwrites formula with existing value if it isn't a choice
+          checkCell.clearNote();
+        }
+        if (hasDebugColumns) {
+          timeEnd("debug generateFormula row"+(i+firstRow)); // Only report this timing if debug columns present
+          time("debugColumnFormulas row" + (i+firstRow));
+          Object.values(debugColumns).forEach(value => value.formulas.push([parser ? value.formulaFunc.call(parser) : null]));
+          timeEnd("debugColumnFormulas row" + (i+firstRow));
+        }
         notes[i] = note;
       }
       timeEnd("generateFormulas");
@@ -1161,7 +1403,9 @@ const StatusTranspiler = (function(){
       availableDataRange.setFormulas(statusFormulas.map(formula => [formula]));
       preReqRange.setNotes(notes.map(note => [note]));
     
+      time("debugColumnValues");
       Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas));
+      timeEnd("debugColumnValues");
 
       timeEnd("validateAndGenerateStatusFormulas");
       return;
