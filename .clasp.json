@@ -1,0 +1,8 @@
+{
+    
+    "rootDir": "./src",
+    "filePushOrder": [
+        "src/util.ts",
+        "src/SheetBase.ts"
+    ]
+}

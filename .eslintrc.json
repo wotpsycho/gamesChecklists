@@ -12,7 +12,8 @@
       "plugin:@typescript-eslint/recommended"
     ],
     "parserOptions": {
-        "ecmaVersion": 11
+        "ecmaVersion": 11,
+        "sourceType": "script"
     },
     "rules": {
         "indent": [
@@ -31,7 +32,8 @@
         ],
         "no-var": "error",
         "prefer-const": "error",
-        "@typescript-eslint/no-inferrable-types": "off"
+        "@typescript-eslint/no-inferrable-types": "off",
+        "@typescript-eslint/no-namespace": "off"
     },
     "globals": {
         "SpreadsheetApp": false,

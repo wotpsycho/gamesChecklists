@@ -1,19 +1,19 @@
-/* exported SheetBase */
-// eslint-disable-next-line no-redeclare
-import Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
-import Sheet = GoogleAppsScript.Spreadsheet.Sheet;
-import Range = GoogleAppsScript.Spreadsheet.Range;
-import Filter = GoogleAppsScript.Spreadsheet.Filter;
-import EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
-const SheetBase = (()=>{
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+namespace ChecklistApp {
+  time();
+  import Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
+  import Sheet = GoogleAppsScript.Spreadsheet.Sheet;
+  import Range = GoogleAppsScript.Spreadsheet.Range;
+  import Filter = GoogleAppsScript.Spreadsheet.Filter;
+
   type column = number|string;
   type row = number|string;
   type stringMap = {[x:string]:string};
   type stringToNumberMap = {[x:string]: number}
   type columnMap = stringToNumberMap;
   type rowMap = stringToNumberMap;
-  type sheetValue = string|number|boolean|undefined|null;
-  class SheetBase {
+  export type sheetValue = string|number|boolean|undefined|null;
+  export class SheetBase {
     readonly sheet: Sheet;
     private readonly namedColumnHeaders: stringMap;
     private readonly namedRowHeaders: stringMap;
@@ -46,7 +46,7 @@ const SheetBase = (()=>{
     }
 
     private _headerRow: number
-    get headerRow() {
+    get headerRow(): number {
       if (!this._headerRow) {
         const header = (this.filter && this.filter.getRange().getRow()) || this.sheet.getFrozenRows() || 1;
         this._headerRow = header;
@@ -124,7 +124,7 @@ const SheetBase = (()=>{
     }
 
     private _columnsByHeader: columnMap
-    get columnsByHeader() {
+    get columnsByHeader():columnMap {
       if (!this._columnsByHeader) {
         this._columnsByHeader = {};
         const columnHeaders = this.getRowValues(this.headerRow);
@@ -154,7 +154,7 @@ const SheetBase = (()=>{
       ChecklistApp.setActiveSheet(this.sheet);
     }
 
-    toast(message: string, _titleOrSeconds: string|number, _seconds: number = undefined): void {
+    toast(message: string, _titleOrSeconds: string|number = undefined, _seconds: number = undefined): void {
       let title: string, seconds: number;
       if (Number(_titleOrSeconds)) { // 0 seconds not valid so truthy check OK
         seconds = _titleOrSeconds as number;
@@ -165,7 +165,7 @@ const SheetBase = (()=>{
     }
     // END UI SECTION
 
-    _checkRow(row: row,_allowMissingRow: boolean = false) : number {
+    private _checkRow(row: row,_allowMissingRow: boolean = false) : number {
       let rowIndex: number;
       if (!Number(row)) {
         if (!this.rows[row]) {
@@ -182,7 +182,7 @@ const SheetBase = (()=>{
       return rowIndex;
     }
 
-    _checkColumn(column: column, _allowMissingColumn: boolean = false): number {
+    private _checkColumn(column: column, _allowMissingColumn: boolean = false): number {
       let columnIndex: number;
       if (!Number(column)) {
         if (!this.columns[column] && !this.columnsByHeader[column]) {
@@ -237,7 +237,7 @@ const SheetBase = (()=>{
 
     getUnboundedRange(row: row, column: column, endRow: row, endColumn: column): Range {
       // R1C1 unbounded column/row range results in Rn:Rm/Cn:Cm which is interpreted as A1. Use existing A1 formula translator instead
-      return this.getRange(FORMULA.A1(
+      return this.getRange(Formula.FORMULA.A1(
         row       && this.toRowIndex(   row), 
         column    && this.toColumnIndex(column), 
         endRow    && this.toRowIndex(   endRow), 
@@ -283,7 +283,7 @@ const SheetBase = (()=>{
       return this.getColumnRange(column, _startRow, _numRows);
     }
 
-    getColumnDataValues(column: column, _startRow = this.firstDataRow, _numRows = this.lastRow - _startRow + 1) {
+    getColumnDataValues(column: column, _startRow:row  = this.firstDataRow, _numRows: number = this.lastRow - this.toRowIndex(_startRow) + 1): sheetValue[] {
       const columnDataRange = this.getColumnDataRange(column, _startRow, _numRows);
       return columnDataRange && columnDataRange.getValues().map(row => row[0]) || [];
     }
@@ -390,7 +390,7 @@ const SheetBase = (()=>{
       }
     }
 
-    _determineLastNamedColumn(...columnTypes: column[]): number {
+    protected _determineLastNamedColumn(...columnTypes: column[]): number {
       if (columnTypes.length == 0) columnTypes = this.namedColumns;
       return Math.max(0,...columnTypes.map(columnType => this._checkColumn(columnType,true) || 0));
     }
@@ -434,7 +434,7 @@ const SheetBase = (()=>{
     }
     
 
-    _removeRow(row: row): void {
+    protected _removeRow(row: row): void {
       const wasEditable = this.editable;
       if (!wasEditable) this.editable = true;
       const rowIndex = this.toRowIndex(row);
@@ -448,7 +448,7 @@ const SheetBase = (()=>{
       if (!wasEditable) this.editable = false;
     }
 
-    _determineLastNamedRow(...rowTypes: row[]): number {
+    protected _determineLastNamedRow(...rowTypes: row[]): number {
       if (rowTypes.length == 0) rowTypes = this.namedRows;
       return Math.max(0,...rowTypes.map(rowType => this._checkRow(rowType,true) || 0));
     }
@@ -464,6 +464,5 @@ const SheetBase = (()=>{
     }
 
   }
-
-  return SheetBase;
-})();
+  timeEnd();
+}
