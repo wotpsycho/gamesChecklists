@@ -30,12 +30,7 @@ const ChecklistSettings = (function(){
   }
 
   const SETTING_OPTIONS = {
-    [SETTING.MODE]        : {
-      EDIT   : MODE.EDIT,
-      CREATE : MODE.CREATE,
-      CLASSIC: MODE.CLASSIC,
-      DYNAMIC: MODE.DYNAMIC,
-    },
+    [SETTING.MODE]        : MODE,
     [SETTING.STATUS]      : {
       AVAILABLE: "Available Only",
       ALL      : "All",
