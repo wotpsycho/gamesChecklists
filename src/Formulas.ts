@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace Formula {
-  export type formula = ((...value: unknown[]) => string) & {
+  export type Formula = ((...value: unknown[]) => string)
+  export type FormulaHelper = Formula & {
     identify: (text:string) => boolean;
     parseOperands: (text:string) => string[];
     generateFormula: (...value: unknown[]) => string;
@@ -9,7 +10,7 @@ namespace Formula {
   
   
   let prettyPrint = true;
-  export const togglePrettyPrint = (value = !prettyPrint): boolean => {
+  export const togglePrettyPrint = (value:boolean = !prettyPrint): boolean => {
     const oldValue = prettyPrint;
     prettyPrint = value;
     return oldValue;
@@ -204,7 +205,7 @@ namespace Formula {
     }
   }
   
-  const _helpersToGenerateFunctions = (helpers: {[x:string]: FormulaTranslationHelper|{formula:FormulaTranslationHelper,consts: {[x:string]: unknown}}}): {[x:string]:formula}  => {
+  const _helpersToGenerateFunctions = (helpers: {[x:string]: FormulaTranslationHelper|{formula:FormulaTranslationHelper,consts: {[x:string]: unknown}}}): {[x:string]:FormulaHelper}  => {
     const toFuncs = {};
     Object.entries(helpers).forEach(([key,helperOrMap]) => {
       let helper: FormulaTranslationHelper;

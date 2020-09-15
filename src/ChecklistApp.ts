@@ -13,7 +13,7 @@ namespace ChecklistApp {
     PRE_REQS= "PRE_REQS",
     STATUS= "STATUS",
   }
-  export type column = number|COLUMN
+  export type column = number|COLUMN|string; // byHeader column is valid, so strings are valid
   
   export enum ROW {
     TITLE= "TITLE", 
@@ -22,6 +22,7 @@ namespace ChecklistApp {
     HEADERS= "HEADERS",
   }
   export type row = ROW | number;
+  export type dataRow = number;
   export enum STATUS {
     CHECKED= "CHECKED",
     AVAILABLE= "TRUE",
