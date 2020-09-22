@@ -132,10 +132,10 @@ namespace Settings {
     private static readonly checklistSettings: {[x:number]:ChecklistSettings} = {}
 
     static getSettingsForChecklist(checklist = ChecklistApp.getActiveChecklist()): ChecklistSettings {
-      if (!this.checklistSettings[checklist.sheetId]) {
-        this.checklistSettings[checklist.sheetId] = new ChecklistSettings(checklist);
+      if (!this.checklistSettings[checklist.id]) {
+        this.checklistSettings[checklist.id] = new ChecklistSettings(checklist);
       }
-      return this.checklistSettings[checklist.sheetId];
+      return this.checklistSettings[checklist.id];
     }
 
     static getSettingsForActiveChecklist(): ChecklistSettings {

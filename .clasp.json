@@ -4,6 +4,7 @@
     "rootDir": "./src",
     "filePushOrder": [
         "src/util.ts",
+        "src/Formula.ts",
         "src/SheetBase.ts"
     ]
 }

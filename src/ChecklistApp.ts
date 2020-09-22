@@ -1,9 +1,8 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace ChecklistApp {
-  type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
-  type Range = GoogleAppsScript.Spreadsheet.Range;
-  type Filter = GoogleAppsScript.Spreadsheet.Filter;
-  type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
+  // export import Cell = GoogleAppsScript.Spreadsheet.Range;
+  export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
+  export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
 
   export enum COLUMN {
     CHECK= "CHECK",
@@ -33,16 +32,16 @@ namespace ChecklistApp {
     ERROR= "ERROR",
   }
   
-  const COLUMN_HEADERS = Object.freeze({
+  const COLUMN_HEADERS:Readonly<{[x in COLUMN]:string}> = {
     [COLUMN.CHECK]: "✓",
     [COLUMN.TYPE]: "Type",
     [COLUMN.ITEM]: "Item",
     [COLUMN.PRE_REQS]: "Pre-Reqs",
     [COLUMN.STATUS]: "Available",
     [COLUMN.NOTES]: "Notes",
-  });
+  };
   
-  const COLOR = Object.freeze({
+  const COLOR = {
     ERROR: "#ff0000",
     UNAVAILABLE: "#fce5cd",
     MISSED: "#f4cccc",
@@ -52,15 +51,15 @@ namespace ChecklistApp {
     CHECKED_TEXT: "#666666",
     MISSABLE: "#990000",
     WHITE: "white",
-  });
+  } as const;
   
-  const ROW_HEADERS = Object.freeze({
+  const ROW_HEADERS:Readonly<{[x in ROW]?: string}> = {
     [ROW.QUICK_FILTER]: "Filter",
     [ROW.SETTINGS]: "⚙",
     [ROW.HEADERS]: "✓",
-  });
+  };
   
-  const MAX_EMPTY_ROWS = 100;
+  const MAX_EMPTY_ROWS:number = 100;
   
   // const checklists:{[x:number]:Checklist} = {};
   // APP SECTION
@@ -69,11 +68,11 @@ namespace ChecklistApp {
   }
   
   export function getChecklistByMetaSheet(metaSheet: Sheet): Checklist {
-    const metaDevMeta = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+    const metaDevMeta:DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
     if (metaDevMeta && metaDevMeta[0]) {
-      const sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
+      const sheet:Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
       if (sheet) {
-        const checklist = ChecklistApp.getChecklistBySheet(sheet);
+        const checklist:Checklist = ChecklistApp.getChecklistBySheet(sheet);
         checklist.metaSheet = metaSheet;
         return checklist;
       }
@@ -103,7 +102,7 @@ namespace ChecklistApp {
     }
     private static readonly checklists:{[x:number]:Checklist} = {}
     static fromSheet(sheet: Sheet): Checklist {
-      const sheetId = sheet.getSheetId();
+      const sheetId:number = sheet.getSheetId();
       if (!this.checklists[sheetId]) {
         this.checklists[sheetId] = new Checklist(sheet);
       }
@@ -115,8 +114,8 @@ namespace ChecklistApp {
     private _titleColumn: number
     get title(): string {
       if (typeof this._title == "undefined") {
-        const titleValues = this.getRowValues(ROW.TITLE, 2);
-        const titleIndex = titleValues.findIndex(value => value);
+        const titleValues:sheetValue[] = this.getRowValues(ROW.TITLE, 2);
+        const titleIndex:number = titleValues.findIndex(value => value);
         this._title = titleIndex >= 0 ? titleValues[titleIndex] as string : null;
         this._titleColumn = titleIndex >= 0 ? titleIndex + 2 : 3;
       }
@@ -137,9 +136,13 @@ namespace ChecklistApp {
     get headerRow(): number {
       return this.rows[ROW.HEADERS] || super.headerRow;
     }
+
+    protected get columns(): {[x in COLUMN]?: number} {
+      return super.columns;
+    }
     
-    get rows(): {[x:string]: number} {
-      const rows = super.rows;
+    protected get rows(): {[x in ROW]?: number} {
+      const rows:{[x in ROW]?: number} = super.rows;
       if (!rows[ROW.TITLE] && !Object.values(rows).includes(1)) rows[ROW.TITLE] = 1;
       return rows;
     }
@@ -148,12 +151,12 @@ namespace ChecklistApp {
     get metaSheet(): Sheet {
       if (typeof this._metaSheet == "undefined") {
         time("get metaSheet");
-        let metaSheet;
-        const devMeta = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+        let metaSheet:Sheet;
+        const devMeta:DeveloperMetadata[] = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
         if (devMeta && devMeta[0]) {
           metaSheet = this.sheet.getParent().getSheetByName(devMeta[0].getValue());
           if (!metaSheet) {
-            const metaDevMeta = this.sheet.getParent().createDeveloperMetadataFinder().withKey("metaForSheet").withValue(this.sheet.getName()).withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+            const metaDevMeta:DeveloperMetadata[] = this.sheet.getParent().createDeveloperMetadataFinder().withKey("metaForSheet").withValue(this.sheet.getName()).withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
             if (metaDevMeta && metaDevMeta[0]) {
               metaSheet = metaDevMeta[0].getLocation().getSheet();
               this.metaSheet = metaSheet; // run setter to set metadata
@@ -175,13 +178,13 @@ namespace ChecklistApp {
     set metaSheet(metaSheet: Sheet) {
       time("set metaSheet");
       this._metaSheet = metaSheet;
-      const devMeta = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+      const devMeta:DeveloperMetadata[] = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (devMeta && devMeta[0]) {
         devMeta[0].setValue(this._metaSheet.getName());
       } else {
         this.sheet.addDeveloperMetadata("metaSheet",this._metaSheet.getName(), SpreadsheetApp.DeveloperMetadataVisibility.PROJECT);
       }
-      const metaDevMeta = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+      const metaDevMeta:DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (metaDevMeta && metaDevMeta[0]) {
         devMeta[0].setValue(this.sheet.getName());
       } else {
@@ -193,6 +196,9 @@ namespace ChecklistApp {
       this.metaSheet = this.spreadsheet.insertSheet(name, this.sheet.getIndex());
       this.activate(); // creating the new sheet activates it
     }
+    get id ():number { 
+      return this.sheetId;
+    }
     get meta(): ChecklistMeta.MetaSheet {
       return this.metaSheet && ChecklistMeta.getFromChecklist(this);
     }
@@ -202,7 +208,7 @@ namespace ChecklistApp {
     set editable(isEditable: boolean) {
       super.editable = isEditable;
       if (!isEditable) {
-        const editableRanges = [];
+        const editableRanges:Range[] = [];
         if (this.hasRow(ROW.QUICK_FILTER)) {
           editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
         }
@@ -265,7 +271,7 @@ namespace ChecklistApp {
       
       time("moveNotes");
       if (this.isColumnInRange(COLUMN.NOTES,range)) {
-        this.syncNotes(range);
+        this.syncNotes();
       }
       timeEnd("moveNotes");
       
@@ -303,13 +309,9 @@ namespace ChecklistApp {
     // END Settings Section
     
     // NOTES SECTION
-    syncNotes(range: Range = undefined): void {
+    syncNotes(): void {
       time("syncNotes");
-      const itemRange = this.getColumnDataRangeFromRange(COLUMN.ITEM,range);
-      const notesRange = this.getColumnDataRangeFromRange(COLUMN.NOTES,range);
-      if (itemRange && notesRange) {
-        itemRange.setNotes(notesRange.getValues());
-      }
+      this.getColumnDataRange(COLUMN.ITEM).setNotes(this.getColumnDataRange(COLUMN.NOTES).getValues());
       timeEnd("syncNotes");
     }
     // NOTES SECTION

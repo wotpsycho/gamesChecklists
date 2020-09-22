@@ -24,6 +24,23 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
     time("range.getSheet()");
     const sheet = range.getSheet();
     timeEnd("range.getSheet()");
+
+    
+    time("sheetData");
+    time("dataRange");
+    // const dataRange = sheet.getDataRange();
+    timeEnd("dataRange");
+    time("dataValues");
+    // const vals = dataRange.getValues();
+    timeEnd("dataValues");
+    time("dataFormulas");
+    // const forms = dataRange.getFormulas();
+    timeEnd("dataFormulas");
+    time("dataNotes");
+    // const notes = dataRange.getNotes();
+    timeEnd("dataNotes");
+    timeEnd("sheetData");
+
     
     time("ChecklistApp.setActiveSheet(..)");
     ChecklistApp.setActiveSheet(sheet);

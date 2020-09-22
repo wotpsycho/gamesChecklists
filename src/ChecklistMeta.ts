@@ -54,7 +54,7 @@ namespace ChecklistMeta {
     private static readonly metaSheets: {[x:string]: MetaSheet} = {}
     static fromChecklist(checklist: ChecklistApp.Checklist): MetaSheet {
       if (checklist && checklist.isChecklist && checklist.metaSheet) {
-        const key = `${checklist.sheetId}:${checklist.metaSheet.getSheetId}`;
+        const key = `${checklist.id}:${checklist.metaSheet.getSheetId}`;
         if (!this.metaSheets[key]) {
           this.metaSheets[key] = new MetaSheet(checklist);
         }

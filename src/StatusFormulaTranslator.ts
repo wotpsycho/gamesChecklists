@@ -1,13 +1,15 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace Status {
-  import Range = GoogleAppsScript.Spreadsheet.Range;
-  import Checklist = ChecklistApp.Checklist;
-  import COLUMN = ChecklistApp.COLUMN;
-  import column = ChecklistApp.column;
-  import row = ChecklistApp.dataRow;
-  import STATUS = ChecklistApp.STATUS;
-  import FORMULA = Formula.FORMULA;
-  import FormulaHelper = Formula.FormulaHelper;
+  type Range = GoogleAppsScript.Spreadsheet.Range;
+  type Checklist = ChecklistApp.Checklist;
+  type column = ChecklistApp.column;
+  type row = ChecklistApp.dataRow;
+  type FormulaHelper = Formula.FormulaHelper;
+  type STATUS = ChecklistApp.STATUS;
+
+  const STATUS = ChecklistApp.STATUS;
+  const COLUMN = ChecklistApp.COLUMN;
+  const FORMULA = Formula.FORMULA; 
   const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
 
 
@@ -37,10 +39,10 @@ namespace Status {
 
     private static readonly translators: {[x:number]: StatusFormulaTranslator} = {}
     static fromChecklist(checklist: Checklist): StatusFormulaTranslator {
-      if (!this.translators[checklist.sheetId]) {
-        this.translators[checklist.sheetId] = new StatusFormulaTranslator(checklist);
+      if (!this.translators[checklist.id]) {
+        this.translators[checklist.id] = new StatusFormulaTranslator(checklist);
       }
-      return this.translators[checklist.sheetId];
+      return this.translators[checklist.id];
     }
 
     // PUBLIC FUNCTIONS
@@ -54,7 +56,7 @@ namespace Status {
       const preReqRange:Range = this.checklist.getColumnDataRange(COLUMN.PRE_REQS);
       timeEnd("getStatusRanges preReqRange");
       time("getStatusRanges statusRange");
-      const availableDataRange:Range = this.checklist.getColumnDataRange(COLUMN.STATUS);
+      const statusDataRange:Range = this.checklist.getColumnDataRange(COLUMN.STATUS);
       timeEnd("getStatusRanges statusRange");
       time("getStatusRanges checkRange");
       const checkRange:Range = this.checklist.getColumnDataRange(COLUMN.CHECK);
@@ -69,6 +71,9 @@ namespace Status {
       time("getStatusValues preReqFormulas");
       const preReqFormulas:string[][] = preReqRange.getFormulas();
       timeEnd("getStatusValues preReqFormulas");
+      time("getStatusValues statusFormulas");
+      const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
+      timeEnd("getStatusValues statusFormulas");
       time("getStatusValues checkFormulas");
       const checkFormulas:string[][] = checkRange.getFormulas();
       timeEnd("getStatusValues checkFormulas", "getStatusValues");
@@ -114,7 +119,7 @@ namespace Status {
       };
       Object.keys(debugColumns).forEach(debugColumn =>{
         if (this.checklist.columnsByHeader[debugColumn]) {
-          const range:Range = this.checklist.getColumnDataRangeFromRange(this.checklist.columnsByHeader[debugColumn],preReqRange);
+          const range:Range = this.checklist.getColumnDataRange(this.checklist.columnsByHeader[debugColumn]);
           debugColumns[debugColumn].range = range;
           debugColumns[debugColumn].formulas = [];
         } else {
@@ -130,7 +135,7 @@ namespace Status {
         let note:string = null;
         let checkChoiceInfos: rowChoiceInfo;
         if (parser) {
-          statusFormulas[i] = parser.toFormula();
+          statusFormulas[i] = FORMULA(parser.toFormula());
           if (parser.hasErrors()) {
             note = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
           } else {
@@ -165,8 +170,12 @@ namespace Status {
         notes[i] = note;
       }
       timeEnd("generateFormulas");
-
-      availableDataRange.setFormulas(statusFormulas.map(formula => [FORMULA(formula)]));
+      time("setFormulasIndividual");
+      // Reduce client-side recalculations by only setting formula if changed
+      statusFormulas.forEach((statusFormula,i) => 
+        statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula)
+      );
+      timeEnd("setFormulasIndividual");
       preReqRange.setNotes(notes.map(note => [note]));
 
       time("debugColumnValues");
@@ -271,7 +280,7 @@ namespace Status {
   class CellFormulaParser {
     private static readonly parsers: {[x:number]: CellFormulaParser} = {};
     static getParserForChecklistRow(translator: StatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
-      const key:string = `${translator.checklist.sheetId}:${row}`;
+      const key:string = `${translator.checklist.id}:${row}`;
       if (!this.parsers[key]) {
         this.parsers[key] = new CellFormulaParser(translator,row,_defaultValue);
       }

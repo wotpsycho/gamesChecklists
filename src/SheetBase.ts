@@ -1,97 +1,102 @@
+/*exported Cell */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace ChecklistApp {
-  time();
-  import Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
-  import Sheet = GoogleAppsScript.Spreadsheet.Sheet;
-  import Range = GoogleAppsScript.Spreadsheet.Range;
-  import Filter = GoogleAppsScript.Spreadsheet.Filter;
+  
+  export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
+  export type Range = GoogleAppsScript.Spreadsheet.Range;
+  export type Filter = GoogleAppsScript.Spreadsheet.Filter;
+  export type Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
 
   type column = number|string;
   type row = number|string;
   type stringMap = {[x:string]:string};
-  type stringToNumberMap = {[x:string]: number}
+  type stringToNumberMap = {[x:string]:number}
   type columnMap = stringToNumberMap;
   type rowMap = stringToNumberMap;
   export type sheetValue = string|number|boolean|undefined|null;
   export class SheetBase {
-    readonly sheet: Sheet;
-    private readonly namedColumnHeaders: stringMap;
-    private readonly namedRowHeaders: stringMap;
+    readonly sheet:Sheet;
+    private readonly namedColumnHeaders:stringMap;
+    private readonly namedRowHeaders:stringMap;
     static readonly ChecklistSheetError = class ChecklistSheetError extends Error{}
 
-    constructor(sheet: Sheet,_namedColumnHeaders: stringMap = undefined, _namedRowHeaders: stringMap = undefined) {
+    constructor(sheet:Sheet,_namedColumnHeaders:stringMap = undefined, _namedRowHeaders:stringMap = undefined) {
       this.sheet = sheet;
       this.namedColumnHeaders = _namedColumnHeaders;
       this.namedRowHeaders = _namedRowHeaders;
     }
 
-    get spreadsheet(): Spreadsheet {
+    get spreadsheet():Spreadsheet {
       return this.sheet.getParent();
     }
 
-    get filter(): Filter {
+    get filter():Filter {
       return this.sheet.getFilter();
     }
 
-    get name(): string {
+    get name():string {
       return this.sheet.getName();
     }
 
-    set name(newName: string) {
+    set name(newName:string) {
       this.sheet.setName(newName);
     }
 
+    private _sheetId: number
     get sheetId(): number {
-      return this.sheet.getSheetId();
+      return this._sheetId || (this._sheetId = this.sheet.getSheetId());
     }
 
-    private _headerRow: number
-    get headerRow(): number {
+    private _headerRow:number
+    get headerRow():number {
       if (!this._headerRow) {
-        const header = (this.filter && this.filter.getRange().getRow()) || this.sheet.getFrozenRows() || 1;
+        const header:number = (this.filter && this.filter.getRange().getRow()) || this.sheet.getFrozenRows() || 1;
         this._headerRow = header;
       } 
       return this._headerRow;
     }
 
-    get firstDataRow(): number {
+    get firstDataRow():number {
       return this.headerRow && (this.headerRow + 1);
     }
 
-    get lastColumn(): number {
-      return this.sheet.getLastColumn();
+    get lastColumn():number {
+      time("lc");
+      const lastColumn = this.sheet.getLastColumn();
+      timeEnd("lc");
+      return lastColumn;
     }
 
-    get lastRow(): number {
+    get lastRow():number {
       return this.sheet.getLastRow();
     }
 
-    get maxRows(): number {
+    get maxRows():number {
       return this.sheet.getMaxRows();
     }
 
-    get maxColumns(): number {
+    get maxColumns():number {
       return this.sheet.getMaxColumns();
     }
 
-    get namedColumns(): string[] {
+    get namedColumns():string[] {
       return this.namedColumnHeaders && Object.keys(this.namedColumnHeaders) || [];
     }
 
-    get namedRows(): string[] {
+    get namedRows():string[] {
       return this.namedRowHeaders && Object.keys(this.namedRowHeaders) || [];
     }
 
-    private _rows: rowMap
-    get rows(): rowMap {
+    private _rows:rowMap
+    protected get rows():rowMap {
       if (!this._rows) {
         time("get rows");
-        Object.defineProperty(this,"_rows", {value: {}});
+        this._rows = {};
         if (this.namedRows.length) {
-          const rowHeaders = this.getColumnValues(1,1,Math.max(this.headerRow,this.namedRows.length));
+          const rowHeaders:sheetValue[] = this.getColumnValues(1,1,Math.max(this.headerRow,this.namedRows.length));
           rowHeaders.forEach((rowHeader,i) => {
-            const row = i+1;
-            let rowId: string;
+            const row:row = i+1;
+            let rowId:string;
             Object.entries(this.namedRowHeaders).forEach(([namedRowId,namedRowHeader]) => {
               if (rowHeader == namedRowHeader) {
                 rowId = namedRowId;
@@ -105,42 +110,35 @@ namespace ChecklistApp {
       return {...this._rows};
     }
 
-    private _columns: columnMap
-    get columns(): columnMap {
-      if (!this._columns) {
-        time("get columns");
-        this._columns = {};
-        if (this.namedColumns.length) {
-          Object.entries(this.namedColumnHeaders).forEach(([columnId, columnHeader]) => {
-            const column = this.columnsByHeader[columnHeader];
-            if (column) {
-              this._columns[columnId] = column;
-            }
-          });
-        }
-        timeEnd("get columns");
-      }
-      return {...this._columns};
+    private _columns:columnMap
+    protected get columns():columnMap {
+      return this.namedColumns.length > 0 ? 
+        Object.entries(this.namedColumnHeaders).reduce((columns,[columnId,columnHeader]) => 
+          ({
+            ...columns,
+            ...{[columnId]: this.columnsByHeader[columnHeader]},
+          })
+        ,{}) :
+        {};
     }
 
-    private _columnsByHeader: columnMap
+    private _columnsByHeader:columnMap
     get columnsByHeader():columnMap {
-      if (!this._columnsByHeader) {
-        this._columnsByHeader = {};
-        const columnHeaders = this.getRowValues(this.headerRow);
-        columnHeaders.forEach((header, i) => {
-          if (!header) return;
-          const column = i + 1;
-          this._columnsByHeader[header as string] = column;
-        });
-      }
-      return {...this._columnsByHeader};
+      return Object.assign({}, this._columnsByHeader || (this._columnsByHeader = 
+        this.getRowValues(this.headerRow).reduce((columnsByHeader,header,i) =>
+          ({
+            ...columnsByHeader,
+            ...(header ? {[header.toString()]: i+1} : {}),
+
+          })
+        ,{})
+      ));
     }
 
-    get editable(): boolean {
+    get editable():boolean {
       return !this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
     }
-    set editable(isEditable: boolean) {
+    set editable(isEditable:boolean) {
       if (!this.editable && isEditable) {
         const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
         protection.remove();
@@ -150,12 +148,12 @@ namespace ChecklistApp {
       }
     }
     // UI Section
-    activate(): void {
+    activate():void {
       ChecklistApp.setActiveSheet(this.sheet);
     }
 
-    toast(message: string, _titleOrSeconds: string|number = undefined, _seconds: number = undefined): void {
-      let title: string, seconds: number;
+    toast(message:string, _titleOrSeconds:string|number = undefined, _seconds:number = undefined):void {
+      let title:string, seconds:number;
       if (Number(_titleOrSeconds)) { // 0 seconds not valid so truthy check OK
         seconds = _titleOrSeconds as number;
       } else {
@@ -165,14 +163,14 @@ namespace ChecklistApp {
     }
     // END UI SECTION
 
-    private _checkRow(row: row,_allowMissingRow: boolean = false) : number {
-      let rowIndex: number;
+    private _checkRow(row:row,_allowMissingRow:boolean = false) :number {
+      let rowIndex:number;
       if (!Number(row)) {
         if (!this.rows[row]) {
           if (_allowMissingRow && this.namedRows.includes(row as string)) {
             return undefined;
           } else {
-            throw new SheetBase.ChecklistSheetError("Invalid row: " + row);
+            throw new SheetBase.ChecklistSheetError("Invalid row:" + row);
           } 
         }
         rowIndex = this.rows[row];
@@ -182,14 +180,14 @@ namespace ChecklistApp {
       return rowIndex;
     }
 
-    private _checkColumn(column: column, _allowMissingColumn: boolean = false): number {
-      let columnIndex: number;
+    private _checkColumn(column:column, _allowMissingColumn:boolean = false):number {
+      let columnIndex:number;
       if (!Number(column)) {
         if (!this.columns[column] && !this.columnsByHeader[column]) {
           if (_allowMissingColumn && this.namedColumns.includes(column as string)) {
             return undefined;
           } else {
-            throw new SheetBase.ChecklistSheetError("Invalid column: " + column);
+            throw new SheetBase.ChecklistSheetError("Invalid column:" + column);
           }
         }
         columnIndex = this.columns[column] || this.columnsByHeader[column];
@@ -199,15 +197,15 @@ namespace ChecklistApp {
       return columnIndex;
     }
 
-    toRowIndex(row: row): number {
+    toRowIndex(row:row):number {
       return this._checkRow(row);
     }
 
-    toColumnIndex (column: column): number {
+    toColumnIndex (column:column):number {
       return this._checkColumn(column);
     }
 
-    hasRow(...rows: row[]): boolean {
+    hasRow(...rows:row[]):boolean {
       if (rows.length == 0) throw new SheetBase.ChecklistSheetError("Missing row");
       for (const row of rows) {
         if (this._checkRow(row,true) == undefined) {
@@ -217,7 +215,7 @@ namespace ChecklistApp {
       return true;
     }
 
-    hasColumn(...columns: column[]): boolean {
+    hasColumn(...columns:column[]):boolean {
       if (columns.length == 0) throw new SheetBase.ChecklistSheetError("Missing column");
       for (const column of columns) {
         if (this._checkColumn(column,true) == undefined) {
@@ -227,110 +225,83 @@ namespace ChecklistApp {
       return true;
     }
 
-    getRange(row: row|string, column: column = undefined, _numRows: number = 1, _numColumns: number = 1): Range {
-      if (row && !column) {
-        // This is the case of A1/R1C1 notation
-        return this.sheet.getRange(row as string);
-      }
-      return this.sheet.getRange(this.toRowIndex(row),this.toColumnIndex(column),_numRows,_numColumns);
-    }
+    private readonly rangeCache:{[x:string]: Range} = {}
+    getRange = (row:row|string, column:column = undefined, _numRows:number = 1, _numColumns:number = 1):Range => 
+      row && !column ? 
+        this.sheet.getRange(row as string) :
+        this.sheet.getRange(this.toRowIndex(row), this.toColumnIndex(column), _numRows, _numColumns)
 
-    getUnboundedRange(row: row, column: column, endRow: row, endColumn: column): Range {
+    getUnboundedRange = (row:row, column:column, endRow:row, endColumn:column):Range =>
       // R1C1 unbounded column/row range results in Rn:Rm/Cn:Cm which is interpreted as A1. Use existing A1 formula translator instead
-      return this.getRange(Formula.FORMULA.A1(
+      this.getRange(Formula.FORMULA.A1(
         row       && this.toRowIndex(   row), 
         column    && this.toColumnIndex(column), 
         endRow    && this.toRowIndex(   endRow), 
         endColumn && this.toColumnIndex(endColumn)
-      ));
-    }
+      ))
 
-    getValues(row: row, column: column, _numRows: number = 1, _numColumns: number = 1): sheetValue[][] {
-      return this.getRange(row, column, _numRows, _numColumns).getValues();
-    }
+    getValues = (row:row, column:column, _numRows:number = 1, _numColumns:number = 1):sheetValue[][] =>
+      this.getRange(row, column, _numRows, _numColumns).getValues();
+    
 
-    getValue(row: row, column: column): sheetValue {
-      return this.getRange(row,column).getValue();
-    }
+    getValue = (row:row, column:column):sheetValue => 
+      this.getRange(row,column).getValue()
 
-    setValues(row: row, column: column, values: sheetValue[][]): void {
-      if (!values || !Array.isArray(values) || values.length == 0 || !Array.isArray(values[0]) || values[0].length == 0) {
-        throw new SheetBase.ChecklistSheetError("Cannot set values without a two dimensional values array");
-      }
-      this.getRange(row, column, values.length, values[0].length).setValues(values);
-    }
+    setValues= (row:row, column:column, values:sheetValue[][]):Range =>
+      this.getRange(row, column, values.length, values[0].length).setValues(values)
 
-    setValue(row: row, column: column, value: sheetValue): void {
-      return this.setValues(row,column,[[value]]);
-    }
+    setValue = (row:row, column:column, value:sheetValue):Range =>
+      this.setValues(row,column,[[value]])
 
-    getColumnRange(column: column, _startRow: row = 1, _numRows: number = this.lastRow - this.toRowIndex(_startRow) + 1): Range {
-      if (_numRows <= 0 && this.lastRow != this.maxRows) _numRows += this.maxRows - this.lastRow;
-      return this.getRange(_startRow, column, _numRows, 1);
-    }
+    getColumnRange = (column:column, _startRow:row = 1, _numRows:number = undefined):Range =>
+      _numRows > 0 ? this.getRange(_startRow, column, _numRows, 1) : this.getUnboundedColumnRange(column,_startRow)
 
-    getColumnValues(column: column, _startRow: row = 1, _numRows: number = this.lastRow - this.toRowIndex(_startRow) + 1): sheetValue[] {
-      return this.getColumnRange(_startRow, column, _numRows).getValues().map(row => row[0]);
-    }
+    getUnboundedColumnRange = (column:column, _startRow:row = 1):Range =>
+      this.getUnboundedRange(_startRow,column,undefined,column)
 
-    setColumnValues(column: column, values: sheetValue[], _startRow: row = 1): void {
-      this.setValues(_startRow, column, values.map((rowValue: sheetValue) => [rowValue]));
-    }
+    getColumnValues = (column:column, _startRow:row, _numRows:number):sheetValue[] =>
+      this.getColumnRange(_startRow, column, _numRows).getValues().map(row => row[0]);
+    
 
-    getColumnDataRange(column: column, _startRow: row = this.firstDataRow, _numRows: number = this.lastRow - this.toRowIndex(_startRow) + 1): Range {
-      if (_numRows <= 0 && this.lastRow != this.maxRows) _numRows += this.maxRows - this.lastRow;
-      if (_numRows <= 0) return;
-      return this.getColumnRange(column, _startRow, _numRows);
-    }
+    setColumnValues = (column:column, values:sheetValue[], _startRow:row = 1):Range =>
+      this.setValues(_startRow, column, values.map((rowValue:sheetValue) => [rowValue]));
+    
 
-    getColumnDataValues(column: column, _startRow:row  = this.firstDataRow, _numRows: number = this.lastRow - this.toRowIndex(_startRow) + 1): sheetValue[] {
-      const columnDataRange = this.getColumnDataRange(column, _startRow, _numRows);
-      return columnDataRange && columnDataRange.getValues().map(row => row[0]) || [];
-    }
+    getColumnDataRange = (column:column, _startRow:row = this.firstDataRow, _numRows:number = undefined):Range =>
+      _numRows > 0 ? this.getColumnRange(column, _startRow, _numRows) : this.getUnboundedColumnDataRange(column,_startRow);
 
-    getColumnDataRangeFromRange(column: column, range: Range): Range {
-      const firstRow = Math.max(this.firstDataRow, (range && range.getRow()) || 0);
-      const lastRow = Math.min(this.lastRow, (range && range.getLastRow()) || this.lastRow);
-      if (firstRow > lastRow) return;
-      return this.getColumnDataRange(column,firstRow, lastRow-firstRow+1);
-    }
+    getColumnDataValues = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):sheetValue[] => 
+      this.getColumnDataRange(column, _startRow, _numRows).getValues().map(row => row[0]);
+    
 
-    getUnboundedColumnDataRange(column: column, _startRow: row = this.firstDataRow): Range {
-      return this.getUnboundedRange(_startRow,column,null,column);
-    }
+    // getColumnDataRangeFromRange(column:column, range:Range):Range {
+    //   const firstRow = Math.max(this.firstDataRow, (range && range.getRow()) || 0);
+    //   const lastRow = Math.min(this.lastRow, (range && range.getLastRow()) || this.lastRow);
+    //   if (firstRow > lastRow) return;
+    //   return this.getColumnDataRange(column,firstRow, lastRow-firstRow+1);
+    // }
 
-    setColumnDataValues(column: column, values: sheetValue[], _startRow: row = this.firstDataRow): void {
-      this.setColumnValues(column, values, _startRow);
-    }
+    getUnboundedColumnDataRange = (column:column, _startRow:row = this.firstDataRow):Range =>
+      this.getUnboundedRange(_startRow,column,null,column)
 
-    getRowRange(row: row, _startColumn: column = 1, _numColumns: number = this.lastColumn - this.toColumnIndex(_startColumn) + 1): Range {
-      if (_numColumns <= 0 && this.lastColumn != this.maxColumns) _numColumns += this.maxColumns - this.lastColumn;
-      return this.getRange(row, _startColumn, 1, _numColumns);
-    }
+    setColumnDataValues = (column:column, values:sheetValue[], _startRow:row = this.firstDataRow):Range => 
+      this.setColumnValues(column, values, _startRow);    
 
-    getUnboundedRowRange(row: row, _startColumn: column = 1): Range {
-      const rowIndex = this.toRowIndex(row);
-      return this.getUnboundedRange(rowIndex,_startColumn,rowIndex,null);
-    }
+    getRowRange = (row:row, _startColumn:column = 1, _numColumns:number = undefined):Range => 
+      _numColumns > 0 ? this.getRange(row, _startColumn, 1, _numColumns) : this.getUnboundedRowRange(row,_startColumn)
 
-    getRowValues(row: row, _startColumn: column = 1, _numColumns: number = this.lastColumn - this.toColumnIndex(_startColumn) + 1): sheetValue[] {
-      return this.getRowRange(row, _startColumn, _numColumns).getValues()[0];
-    }
+    getUnboundedRowRange = (row:row, _startColumn:column = 1):Range => 
+      this.getUnboundedRange(row,_startColumn,row,null)
 
-    setRowValues(row: row, values: sheetValue[]|column, _startColumn: column|sheetValue[] = 1): void {
-      let vals: sheetValue[], sCol: column;
-      if (Number(values) && Array.isArray(_startColumn)) {
-        // Ordering is slightly ambiguous, allow either
-        [sCol, vals] = [values as column, _startColumn as sheetValue[]];
-      } else {
-        [vals,sCol] = [values as sheetValue[],_startColumn as column];
-      }
-      this.setValues(row, sCol, [vals]);
-    }
+    getRowValues = (row:row, _startColumn:column = 1, _numColumns:number = undefined):sheetValue[] => 
+      (_numColumns > 0 ? this.getRowRange(row,_startColumn,_numColumns) : this.getUnboundedRowRange(row,_startColumn)).getValues()[0]
 
-    isColumnInRange(column: column|column[], range: Range): boolean {
+    setRowValues = (row:row, values:sheetValue[], _startColumn:column = 1):Range => 
+      this.setValues(row, _startColumn, [values])
+
+    isColumnInRange(column:column|column[], range:Range):boolean {
       if (!column || !range) return false;
-      const columns: column[] = Array.isArray(column) ? column : [column];
+      const columns:column[] = Array.isArray(column) ? column : [column];
       for (let col of columns) {
         col = this._checkColumn(col,true);
         if (!col) return false;
@@ -341,9 +312,9 @@ namespace ChecklistApp {
       return false;
     }
 
-    isRowInRange(row: row|row[], range: Range): boolean {
+    isRowInRange(row:row|row[], range:Range):boolean {
       if (!row || !range) return false;
-      const rows: row[] = Array.isArray(row) ? row : [row];
+      const rows:row[] = Array.isArray(row) ? row : [row];
       for (let rw of rows) {
         rw = this._checkRow(rw,true);
         if (!rw) return false;
@@ -354,9 +325,7 @@ namespace ChecklistApp {
       return false;
     }
 
-    
-
-    insertColumn(columnIndex: number): void {
+    insertColumn(columnIndex:number):void {
       const wasEditable = this.editable;
       if (!wasEditable) this.editable = true;
       if (columnIndex <= this.maxColumns) {
@@ -379,7 +348,7 @@ namespace ChecklistApp {
       if (!wasEditable) this.editable = false;
     }
 
-    ensureColumn(columnType: column, columnIndex:number = this.lastColumn+1): void {
+    ensureColumn(columnType:column, columnIndex:number = this.lastColumn+1):void {
       if (!this.hasColumn(columnType)) {
         columnIndex = this._checkColumn(columnIndex,true) || this.lastColumn;
         this.insertColumn(columnIndex);
@@ -390,12 +359,10 @@ namespace ChecklistApp {
       }
     }
 
-    protected _determineLastNamedColumn(...columnTypes: column[]): number {
-      if (columnTypes.length == 0) columnTypes = this.namedColumns;
-      return Math.max(0,...columnTypes.map(columnType => this._checkColumn(columnType,true) || 0));
-    }
+    protected _determineLastNamedColumn = (...columnTypes:column[]):number => 
+      (columnTypes.length > 0 ? columnTypes : this.namedColumns).reduce<number>((lastColumn,columnType) => Math.max(lastColumn,this._checkColumn(columnType,true) || 0),0);    
 
-    hideColumn(...columnTypes: column[]): void {
+    hideColumn(...columnTypes:column[]):void {
       columnTypes.forEach(columnType => {
         const columnIndex = this.toColumnIndex(columnType);
         if (columnIndex) {
@@ -404,7 +371,7 @@ namespace ChecklistApp {
       });
     }
 
-    insertRow(rowIndex: number): void {
+    insertRow(rowIndex:number):void {
       const wasEditable = this.editable;
       if (!wasEditable) this.editable = true;
       if (rowIndex <= this.maxRows) {
@@ -422,7 +389,7 @@ namespace ChecklistApp {
       if (!wasEditable) this.editable = false;
     }
 
-    ensureRow(rowType: row, rowIndex: number = this.headerRow): void {
+    ensureRow(rowType:row, rowIndex:number = this.headerRow):void {
       if (!this.hasRow(rowType)) {
         rowIndex = this._checkRow(rowIndex,true) || this.lastRow;
         this.insertRow(rowIndex);
@@ -432,9 +399,8 @@ namespace ChecklistApp {
         this._rows[rowType] = rowIndex;
       }
     }
-    
 
-    protected _removeRow(row: row): void {
+    protected _removeRow(row:row):void {
       const wasEditable = this.editable;
       if (!wasEditable) this.editable = true;
       const rowIndex = this.toRowIndex(row);
@@ -448,13 +414,10 @@ namespace ChecklistApp {
       if (!wasEditable) this.editable = false;
     }
 
-    protected _determineLastNamedRow(...rowTypes: row[]): number {
-      if (rowTypes.length == 0) rowTypes = this.namedRows;
-      return Math.max(0,...rowTypes.map(rowType => this._checkRow(rowType,true) || 0));
-    }
+    protected _determineLastNamedRow = (...rowTypes:row[]):number =>
+      (rowTypes.length > 0 ? rowTypes : this.namedRows).reduce<number>((lastRow,rowType) => Math.max(lastRow,this._checkRow(rowType,true)||0),0)
 
-
-    expandAll(): void {
+    expandAll():void {
       if (this.lastRow > 1) {
         this.sheet.showRows(1,this.lastRow);
       }
@@ -464,5 +427,4 @@ namespace ChecklistApp {
     }
 
   }
-  timeEnd();
 }

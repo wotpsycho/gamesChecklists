@@ -10,7 +10,7 @@ function ResetChecklist(checklist = ChecklistApp.getActiveChecklist()) {
     let isInit = false;
     if (!checklist.isChecklist) {
       const response = ui.alert(
-        "Checklist not found", 
+        "Checklist not found",
         "This does not appear to be a checklist. Would you like to turn it into one?\n\nWARNING: Data validation and conditional formatting will be replaced.", 
         ui.ButtonSet.YES_NO
       );
