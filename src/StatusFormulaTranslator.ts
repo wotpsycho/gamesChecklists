@@ -62,7 +62,8 @@ namespace Status {
   const SPECIAL_PREFIXES:{[x:string]:string} = {
     USES  : "USES",
     MISSED: "MISSED",
-    CHOICE: "CHOICE",
+    CHOICE: "CHOICE", // DEPRECATED, alias for OPTION
+    OPTION: "OPTION",
   };
 
   export function getActiveChecklistTranslator(): StatusFormulaTranslator {
@@ -195,7 +196,7 @@ namespace Status {
               note = "Possible to miss Pre-Reqs\n------------------------------\n" + allMissablePreReqs.join("\n");
             } 
           }
-          if (parser.hasChoices()) {
+          if (parser.isChoice()) {
             checkChoiceInfos = parser.getChoiceInfo();
           }
         }
@@ -414,7 +415,8 @@ namespace Status {
               childFormulaNode = new MissedFormulaNode(content,this.translator,row);
               break;
             case SPECIAL_PREFIXES.CHOICE.toUpperCase():
-              childFormulaNode = new ChoiceFormulaNode(content,this.translator,row);
+            case SPECIAL_PREFIXES.OPTION.toUpperCase():
+              childFormulaNode = new OptionFormulaNode(content,this.translator,row);
               break;
           }
         } else {
@@ -448,11 +450,11 @@ namespace Status {
       return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
     }
 
-    hasChoices():boolean {
+    isChoice():boolean {
       return !!choiceRows[this.row];
     }
     getChoiceInfo():rowChoiceInfo {
-      if (this.hasChoices()) {
+      if (this.isChoice()) {
         const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
         const choiceInfo:rowChoiceInfo = {
           choiceCheckedFormula: OR(...choiceRows[this.row].map(row => this.translator.cellA1(row,COLUMN.CHECK))),
@@ -813,32 +815,6 @@ namespace Status {
       }
       return IFS(...ifsArgs);
     }
-    // Spike decided against, consider for future if running into cycles
-    /* toChoiceStatusFormula() {
-      // Choice rows become inverted, depending directly on option rows only, and option rows adoping these pre-reqs
-      const ifsArgs = [];
-      const order = [
-      [STATUS.ERROR     , OR ]                , // Any error       => error
-      [STATUS.CHECKED   , OR ]                , // Any checked     => checked
-      [STATUS.AVAILABLE , OR ]                , // Any available   => available
-      [STATUS.PR_NOT_MET, AND]                , // All unavailable => unavailable
-      [STATUS.PR_USED   , AND]                , // All used        => used
-      [STATUS.MISSED    , AND, STATUS.PR_USED], // All missed/used => missed
-      ];
-      const rowStatusA1s = choiceRows[this.row].map(row => cellA1(row,COLUMN.STATUS));
-      order.forEach(([status,formulaType,...additionalStatuses]) => {
-      additionalStatuses.push(status);
-      const formula = formulaType(
-      rowStatusA1s.map(a1 => 
-      OR(additionalStatuses.map(
-      additionalStatus => EQ(a1,VALUE(additionalStatus))))
-      )
-      );
-      ifsArgs.push(formula,VALUE(status));
-      });
-      ifsArgs.push(VALUE.TRUE,VALUE(STATUS.UNKNOWN));
-      return IFS(ifsArgs);
-    } */
   }
 
   class ComparisonFormulaNode extends FormulaNode<boolean> {
@@ -1030,7 +1006,7 @@ namespace Status {
     rowInfos: rowInfo[],
     numPossible: number;
     isChoice?: boolean;
-    isChoiceOnly?: boolean;
+    isVirtualChoice?: boolean;
     wasSelfReferential?: boolean;
   }
 // Abstract intermediate class
@@ -1106,12 +1082,12 @@ namespace Status {
           if (choiceInfos[valueInfo.key]) {
             valueInfo.isChoice = true;
             if (valueInfo.rowInfos.length == 0) {
-            // Is a choice with no row, set rows to choice's rows
+            // Is a choice with no row, set rows to choice's options' rows
             //num vlaue row
               const columnValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
               valueInfo.rowInfos = choiceInfos[valueInfo.key].options.map(optionRow => columnValues[optionRow]).flat();
               valueInfo.numPossible = valueInfo.rowInfos.length;
-              valueInfo.isChoiceOnly = true;
+              valueInfo.isVirtualChoice = true;
             }
           }
           valueInfo.rowInfos = [...valueInfo.rowInfos.map(rowInfo => Object.assign({},rowInfo))];
@@ -1120,7 +1096,7 @@ namespace Status {
           if (rowIndex >= 0) {
             const removed:rowInfo[] = valueInfo.rowInfos.splice(rowIndex,1);
             valueInfo.wasSelfReferential = true;
-            if (!valueInfo.isChoiceOnly) valueInfo.numPossible -= removed[0].num;
+            if (!valueInfo.isVirtualChoice) valueInfo.numPossible -= removed[0].num;
           }
         }
       }
@@ -1175,7 +1151,7 @@ namespace Status {
     }
 
     isDirectlyMissable():boolean {
-      if (this.valueInfo.isChoiceOnly) return false;
+      if (this.valueInfo.isVirtualChoice) return false;
       return super.isDirectlyMissable(); 
     }
 
@@ -1414,7 +1390,7 @@ namespace Status {
   }
 
   interface choiceInfo {
-    isChoiceOnly: boolean;
+    isVirtualChoice: boolean;
     choiceRow?: row;
     readonly options: row[]; // options is referenced in choiceRows, so don't allow overwrites
   }
@@ -1424,24 +1400,24 @@ namespace Status {
   }
   const choiceInfos:{[x:string]: choiceInfo} = {};
   const choiceRows:{[x:number]: row[]} = {};
-  class ChoiceFormulaNode extends FormulaValueNode<boolean> {
+  class OptionFormulaNode extends FormulaValueNode<boolean> {
     constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
 
       this.choiceInfo.options.push(this.row);
     }
 
-    get isChoiceOnly(): boolean {
-      return this.valueInfo.isChoiceOnly || !this.valueInfo.rowInfos.length;
+    get isVirtualChoice(): boolean {
+      return this.valueInfo.isVirtualChoice || !this.valueInfo.rowInfos.length;
     }
     get choiceRow(): row {
-      return this.isChoiceOnly ? undefined : this.valueInfo.rowInfos[0].row;
+      return this.isVirtualChoice ? undefined : this.valueInfo.rowInfos[0].row;
     }
     get choiceInfo(): choiceInfo {
       if (!choiceInfos[this.valueInfo.key]) {
       // Handles cache
         const choiceInfo:choiceInfo = {
-          isChoiceOnly: this.isChoiceOnly,
+          isVirtualChoice: this.isVirtualChoice,
           choiceRow: this.choiceRow,
           options: [],
         };
@@ -1452,13 +1428,25 @@ namespace Status {
       }
       return choiceInfos[this.valueInfo.key];
     }
+    readonly usage:string = `OPTION Usage:
+OPTION [ChoiceID]
+
+-[ChoiceID] is either an Item in the List, or a Unique Identifier for the Choice.
+
+Each ChoiceID must have at least 2 Items that are OPTIONs associated with it, and only 1 can be Checked.
+If ChoiceID refers to an Item in the List, Checking an OPTION will Check that Item.
+OPTIONs can have additional Pre-Reqs in addition to what are inherited from the Choice's Item.
+
+Example: Item "Yes" and Item "No" both have Pre-Req "OPTION Yes or No?"
+
+NOTE: CHOICE is a deprecated alias for OPTION`;
     checkErrors():void {
       if (this.choiceInfo.options.length < 2) {
-        this.addError(`CHOICE "${this.valueInfo.key}" only has this option`);
+        this.addError(`This is the only OPTION for Choice "${this.valueInfo.key}"\n\n${this.usage}`);
       }
-      if (!this.isChoiceOnly) {
+      if (!this.isVirtualChoice) {
         if (this.valueInfo.rowInfos.length != 1) {
-          this.addError("CHOICE must match either a single item, or have an identifier that matches no items but ties the options together.");
+          this.addError(`"${this.valueInfo.key}" refers to ${this.valueInfo.rowInfos.length} Items\n\n${this.usage}`);
         }
         super.checkErrors();
       }
@@ -1490,49 +1478,16 @@ namespace Status {
       return this._determineFormula(VALUE.FALSE,STATUS.UNKNOWN);
     }
 
-    private _determineFormula(choiceOnlyFormula: string,...statuses: STATUS[]):string  {
-      return this.isChoiceOnly ? choiceOnlyFormula : this._getChoiceRowStatusFormula(...statuses);
+    private _determineFormula(virtualChoiceFormula: string,...statuses: STATUS[]):string  {
+      return this.isVirtualChoice ? virtualChoiceFormula : this._getChoiceRowStatusFormula(...statuses);
     }
 
     private _getChoiceRowStatusFormula(...statuses: STATUS[]) {
       return OR(...statuses.map(status => EQ(this.translator.cellA1(this.choiceRow,COLUMN.STATUS),VALUE(status))));
     }
-    /* Part of spike reversing dependencies, currently obsolute but keeping until checkin so there is record
-    toAvailableFormula() {
-      const andArguments = [NOT(this._getChoiceUsedFormula())];
-      if (!this.isChoiceOnly) {
-      andArguments.push(this._getChoiceStatusFormula(this.toAvailableFormula));
-      }
-      return AND(andArguments);
-    }
-    toPRUsedFormula() {
-      // If any of the others with the same choice ID are checked, this is PR_USED aka Missed By Choice
-      return this._getChoiceUsedFormula(true);
-      }
-      toRawMissedFormula() {
-      return AND(NOT(this._getChoiceUsedFormula()),this._getChoiceStatusFormula(this.toRawMissedFormula));
-    }
-    toMissedFormula() {
-      return this._getChoiceStatusFormula(this.toMissedFormula);
-    }
-    toUnknownFormula() {
-      return this._getChoiceStatusFormula(this.toUnknownFormula);
-    }
-
-    _getChoiceStatusFormula(formulaFunction, _choiceOnlyValue = VALUE.FALSE) {
-      return this.isChoiceOnly ? _choiceOnlyValue : parsersByRow[this.choiceRow][formulaFunction.name || formulaFunction]();// EQ(cellA1(this.choiceInfo.choiceRow,COLUMN.STATUS),VALUE(status));
-    }
-
-    _getChoiceUsedFormula(_includePRUsed = false) {
-      const orArguments = this.choiceInfo.options.filter(row => row != this.row).map(row => cellA1(row,COLUMN.CHECK));
-      if (_includePRUsed) {
-        orArguments.push(this._getChoiceStatusFormula(this.toPRUsedFormula));
-      }
-      return OR(...orArguments);
-    } */
 
     getAllPossiblePreReqRows():ReadonlySet<row> {
-      if (this.isChoiceOnly) {
+      if (this.isVirtualChoice) {
         return new Set<row>();
       } else {
         return super.getAllPossiblePreReqRows();
@@ -1540,7 +1495,7 @@ namespace Status {
     }
 
     getCircularDependencies(previous: row[]): ReadonlySet<row> {
-      if (this.isChoiceOnly) {
+      if (this.isVirtualChoice) {
         return new Set<row>();
       } else {
         return super.getCircularDependencies(previous);

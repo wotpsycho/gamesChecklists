@@ -113,6 +113,7 @@ namespace Formula {
     
   // Exports
   const prettyPrint = false;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export const togglePrettyPrint = (value:boolean = !prettyPrint): boolean => {
     const oldValue = prettyPrint;
     //prettyPrint = value; // TODO Allow only in Debug options due to Max Formula Length
