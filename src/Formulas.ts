@@ -1,56 +1,54 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace Formula {
-  export type Formula = ((...value: unknown[]) => string)
-  export type FormulaHelper = Formula & {
-    identify: (text:string) => boolean;
-    parseOperands: (text:string) => string[];
-    generateFormula: (...value: unknown[]) => string;
-  } & {[x:string]: string};
+  type Formula<T> = (...value:T[]) => string
+  export type StringFormula = Formula<string>
   type Range = GoogleAppsScript.Spreadsheet.Range;
   
-  
-  let prettyPrint = true;
-  export const togglePrettyPrint = (value:boolean = !prettyPrint): boolean => {
-    const oldValue = prettyPrint;
-    prettyPrint = value;
-    return oldValue;
+  // Helpers
+  const isNumber = (value: unknown): boolean => {
+    return typeof value == "number" || Number(value) > 0 || Number(value) < 0 || value === "0";
   };
-  // FORMULA ENUM DEFINIOTNS
-  class FormulaTranslationHelper {
-    readonly regEx: RegExp;
-    readonly formulaName: string;
-    constructor(regEx: RegExp, formulaName: string) {
-      this.regEx = regEx;
-      this.formulaName = formulaName;
+  
+  const rcToR1C1 = (row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string => {
+    let address = "";
+    if (isNumber(row)) {
+      address += "R" + (isRowRelative ? `[${row}]` : row);
     }
+    if (isNumber(column)) {
+      address += "C" + (isColumnRelative ? `[${column}]` : column);
+    }
+    return address;
+  };
+  
+  const columnToA1 = (column: number): string => {
+    column--;
+    const rest = Math.floor(column / 26);
+    if (rest < 0)
+      return "";
+    const leastSig = column % 26;
+    const leastSigLet = String.fromCharCode("A".charCodeAt(0) + leastSig);
+    return columnToA1(rest) + leastSigLet;
+  };
+  
+  const rcToA1 = (row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string => {
+    let address = "";
+    if (isNumber(column)) {
+      if (!isColumnRelative) address += "$";
+      address += columnToA1(column);
+    }
+    if (isNumber(row)) {
+      if (!isRowRelative) address += "$";
+      address += row;
+    }
+    return address;
+  };  
+  
+  // Factories
+  const PrefixFormula = <T=string>(symbol:string):Formula<T> => 
+    (...values: T[]): string => {
+      const _prettyPrint = prettyPrint && values.length > 1;
     
-    identify(text: string): boolean {
-      return !!(text && this.regEx && text.match(this.regEx));
-    }
-    
-    parseOperands(text: string): string[] {
-      if (!text || !this.regEx) return;
-      const match = text.match(this.regEx);
-      return (match && match.slice(1));
-    }
-    _shouldPrettyPrint(values: unknown[]): boolean {
-      // TODO pull from config
-      return prettyPrint && values.length > 1;
-    }
-    _deepFlat(values: unknown[]): unknown[] {
-      let oldLength: number;
-      do {
-        oldLength = values.length;
-        values = values.flat();
-      } while (oldLength != values.length);
-      return values;
-    }
-    
-    generateFormula(...values: unknown[]): string {
-      values = this._deepFlat(values);
-      const _prettyPrint = this._shouldPrettyPrint(values);
-      
-      let result = this.formulaName + "(";
+      let result = symbol + "(";
       if (values.length != 0) {
         const joiner = _prettyPrint ? ",\n" : ",";
         const innerResult = values.join(joiner);
@@ -63,48 +61,13 @@ namespace Formula {
       }
       result += ")";
       return result;
-    }
-  }
-  // Since certain formulas accept 0-N arguments, handle that instead of nested groups
-  class FlexibleFormulaTranslationHelper extends FormulaTranslationHelper {
-    parseOperands(text: string): string[] {
-      if (!text) return;
-      
-      const match = text.match(this.regEx);
-      if (!match) return;
-      
-      const results = [];
-      const lMatch = match[1];
-      const lResult = this.parseOperands(lMatch);
-      if (lResult) results.push(...lResult);
-      else results.push(lMatch);
-      
-      const rMatch = match[2];
-      const rResult = this.parseOperands(rMatch);
-      if (rResult) results.push(...rResult);
-      else results.push(rMatch);
-      
-      return results;
-    }
-    generateFormula(...values: unknown[]): string {
-      values = this._deepFlat(values);
-      if (values.length == 1) return values[0].toString();
-      else return super.generateFormula(...values);
-    }
-  }
+    };
   
-  class SimpleFormulaHelper extends FormulaTranslationHelper {
-    constructor(formulaName: string = "") {
-      super(undefined, formulaName);
-    }
-  }
-  
-  class InlineFormulaTranslationHelper extends FormulaTranslationHelper {
-    generateFormula(...values: unknown[]): string {
-      values = this._deepFlat(values);
-      const _prettyPrint = this._shouldPrettyPrint(values);
-      
-      const joiner = _prettyPrint ? "\n" + this.formulaName + "\n" : " " + this.formulaName + " ";
+  const InlineFormula = <T=string>(symbol:string):Formula<T> => 
+    (...values:T[]) => {
+      const _prettyPrint = prettyPrint && values.length > 1;
+    
+      const joiner = _prettyPrint ? "\n" + symbol + "\n" : " " + symbol + " ";
       const innerResult = values.join(joiner);
       if (_prettyPrint && values.length > 1) {
         return "(\n  " + innerResult.replace(/\n/g,"\n  ") + "\n)";
@@ -113,40 +76,17 @@ namespace Formula {
       } else {
         return innerResult;
       }
-    }
-  }
+    };
   
-  const isNumber = (value: unknown): boolean => {
-    return typeof value == "number" || Number(value) > 0 || Number(value) < 0 || value === "0";
-  };
-  
-  
-  class ValueFormulaTranslationHelper extends SimpleFormulaHelper {
-    generateFormula(...values: unknown[]): string {
-      const value = values[0];
-      if (typeof value == "boolean" || value.toString().toUpperCase() == "TRUE" || value.toString().toUpperCase() == "FALSE") {
-        return value.toString().toUpperCase();
-      } else if (isNumber(value)) {
-        return Number(value).toString();
-      } else {
-        return `"${value.toString()}"`;
-      }
-      
-    }
-  }
-  
-  abstract class RangeTranslationHelper extends SimpleFormulaHelper {
-    abstract _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean, isColumnRelative: boolean): string
-    // Assumes absolute unless settings object passed
-    // Arguments: range|startRow, column, [endColumn], [endRow], [startRowRelative], [startColumnRelative],[]
-    generateFormula(rangeOrRow: Range|number, ...rest: (number|boolean)[]): string {
+  const RangeFormula = (rcToAddress:(row:number,column:number,rowRelative:boolean,columnRelative:boolean) => string):Formula<boolean|number|Range> => 
+    (rangeOrRow: Range|number, ...rest: (number|boolean)[]): string => {
       const booleanStart = [rest.indexOf(true),rest.indexOf(false)].filter(index => index >= 0).reduce((a,b) => Math.min(a,b),rest.length);
       const [rowRelative,columnRelative,endRowRelative,endColumnRelative] = Object.assign([false,false,false,false],rest.splice(booleanStart));
       let [column,endRow,endColumn]: number[] = rest as number[];
       let row: number;
       if (typeof rangeOrRow == "object") {
         const range = rangeOrRow;
-        
+      
         // A1:A => not end row bounded
         // A:A => not end/start row bounded
         if (range.isStartRowBounded()) row = range.getRow();
@@ -158,130 +98,110 @@ namespace Formula {
       } else {
         if (isNumber(rangeOrRow)) row = rangeOrRow;
       }
-      const startCell = this._rowColumnToRangeFormula(row,column,rowRelative,columnRelative);
-      let range = startCell;
-      let endCell;
-      if (isNumber(endRow) || isNumber(endColumn)) endCell = this._rowColumnToRangeFormula(endRow,endColumn,endRowRelative,endColumnRelative);
-      if (endCell && endCell != startCell) range += ":" + endCell;
-      return range;
-    }
-  }
+      const startCell = rcToAddress(row,column,rowRelative,columnRelative);
+      const endCell = rcToAddress(endRow,endColumn,endRowRelative,endColumnRelative);
+      return startCell + (endCell && (endCell != startCell || !row || !column) ? `:${endCell}` : "");
+    };
   
-  class RangeR1C1TranslationHelper extends RangeTranslationHelper {
-    _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string {
-      let address = "";
-      if (isNumber(row)) {
-        address += "R" + (isRowRelative ? `[${row}]` : row);
-      }
-      if (isNumber(column)) {
-        address += "C" + (isColumnRelative ? `[${column}]` : column);
-      }
-      return address;
-    }
-  }
-  
-  const columnToA1 = (column: number): string => {
-    column--;
-    const rest = Math.floor(column / 26);
-    if (rest < 0)
-      return "";
-    const leastSig = column % 26;
-    const leastSigLet = String.fromCharCode("A".charCodeAt(0) + leastSig);
-    return columnToA1(rest) + leastSigLet;
+  // Mixin
+  const withConstants = <T,U extends {[x:string]: T}>(formula:Formula<T>, consts:U):Formula<T>&{[key in keyof U]:string} => 
+    Object.assign(
+      (...args:T[]) => formula(...args), 
+      formula, 
+      Object.entries<T>(consts).reduce<{[x:string]:string}>((consts,[name,value]) => Object.assign(consts,{[name]:formula(value)}),{}) as {[key in keyof U]:string}
+    );
+    
+  // Exports
+  const prettyPrint = false;
+  export const togglePrettyPrint = (value:boolean = !prettyPrint): boolean => {
+    const oldValue = prettyPrint;
+    //prettyPrint = value; // TODO Allow only in Debug options due to Max Formula Length
+    return oldValue;
   };
-  
-  class RangeA1TranslationHelper extends RangeTranslationHelper {
-    _rowColumnToRangeFormula(row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string {
-      let address = "";
-      if (isNumber(column)) {
-        if (!isColumnRelative) address += "$";
-        address += columnToA1(column);
-      }
-      if (isNumber(row)) {
-        if (!isRowRelative) address += "$";
-        address += row;
-      }
-      return address;
+  export const AND:StringFormula = (...values:string[]):string => {
+    if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
+    if (values.includes(Formula.VALUE.TRUE)) {
+      values = values.filter(value => value != Formula.VALUE.TRUE);
+      if (values.length == 0) return Formula.VALUE.TRUE;
     }
-  }
+    if (values.length == 1) return values[0];
+    return PrefixFormula("AND")(...values);
+  };
+  export const OR:StringFormula = (...values:string[]):string => {
+    if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
+    if (values.includes(Formula.VALUE.FALSE)) {
+      values = values.filter(value => value != Formula.VALUE.FALSE);
+      if (values.length == 0) return Formula.VALUE.FALSE;
+    }
+    if (values.length == 1) return values[0];
+    return PrefixFormula("OR")(...values);
+  };
+  export const NOT:StringFormula = (value:string):string => {
+    if (value == Formula.VALUE.TRUE) return Formula.VALUE.FALSE;
+    if (value == Formula.VALUE.FALSE) return Formula.VALUE.TRUE;
+    if (value && value.toString().match(/^NOT\(/)) return value.toString().substring(3); // NOT(NOT(...)) => (...)
+    return PrefixFormula("NOT")(value);
+  };
+  export const IF:StringFormula = PrefixFormula("IF");
+  export const IFS:StringFormula = PrefixFormula("IFS");
+  export const IFERROR:StringFormula = PrefixFormula("IFERROR");
   
-  const _helpersToGenerateFunctions = (helpers: {[x:string]: FormulaTranslationHelper|{formula:FormulaTranslationHelper,consts: {[x:string]: unknown}}}): {[x:string]:FormulaHelper}  => {
-    const toFuncs = {};
-    Object.entries(helpers).forEach(([key,helperOrMap]) => {
-      let helper: FormulaTranslationHelper;
-      let consts: { [x: string]: unknown; };
-      if (helperOrMap instanceof FormulaTranslationHelper) {
-        helper = helperOrMap;
+  export const EQ:StringFormula = PrefixFormula("EQ");
+  export const NE:StringFormula = PrefixFormula("NE");
+  export const GT:StringFormula = InlineFormula(">");
+  export const GTE:StringFormula = InlineFormula(">=");
+  export const LT:StringFormula = InlineFormula("<");
+  export const LTE:StringFormula = InlineFormula("<=");
+  
+  export const MULT:StringFormula = InlineFormula("*");
+  export const DIV:StringFormula = InlineFormula("/");
+  export const MINUS:StringFormula = InlineFormula("-");
+  export const ADD:StringFormula = InlineFormula("+");
+  
+  export const COUNTIF:StringFormula = PrefixFormula("COUNTIF");
+  export const COUNTIFS:StringFormula = PrefixFormula("COUNTIFS");
+  export const ERRORTYPE:StringFormula = PrefixFormula("ERROR.TYPE");
+  export const ISERROR:StringFormula = PrefixFormula("ISERROR");
+  export const ISBLANK:StringFormula = PrefixFormula("ISBLANK");
+  export const REGEXMATCH:StringFormula = PrefixFormula("REGEXMATCH");
+  
+  export const CONCAT:StringFormula = PrefixFormula("CONCATENATE");
+  export const CHAR = withConstants(PrefixFormula<number|string>("CHAR"),{
+    NEWLINE: 10,
+  });
+    
+  export const R1C1 = RangeFormula(rcToR1C1);
+  export const A1 = RangeFormula(rcToA1);
+  export const VALUE = withConstants(
+    (...values: (boolean|string|number)[]): string => {
+      const value = values[0];
+      if (typeof value == "boolean" || value.toString().toUpperCase() == "TRUE" || value.toString().toUpperCase() == "FALSE") {
+        return value.toString().toUpperCase();
+      } else if (isNumber(value)) {
+        return Number(value).toString();
       } else {
-        helper = helperOrMap.formula;
-        consts = helperOrMap.consts;
+        return `"${value.toString()}"`;
       }
-      const generate = Object.assign((...args) => helper.generateFormula(...args),helper);
-      generate.identify = (...args) => helper.identify(...args);
-      generate.parseOperands = (...args) => helper.parseOperands(...args);
-      generate.generateFormula = generate;
-      if (consts) {
-        Object.entries(consts).forEach(([constName,value]) => {
-          generate[constName] = generate(value);
-        });
-      }
-      toFuncs[key] = generate;
+    }
+    ,{
+      TRUE: true,
+      FALSE: false,
+      ZERO: 0,
+      ONE: 1,
+      EMPTYSTRING: "",
+      EMPTYSTR: "",
     });
-    return toFuncs;
+  export const T = PrefixFormula("T");
+  export const N = PrefixFormula("N");
+  export const ROUND = PrefixFormula("ROUND");
+  export const COMMENT:{
+    BOOLEAN: StringFormula,
+    NUMBER: StringFormula,
+    STRING: StringFormula,
+  } = {
+    BOOLEAN:  (comment:string,...values):string => Formula.AND(Formula.T(Formula.VALUE(comment)),...values),
+    NUMBER:   (comment:string,...values):string => Formula.ADD(Formula.N(Formula.VALUE(comment)),...values),
+    STRING:   (comment:string,...values):string => Formula.CONCAT(Formula.T(Formula.N(Formula.VALUE(comment))),...values),
   };
-  
-  
-  export const FORMULA = Object.assign((value: string): string => "=" + value,_helpersToGenerateFunctions({
-    AND: new FlexibleFormulaTranslationHelper(/^ *(.+?) *&& *(.+?) *$/, "AND"),
-    OR: new FlexibleFormulaTranslationHelper(/^ *(.+?) *\|\|? *(.+?) *$/, "OR"),
-    NOT: new FormulaTranslationHelper(/^ *! *(.+?) *$/, "NOT"),
-    IF: new SimpleFormulaHelper("IF"),
-    IFS: new SimpleFormulaHelper("IFS"),
-    IFERROR: new SimpleFormulaHelper("IFERROR"),
-    
-    EQ: new FormulaTranslationHelper(/^ *(.+?) *== *(.+?) *$/, "EQ"),
-    NE: new FormulaTranslationHelper(/^ *(.+?) *!= *(.+?) *$/, "NE"),
-    GT: new InlineFormulaTranslationHelper(/^ *(.+?) *> *(.+?) *$/, ">"),
-    GTE: new InlineFormulaTranslationHelper(/^ *(.+?) *>= *(.+?) *$/, ">="),
-    LT: new InlineFormulaTranslationHelper(/^ *(.+?) *< *(.+?) *$/, "<"),
-    LTE: new InlineFormulaTranslationHelper(/^ *(.+?) *<= *(.+?) *$/, "<="),
-    
-    MULT: new InlineFormulaTranslationHelper(/^ *(.+?) +\* +(.+?) *$/, "*"),
-    DIV: new InlineFormulaTranslationHelper(/^ *(.+?) *\/ *(.+?) *$/, "/"),
-    MINUS: new InlineFormulaTranslationHelper(/^ *(.+?) +- +(.+?) *$/, "-"),
-    ADD: new InlineFormulaTranslationHelper(/^ *(.+?) +\+ +(.+?) *$/, "+"),
-    
-    COUNTIF: new SimpleFormulaHelper("COUNTIF"),
-    COUNTIFS: new SimpleFormulaHelper("COUNTIFS"),
-    ERRORTYPE: new SimpleFormulaHelper("ERROR.TYPE"),
-    ISERROR: new SimpleFormulaHelper("ISERROR"),
-    ISBLANK: new SimpleFormulaHelper("ISBLANK"),
-    REGEXMATCH: new SimpleFormulaHelper("REGEXMATCH"),
-    
-    CONCAT: new SimpleFormulaHelper("CONCATENATE"),
-    CHAR: {
-      formula: new SimpleFormulaHelper("CHAR"),
-      consts: {
-        NEWLINE: 10,
-      }
-    },
-    
-    R1C1: new RangeR1C1TranslationHelper(),
-    A1: new RangeA1TranslationHelper(),
-    VALUE: {
-      formula: new ValueFormulaTranslationHelper(),
-      consts: {
-        TRUE: true,
-        FALSE: false,
-        ZERO: 0,
-        ONE: 1,
-        EMPTYSTRING: "",
-        EMPTYSTR: "",
-      },
-    },
-  }));
-  
-  
-  
-  
+  export const FORMULA:StringFormula = (value:string) => "=" + value;
 }

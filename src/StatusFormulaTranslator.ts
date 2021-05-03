@@ -4,13 +4,59 @@ namespace Status {
   type Checklist = ChecklistApp.Checklist;
   type column = ChecklistApp.column;
   type row = ChecklistApp.dataRow;
-  type FormulaHelper = Formula.FormulaHelper;
+  type FormulaHelper = Formula.StringFormula & {
+    identify: (text:string) => boolean;
+    parseOperands: (text:string) => string[];
+    generateFormula: (...value: string[]) => string;
+  };
   type STATUS = ChecklistApp.STATUS;
 
   const STATUS = ChecklistApp.STATUS;
   const COLUMN = ChecklistApp.COLUMN;
-  const FORMULA = Formula.FORMULA; 
-  const {A1,VALUE,OR,AND,NOT,EQ,NE,GTE,GT,LTE,LT,ADD,MINUS,MULT,DIV,IFS,IF,COUNTIF} = FORMULA;
+
+  const FormulaHelper = (formula:Formula.StringFormula, regEx:RegExp, isFlexible:boolean = false):FormulaHelper => {
+    const parseOperands = (text:string):string[] => {
+      const match = text && text.match(regEx);
+      if (!match) return;
+      if (!isFlexible) return match.slice(1);
+
+      const results = [];
+      const lMatch = match[1];
+      const lResult = parseOperands(lMatch);
+      if (lResult) results.push(...lResult);
+      else results.push(lMatch);
+      
+      const rMatch = match[2];
+      const rResult = parseOperands(rMatch);
+      if (rResult) results.push(...rResult);
+      else results.push(rMatch);
+      
+      return results;
+    };
+    return Object.assign(
+      (...args:string[]) => formula(...args), 
+      formula, {
+        generateFormula: formula,
+        identify: (text:string):boolean => !!(text && text.match(regEx)),
+        parseOperands,
+      });
+  };
+  const OR  = FormulaHelper(Formula.OR , /^ *(.+?) *\|\|? *(.+?) *$/,true);
+  const AND = FormulaHelper(Formula.AND, /^ *(.+?) *&& *(.+?) *$/,true);
+  const NOT = FormulaHelper(Formula.NOT, /^ *! *(.+?) *$/);
+  const EQ  = FormulaHelper(Formula.EQ , /^ *(.+?) *== *(.+?) *$/);
+  const NE  = FormulaHelper(Formula.NE , /^ *(.+?) *!= *(.+?) *$/);
+  const GT  = FormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/);
+  const GTE = FormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/);
+  const LT  = FormulaHelper(Formula.LT , /^ *(.+?) *< *(.+?) *$/);
+  const LTE = FormulaHelper(Formula.LTE, /^ *(.+?) *<= *(.+?) *$/);
+    
+  const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) *\* *(.+?) *$/,true);
+  const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) *\/ *(.+?) *$/,true);
+  const MINUS = FormulaHelper(Formula.MINUS, /^ *(.+?) *- *(.+?) *$/,true);
+  const ADD   = FormulaHelper(Formula.ADD  , /^ *(.+?) *\+ *(.+?) *$/,true);
+  
+  const {FORMULA,A1,VALUE,IFS,IF,COUNTIF} = Formula;
 
 
   const SPECIAL_PREFIXES:{[x:string]:string} = {
@@ -58,6 +104,9 @@ namespace Status {
       time("getStatusRanges statusRange");
       const statusDataRange:Range = this.checklist.getColumnDataRange(COLUMN.STATUS);
       timeEnd("getStatusRanges statusRange");
+      time("getStatusRanges itemRange");
+      const itemDataRange:Range = this.checklist.getColumnDataRange(COLUMN.ITEM);
+      timeEnd("getStatusRanges itemRange");
       time("getStatusRanges checkRange");
       const checkRange:Range = this.checklist.getColumnDataRange(COLUMN.CHECK);
       timeEnd("getStatusRanges checkRange", "getStatusRanges");
@@ -68,9 +117,10 @@ namespace Status {
       time("getStatusValues preReqValues");
       const preReqValues:unknown[][] = preReqRange.getValues();
       timeEnd("getStatusValues preReqValues");
-      time("getStatusValues preReqFormulas");
-      const preReqFormulas:string[][] = preReqRange.getFormulas();
-      timeEnd("getStatusValues preReqFormulas");
+      // TODO Remove direct formula logic, disabled now
+      // time("getStatusValues preReqFormulas"); 
+      // const preReqFormulas:string[][] = preReqRange.getFormulas();
+      // timeEnd("getStatusValues preReqFormulas");
       time("getStatusValues statusFormulas");
       const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
       timeEnd("getStatusValues statusFormulas");
@@ -88,12 +138,12 @@ namespace Status {
 
       time("parseCells");
       for (let i:number = 0; i < preReqValues.length; i++) {
-        if (preReqFormulas[i][0]) {
-          // Allow direct formulas, just use reference
-          statusFormulas[i] = A1(i+firstRow, this.checklist.toColumnIndex(COLUMN.PRE_REQS));//"R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
-        } else {
-          parsers[i] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
-        }
+        // if (preReqFormulas[i][0]) {
+        // Allow direct formulas, just use reference
+        // statusFormulas[i] = A1(i+firstRow, this.checklist.toColumnIndex(COLUMN.PRE_REQS));//"R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
+        // } else {
+        parsers[i] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
+        // }
       }
       timeEnd("parseCells");
       time("getDebugColumns");
@@ -128,6 +178,7 @@ namespace Status {
       });
       const hasDebugColumns:boolean = Object.keys(debugColumns).length > 0;
       timeEnd("getDebugColumns");
+      itemDataRange.setFontStyle("normal");
       time("generateFormulas");
       for (let i:number = 0; i < preReqValues.length; i++) {
         hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
@@ -149,11 +200,12 @@ namespace Status {
           }
         }
         if (checkChoiceInfos) {
-          const checkNotes:string[] = ["Check one of the following options to check this item:"];
+          const checkNotes:string[] = ["Choose one of the following Items:"];
           checkChoiceInfos.options.forEach(({row,value}) => {
             checkNotes.push(`•${value} (Row ${row})`);
           });
           const checkCell:Range = checkRange.getCell(i+1,1);
+          itemDataRange.getCell(i+1,1).setFontStyle("italic");
           checkCell.setFormula(FORMULA(checkChoiceInfos.choiceCheckedFormula));
           checkCell.setNote(checkNotes.join("\n"));
         } else if (checkFormulas[i][0]) {
@@ -176,7 +228,21 @@ namespace Status {
         statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula)
       );
       timeEnd("setFormulasIndividual");
+      time("finalItemRow");
+      const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[ChecklistApp.FINAL_ITEM_TYPE];
+      if (finalItems) {
+        itemDataRange.setFontLine("none");
+        const dependendentRows = new Set<number>();
+        finalItems.forEach(finalItem => {
+          CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
+        });
+        dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontLine("underline")));
+      }
+      timeEnd("finalItemRow");
+      time("setNotes");
       preReqRange.setNotes(notes.map(note => [note]));
+      timeEnd("setNotes");
+
 
       time("debugColumnValues");
       Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
@@ -192,27 +258,38 @@ namespace Status {
       const columnIndex: number = this.checklist.toColumnIndex(column);
       if (this.columnInfo[columnIndex]) return this.columnInfo[columnIndex];
       time(`getColumnValues ${column}`);
-      const byRow:{[x:number]:sheetValueInfo} = {};
+      const byRow:{[x:number]:sheetValueInfo[]} = {};
       const byValue:{[x:string]:sheetValueInfo[]} = {};
 
       const firstRow:number = this.checklist.firstDataRow;
       const values:unknown[] = this.checklist.getColumnDataValues(columnIndex);
       values.forEach((value,i) => {
-        const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
-        const numReceived:number = Number(rawParsed[1] || rawParsed[2] || 1);
-        const valueInfo: sheetValueInfo = {
-          num: numReceived,
-          value: rawParsed[3],
-          row: firstRow+i,
-          column: columnIndex,
-        };
-        byRow[valueInfo.row] = valueInfo;
-
-        if (byValue[valueInfo.value]) {
-          byValue[valueInfo.value].push(valueInfo);
-        } else {
-          byValue[valueInfo.value] = [valueInfo];
-        }
+        const rowValues:{[x:string]: sheetValueInfo} = {};
+        value.toString().split(/(\r|\n)+/).forEach(value => {
+          const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
+          const numReceived:number = Number(rawParsed[1] || rawParsed[2] || 1);
+          const rowSubValue = rawParsed[3];
+          const valueInfo: sheetValueInfo = {
+            num: numReceived,
+            value: rowSubValue,
+            row: firstRow+i,
+            column: columnIndex,
+          };
+          if (rowValues[rowSubValue]) {
+            rowValues[rowSubValue].num += numReceived;
+          } else {
+            rowValues[rowSubValue] = valueInfo;
+          }
+        });
+        byRow[firstRow+i] = Object.values(rowValues);
+        byRow[firstRow+i].forEach(valueInfo => {
+          if (byValue[valueInfo.value]) {
+            byValue[valueInfo.value].push(valueInfo);
+          } else {
+            byValue[valueInfo.value] = [valueInfo];
+          }
+          return valueInfo;
+        });
       });
       this.columnInfo[columnIndex] = {byRow,byValue};
       timeEnd(`getColumnValues ${column}`);
@@ -258,7 +335,7 @@ namespace Status {
   };
   type columnValues = {
     byRow: {
-      [x:number]: sheetValueInfo;
+      [x:number]: sheetValueInfo[];
     };
     byValue: {
       [x:string]: sheetValueInfo[];
@@ -271,8 +348,10 @@ namespace Status {
   // Essentially static defs
   const PARSE_REGEX:RegExp = /^ *(?:(\d+)x|x(\d+) +)? *((?:(.*)!)?([^ ].*?)) *$/;
   let UID_Counter:number = 0;
-  const getParenPlaceholder = ():string =>  `PPH_${UID_Counter++}_PPH`;
-  const getQuotePlaeholder = ():string => `QPH_${UID_Counter++}_QPH`;
+  const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
+  const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
+  const getQuotePlaeholder = ():string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
+  const quoteRegex:RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
   const quoteMapping:{[x:string]:string} = {};
   const parentheticalMapping:{[x:string]:string} = {};
 
@@ -359,14 +438,14 @@ namespace Status {
     }
 
     getAllPossiblePreReqs():string[] {
-      const itemValues:{[x:number]:sheetValueInfo} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-      return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row].value);
+      const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+      return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row].map(info => info.value)).flat();
     }
 
     getAllDirectlyMissablePreReqs():string[] {
       const allMissableRows:row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
-      const itemValues:{[x:number]:sheetValueInfo} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-      return [...allMissableRows].map(row => itemValues[row].value);
+      const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+      return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
     }
 
     hasChoices():boolean {
@@ -374,10 +453,10 @@ namespace Status {
     }
     getChoiceInfo():rowChoiceInfo {
       if (this.hasChoices()) {
-        const itemValues:{[x:number]:sheetValueInfo} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+        const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
         const choiceInfo:rowChoiceInfo = {
-          choiceCheckedFormula: OR(choiceRows[this.row].map(row => this.translator.cellA1(row,COLUMN.CHECK))),
-          options: choiceRows[this.row].map(optionRow => itemValues[optionRow]),
+          choiceCheckedFormula: OR(...choiceRows[this.row].map(row => this.translator.cellA1(row,COLUMN.CHECK))),
+          options: choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat(),
         };
         return choiceInfo;
       }
@@ -436,7 +515,7 @@ namespace Status {
     }
   }
 
-  abstract class FormulaNode<T> {
+  abstract class FormulaNode<T extends number|boolean|unknown> {
     protected readonly errors: Set<string> = new Set<string>();
     protected readonly children: FormulaNode<unknown>[] = [];
     protected readonly text: string;
@@ -509,9 +588,9 @@ namespace Status {
     toAvailableFormula(): string {
       let formula: string;
       if (this.hasValue()) {
-        return VALUE(this.value);
+        return VALUE(this.value as string);
       } else if (this.formulaType) {
-        formula = this.formulaType.generateFormula(this.children.map(child => child.toAvailableFormula()));
+        formula = this.formulaType.generateFormula(...this.children.map(child => child.toAvailableFormula()));
       } else if (this.child) {
         formula = this.child.toAvailableFormula();
       } else {
@@ -619,14 +698,14 @@ namespace Status {
       switch (this.formulaType) {
         case AND: {
           return OR(
-            this.children.map(child => AND(
+            ...this.children.map(child => AND(
               NOT(child.toRawMissedFormula()),
               child.toPRUsedFormula()
             )));  
         }
         case OR: {
           return AND(
-            this.children.map(child => AND(
+            ...this.children.map(child => AND(
               NOT(child.toRawMissedFormula()),
               child.toPRUsedFormula()
             )));
@@ -643,10 +722,10 @@ namespace Status {
       if (!this.formulaType) return this.child.toRawMissedFormula();
       switch (this.formulaType) {
         case AND: {
-          return OR(this.children.map(child => child.toRawMissedFormula()));
+          return OR(...this.children.map(child => child.toRawMissedFormula()));
         }
         case OR: {
-          return AND(this.children.map(child => child.toRawMissedFormula()));
+          return AND(...this.children.map(child => child.toRawMissedFormula()));
         }
         case NOT: {
           return this.child.toRawMissedFormula(); // TODO ???
@@ -660,10 +739,10 @@ namespace Status {
       if (!this.formulaType) return this.child.toMissedFormula();
       switch (this.formulaType) {
         case AND: {
-          return OR(this.children.map(child => child.toMissedFormula()));
+          return OR(...this.children.map(child => child.toMissedFormula()));
         }
         case OR: {
-          return AND(this.children.map(child => child.toMissedFormula()));
+          return AND(...this.children.map(child => child.toMissedFormula()));
         }
         case NOT: {
           return this.child.toMissedFormula(); // TODO ???
@@ -678,14 +757,14 @@ namespace Status {
       switch (this.formulaType) {
         case AND: {
           return AND(
-            this.children.map(child => NOT(child.toRawMissedFormula())),
-            OR(this.children.map(child => child.toUnknownFormula()))
+            ...this.children.map(child => NOT(child.toRawMissedFormula())),
+            OR(...this.children.map(child => child.toUnknownFormula()))
           );
         }
         case OR: {
           return AND(
-            OR(this.children.map(child => child.toUnknownFormula())),
-            this.children.map(child => OR(child.toUnknownFormula(),child.toMissedFormula()))
+            OR(...this.children.map(child => child.toUnknownFormula())),
+            ...this.children.map(child => OR(child.toUnknownFormula(),child.toMissedFormula()))
           );
         }
         case NOT: {
@@ -696,6 +775,7 @@ namespace Status {
 
     isDirectlyMissable(): boolean {
       if (this.formulaType == NOT) return true;
+      if (this.formulaType == OR) return this.children.length && this.children.reduce((result:boolean, child) => child.isDirectlyMissable() && result,true);
       else return super.isDirectlyMissable();
     }
   }
@@ -731,7 +811,7 @@ namespace Status {
           break;
         }
       }
-      return IFS(ifsArgs);
+      return IFS(...ifsArgs);
     }
     // Spike decided against, consider for future if running into cycles
     /* toChoiceStatusFormula() {
@@ -835,17 +915,17 @@ namespace Status {
           return LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
         }
         case EQ: {
-          return OR([
+          return OR(
             LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
             GT(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses))
-          ]);
+          );
         }
         case NE: {
-          return AND([
+          return AND(
             EQ(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[0].toFormulaByStatus(...minStatuses)),
             EQ(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
             EQ(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses))
-          ]);
+          );
         }
       }
     }
@@ -921,22 +1001,22 @@ namespace Status {
     toFormulaByStatus(...statuses: STATUS[]): string {
       if (this.hasValue()) return VALUE(this.value);
       if (!this.formulaType) return this.child.toFormulaByStatus(...statuses);
-      return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByStatus(...statuses)));
+      return this.formulaType.generateFormula(...this.children.map(child => child.toFormulaByStatus(...statuses)));
     }
     toFormulaByNotStatus(...statuses: STATUS[]): string {
       if (this.hasValue()) return VALUE(this.value);
       if (!this.formulaType) return this.child.toFormulaByNotStatus(...statuses);
-      return this.formulaType.generateFormula(this.children.map(child => child.toFormulaByNotStatus(...statuses)));
+      return this.formulaType.generateFormula(...this.children.map(child => child.toFormulaByNotStatus(...statuses)));
     }
     toRawMissedFormula():string {
       if (this.hasValue()) return VALUE(this.value);
       if (!this.formulaType) return this.child.toRawMissedFormula();
-      return this.formulaType.generateFormula(this.children.map(child => child.toRawMissedFormula()));
+      return this.formulaType.generateFormula(...this.children.map(child => child.toRawMissedFormula()));
     }
     toUnknownFormula():string {
       if (this.hasValue()) return VALUE(this.value);
       if (!this.formulaType) return this.child.toUnknownFormula();
-      return this.formulaType.generateFormula(this.children.map(child => child.toUnknownFormula()));
+      return this.formulaType.generateFormula(...this.children.map(child => child.toUnknownFormula()));
     }
   }
 
@@ -976,8 +1056,18 @@ namespace Status {
             rowInfos: [],
             numPossible: undefined,
           };
+          let match:RegExpMatchArray;
           if (quoteMapping[valueInfo.key]) {
             const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(quoteMapping[valueInfo.key]);
+            valueInfo.key = rawParsedQuote[3];
+            valueInfo.altColumnName = rawParsedQuote[4];
+            valueInfo.id = rawParsedQuote[5];
+          } else if ((match = valueInfo.key.match(quoteRegex))){
+            let unescaped = valueInfo.key;
+            do {
+              unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
+            } while ((match = unescaped.match(quoteRegex)));
+            const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(unescaped);
             valueInfo.key = rawParsedQuote[3];
             valueInfo.altColumnName = rawParsedQuote[4];
             valueInfo.id = rawParsedQuote[5];
@@ -1018,9 +1108,9 @@ namespace Status {
             if (valueInfo.rowInfos.length == 0) {
             // Is a choice with no row, set rows to choice's rows
             //num vlaue row
-              const columnValues:{[x:number]:sheetValueInfo} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-              valueInfo.rowInfos = choiceInfos[valueInfo.key].options.map(optionRow => columnValues[optionRow]);
-              valueInfo.numPossible = 1;
+              const columnValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+              valueInfo.rowInfos = choiceInfos[valueInfo.key].options.map(optionRow => columnValues[optionRow]).flat();
+              valueInfo.numPossible = valueInfo.rowInfos.length;
               valueInfo.isChoiceOnly = true;
             }
           }
@@ -1121,19 +1211,19 @@ namespace Status {
       return AND(
         GTE(
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toRawMissedFormula()),
-          this.valueInfo.numNeeded
+          VALUE(this.valueInfo.numNeeded)
         ),
-        LT(this.availableChild.toPRNotUsedFormula(),this.valueInfo.numNeeded)
+        LT(this.availableChild.toPRNotUsedFormula(),VALUE(this.valueInfo.numNeeded))
       );
     }
     toRawMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return LT(this.availableChild.toRawNotMissedFormula(),this.valueInfo.numNeeded);
+      return LT(this.availableChild.toRawNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
 
     }
     toMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return LT(this.availableChild.toNotMissedFormula(),this.valueInfo.numNeeded);
+      return LT(this.availableChild.toNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
     }
     toUnknownFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
@@ -1141,7 +1231,7 @@ namespace Status {
         NOT(this.toMissedFormula()),
         LT(
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toMissedFormula(),this.availableChild.toUnknownFormula()),
-          this.valueInfo.numNeeded
+          VALUE(this.valueInfo.numNeeded)
         )
       );
     }
@@ -1252,21 +1342,21 @@ namespace Status {
       return this.valueInfo.numPossible;
     }
 
-    private _generateFormula(values: unknown|unknown[] = [], column:column = COLUMN.STATUS): string {
+    private _generateFormula(values: (string|number|boolean)|(string|number|boolean)[] = [], column:column = COLUMN.STATUS): string {
       if (this.hasValue()) {
         return VALUE(this.value);
       } else if (!values || (Array.isArray(values) && values.length == 0)) {
         return VALUE.ZERO;
       } else {
-        const vals: unknown[] = Array.isArray(values) ? values : [values];
+        const vals: (string|number|boolean)[] = Array.isArray(values) ? values : [values];
         const counts:string[] = Object.entries(this.translator.rowInfosToA1Counts(this.valueInfo.rowInfos, column)).reduce((counts,[range,count]) => {
           vals.forEach(value => {
             const countIf:string = COUNTIF(range, VALUE(value));
-            counts.push(count == 1 ? countIf : MULT(countIf,count));
+            counts.push(count == 1 ? countIf : MULT(countIf,VALUE(count)));
           });
           return counts;
         },[]);
-        return ADD(counts);
+        return ADD(...counts);
       }
     }
   }
@@ -1292,15 +1382,15 @@ namespace Status {
             this.availableChild.toTotalFormula(),
             this._getPRUsedAmountFormula()
           ),
-          this.valueInfo.numNeeded
+          VALUE(this.valueInfo.numNeeded)
         ),
         super.toPRUsedFormula()
       );
     }
 
     private _getPRUsedAmountFormula():string {
-      const usedAmoutArguments:string[] = Object.entries(this.useInfo).map(([row,numUsed]) => IF(this.translator.cellA1(Number(row),COLUMN.CHECK),numUsed));
-      return ADD(usedAmoutArguments);
+      const usedAmoutArguments:string[] = Object.entries(this.useInfo).map(([row,numUsed]) => IF(this.translator.cellA1(Number(row),COLUMN.CHECK),VALUE(numUsed)));
+      return ADD(...usedAmoutArguments);
     }
 
     toAvailableFormula():string {
@@ -1383,7 +1473,7 @@ namespace Status {
 
     toPRUsedFormula():string {
       return this._determineFormula(
-        OR(this.choiceInfo.options.map(row => this.translator.cellA1(row, COLUMN.CHECK))),
+        OR(...this.choiceInfo.options.map(row => this.translator.cellA1(row, COLUMN.CHECK))),
         STATUS.PR_USED,STATUS.CHECKED
       );
     }
@@ -1405,7 +1495,7 @@ namespace Status {
     }
 
     private _getChoiceRowStatusFormula(...statuses: STATUS[]) {
-      return OR(statuses.map(status => EQ(this.translator.cellA1(this.choiceRow,COLUMN.STATUS),VALUE(status))));
+      return OR(...statuses.map(status => EQ(this.translator.cellA1(this.choiceRow,COLUMN.STATUS),VALUE(status))));
     }
     /* Part of spike reversing dependencies, currently obsolute but keeping until checkin so there is record
     toAvailableFormula() {

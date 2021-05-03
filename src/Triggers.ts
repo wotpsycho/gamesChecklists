@@ -47,7 +47,7 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
     timeEnd("ChecklistApp.setActiveSheet(..)");
 
     time("logEditedRange");
-    Logger.log("edit: ", range.getA1Notation());
+    Logger.log("edit: %s", range.getA1Notation());
     timeEnd("logEditedRange");
 
     time("getCL");

@@ -17,7 +17,7 @@ namespace Settings {
     EDIT   = "Edit",
     CREATE = "Create",
     CLASSIC= "Classic",
-    DYNAMIC= "Dynamic",
+    DYNAMIC= "Interactive",
   }
 
   const SETTING_OPTIONS = {
@@ -71,7 +71,7 @@ namespace Settings {
       [SETTING_OPTIONS[SETTING.MODE].DYNAMIC]: "Only available items are shown, updates as you check them off",
       [SETTING_OPTIONS[SETTING.MODE].CLASSIC]: "All items are shown, with Pre-Reqs column showing item availability",
       [SETTING_OPTIONS[SETTING.MODE].EDIT]   : "All items and columns are shown and editable, useful for fixing errors",
-      [SETTING_OPTIONS[SETTING.MODE].CREATE] : "Mix of Dynamic and Edit, only available items are shown and can edit/add new items",
+      [SETTING_OPTIONS[SETTING.MODE].CREATE] : `Mix of ${MODE.DYNAMIC} and ${MODE.EDIT}, only available items are shown and can edit/add new items`,
     },
     [SETTING.ACTION]: {
       [SETTING_OPTIONS[SETTING.ACTION].REFRESH]     : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
@@ -104,7 +104,7 @@ namespace Settings {
     [MODE.DYNAMIC]: {
       [SETTING.STATUS]  : SETTING_OPTIONS[SETTING.STATUS].AVAILABLE,
       [SETTING.NOTES]   : SETTING_OPTIONS[SETTING.NOTES].HIDE,
-      [SETTING.PRE_REQS]: SETTING_OPTIONS[SETTING.PRE_REQS].HIDE,
+      [SETTING.PRE_REQS]: SETTING_OPTIONS[SETTING.PRE_REQS].SHOW,
       [SETTING.BLANKS]  : SETTING_OPTIONS[SETTING.BLANKS].HIDE,
       [SETTING.EDITABLE]: SETTING_OPTIONS[SETTING.EDITABLE].NO,
     },
@@ -368,14 +368,16 @@ namespace Settings {
           this.allValues = allValues;
         }
         _determineValue(): string {
-          const criteria = this.settings.checklist.filter.getColumnFilterCriteria(this.settings.checklist.toColumnIndex(this.column));
-          const hiddenValuesInSet = (criteria && criteria.getHiddenValues() || []).filter(value => this.allValues.has(value));
-          for (const option in this.optionsHiddenValues) {
-            let optionHiddenValues = this.optionsHiddenValues[option];
-            if (typeof optionHiddenValues == "undefined") optionHiddenValues = [];
-            if (hiddenValuesInSet.length == optionHiddenValues.length && hiddenValuesInSet.filter(value => !optionHiddenValues.includes(value)).length == 0) {
+          if (this.settings.checklist.filter) {
+            const criteria = this.settings.checklist.filter.getColumnFilterCriteria(this.settings.checklist.toColumnIndex(this.column));
+            const hiddenValuesInSet = (criteria && criteria.getHiddenValues() || []).filter(value => this.allValues.has(value));
+            for (const option in this.optionsHiddenValues) {
+              let optionHiddenValues = this.optionsHiddenValues[option];
+              if (typeof optionHiddenValues == "undefined") optionHiddenValues = [];
+              if (hiddenValuesInSet.length == optionHiddenValues.length && hiddenValuesInSet.filter(value => !optionHiddenValues.includes(value)).length == 0) {
               // The values we care about that are hidden are the same as this options
-              return option; 
+                return option; 
+              }
             }
           }
           return super._determineValue(); // Edge case with manually edited values we care about, just show default
@@ -525,6 +527,9 @@ namespace Settings {
         }
         execute(): void {
           time(`updateFilterVisibility ${this.column}`);
+          if (!this.settings.checklist.filter) {
+            this.settings.checklist.createFilter();
+          }
           const columnIndex = this.settings.checklist.toColumnIndex(this.column);
           const currentCriteria = this.settings.checklist.filter.getColumnFilterCriteria(columnIndex);
           const hiddenValues = new Set(this.valuesToHide);

@@ -233,7 +233,7 @@ namespace ChecklistApp {
 
     getUnboundedRange = (row:row, column:column, endRow:row, endColumn:column):Range =>
       // R1C1 unbounded column/row range results in Rn:Rm/Cn:Cm which is interpreted as A1. Use existing A1 formula translator instead
-      this.getRange(Formula.FORMULA.A1(
+      this.getRange(Formula.A1(
         row       && this.toRowIndex(   row), 
         column    && this.toColumnIndex(column), 
         endRow    && this.toRowIndex(   endRow), 
@@ -256,7 +256,7 @@ namespace ChecklistApp {
     getColumnRange = (column:column, _startRow:row = 1, _numRows:number = undefined):Range =>
       _numRows > 0 ? this.getRange(_startRow, column, _numRows, 1) : this.getUnboundedColumnRange(column,_startRow)
 
-    getUnboundedColumnRange = (column:column, _startRow:row = 1):Range =>
+    getUnboundedColumnRange = (column:column, _startRow:row = null):Range =>
       this.getUnboundedRange(_startRow,column,undefined,column)
 
     getColumnValues = (column:column, _startRow:row, _numRows:number):sheetValue[] =>
@@ -290,7 +290,7 @@ namespace ChecklistApp {
     getRowRange = (row:row, _startColumn:column = 1, _numColumns:number = undefined):Range => 
       _numColumns > 0 ? this.getRange(row, _startColumn, 1, _numColumns) : this.getUnboundedRowRange(row,_startColumn)
 
-    getUnboundedRowRange = (row:row, _startColumn:column = 1):Range => 
+    getUnboundedRowRange = (row:row, _startColumn:column = null):Range => 
       this.getUnboundedRange(row,_startColumn,row,null)
 
     getRowValues = (row:row, _startColumn:column = 1, _numColumns:number = undefined):sheetValue[] => 

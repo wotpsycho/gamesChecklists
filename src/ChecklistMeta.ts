@@ -135,7 +135,7 @@ namespace ChecklistMeta {
           const checklistValues = this.checklist.getColumnDataValues(checklistColumn);
           checklistValues
             .filter((checklistValue: { toString: () => string; }) => checklistValue && checklistValue.toString().trim())
-            .map((checklistValue: string) => checklistValue.split("\n")).flat()// Handle multi-value entries
+            .map((checklistValue: string) => checklistValue && checklistValue.toString().split("\n")).flat()// Handle multi-value entries
             .filter((checklistValue: string | number) => checklistValue && checklistValue.toString().trim() && !metadata.metaValueCells[checklistValue])
             .forEach(function(checklistValue: string | number){
               columnMissingValues[checklistValue] = true;
@@ -167,9 +167,13 @@ namespace ChecklistMeta {
       time("meta setChecklistDataValidation");
       Object.values(this.columnMetadata).forEach((metadata) => {
         if (metadata.metaValueCells && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
+          const valueChoices = Object.keys(metadata.metaValueCells);
+          if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !valueChoices.includes(ChecklistApp.FINAL_ITEM_TYPE)) {
+            valueChoices.push(ChecklistApp.FINAL_ITEM_TYPE);
+          }
           const rangeValidation = SpreadsheetApp
             .newDataValidation()
-            .requireValueInList(Object.keys(metadata.metaValueCells), true)
+            .requireValueInList(valueChoices, true)
             .setAllowInvalid(true)
             .build();
           metadata.range.setDataValidation(rangeValidation);
@@ -197,6 +201,7 @@ namespace ChecklistMeta {
     
     updateChecklistConditionalFormatting(): void {
       time("meta setConditionalFormatRules");
+      const {FORMULA,REGEXMATCH,VALUE} = Formula;
       const formulaToRuleMap = {};
       const newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
       // Get validation
@@ -210,10 +215,9 @@ namespace ChecklistMeta {
             }
           });
           if (formatRanges.length > 0) {
-            const relativeCell = Formula.FORMULA.A1(metadata.range.getCell(1,1),true);//.getA1Notation();
+            const relativeCell = Formula.A1(metadata.range.getCell(1,1),true);//.getA1Notation();
             // This can be made into rules based on cells.
             Object.entries(metadata.metaValueCells).forEach(([cellValue, cell]) => {
-              const {REGEXMATCH,VALUE} = Formula.FORMULA;
               const [background, color] = [cell.getBackground(), cell.getFontColor()];
               const isBold = cell.getFontWeight() == "bold";
               const isItalic = cell.getFontStyle() == "italic";
@@ -223,7 +227,7 @@ namespace ChecklistMeta {
               const isTextBlack = color === "#000000";
               const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
               const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = Formula.FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue}\\n|${cellValue}$)`)));
+              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue}\\n|${cellValue}$)`)));
               Formula.togglePrettyPrint(prettyPrint);
               ruleBuilder.whenFormulaSatisfied(formula);
               ruleBuilder.setRanges(formatRanges);
@@ -251,6 +255,18 @@ namespace ChecklistMeta {
                 newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
               }
             });
+            if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !metadata.metaValueCells[ChecklistApp.FINAL_ITEM_TYPE]) {
+              // Default for FINAL_ITEM_TYPE 
+              // TODO extract to a "Default styles"
+              newConditionalFormatRulesByColumn[metadata.metaColumn].push(SpreadsheetApp.newConditionalFormatRule()
+                .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${ChecklistApp.FINAL_ITEM_TYPE}\\n|${ChecklistApp.FINAL_ITEM_TYPE}$)`))))
+                .setBackground("#0000FF")
+                .setFontColor("#FFFFFF")
+                .setUnderline(true)
+                .setRanges(formatRanges)
+                .build()
+              );
+            }
           }
         }
       });
@@ -275,7 +291,7 @@ namespace ChecklistMeta {
       }
       
       
-      const newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(rules => rules && rules.length).flat();
+      const newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(rules => rules && rules.length).reverse().flat();
       
       this.checklist.sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
       timeEnd("meta setConditionalFormatRules");

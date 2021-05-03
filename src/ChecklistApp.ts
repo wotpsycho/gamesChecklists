@@ -40,6 +40,8 @@ namespace ChecklistApp {
     [COLUMN.STATUS]: "Available",
     [COLUMN.NOTES]: "Notes",
   };
+  export const FINAL_ITEM_TYPE = "Game Complete";
+
   
   const COLOR = {
     ERROR: "#ff0000",
@@ -50,7 +52,10 @@ namespace ChecklistApp {
     CHECKED_BG: "#f3f3f3",
     CHECKED_TEXT: "#666666",
     MISSABLE: "#990000",
+    INFO_NOTE: "#4a86e8",
+    WARN_NOTE: "#dd0000",
     WHITE: "white",
+    BLACK: "black",
   } as const;
   
   const ROW_HEADERS:Readonly<{[x in ROW]?: string}> = {
@@ -248,7 +253,6 @@ namespace ChecklistApp {
       time("updateSettings");
       if (this.isRowInRange(ROW.SETTINGS, range)) {
         this.settings.handleChange(event);
-        Settings.ChecklistSettings.handleChange(this,event);
         if (range.getNumRows() == 1) {
           timeEnd("updateSettings","checklist handleEdit");
           return;
@@ -545,8 +549,7 @@ namespace ChecklistApp {
     
     resetDataValidation(_skipMeta: boolean = false): void {
       time("checklist resetDataValidation");
-      const {FORMULA} = Formula;
-      const {COUNTIF,A1,CONCAT,VALUE,LT} = FORMULA;
+      const {FORMULA,COUNTIF,A1,CONCAT,VALUE,LT} = Formula;
       const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       checks.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
       // Set Item validation
@@ -586,8 +589,7 @@ namespace ChecklistApp {
     // CONDITIONAL FORMATTING UTILITIES
     resetConditionalFormatting(_skipMeta: boolean = false): void {
       time("checklist resetConditionalFormatting");
-      const {FORMULA} = Formula;
-      const {NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = FORMULA;
+      const {FORMULA,NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = Formula;
       const prettyPrint = Formula.togglePrettyPrint(false);
               
       const checkboxDataRange = this.getUnboundedColumnDataRange(COLUMN.CHECK);
@@ -601,6 +603,7 @@ namespace ChecklistApp {
       const relativeItemCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true);
       const relativePreReqCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.PRE_REQS),true);
       const relativeStatusCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.STATUS),true);
+      const relativeNotesCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.NOTES),true);
               
       const notAvailableFormula = FORMULA(
         NOT(
@@ -627,7 +630,9 @@ namespace ChecklistApp {
       );
       const crossthroughCheckedFormula = FORMULA(EQ(relativeCheckboxCell,VALUE.TRUE));
       const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
-                            
+      const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^(INFO|NOTE)")));
+      const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^WARN")));
+      
       Formula.togglePrettyPrint(prettyPrint);
                             
       const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
@@ -638,12 +643,14 @@ namespace ChecklistApp {
       const missedRule = SpreadsheetApp.newConditionalFormatRule();
       missedRule.setBackground(COLOR.MISSED);
       missedRule.whenFormulaSatisfied(missedFormula);
-      missedRule.setRanges([preReqDataRange,statusDataRange]);
-                            
+      missedRule.setRanges([allDataRange]);
+      // missedRule.setRanges([preReqDataRange,statusDataRange]);
+      
       const usedRule = SpreadsheetApp.newConditionalFormatRule();
       usedRule.setBackground(COLOR.USED);
       usedRule.whenFormulaSatisfied(usedFormula);
-      usedRule.setRanges([preReqDataRange,statusDataRange]);
+      usedRule.setRanges([allDataRange]);
+      // usedRule.setRanges([preReqDataRange,statusDataRange]);
                             
       const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
       notAvailableRule.setBackground(COLOR.UNAVAILABLE);
@@ -670,7 +677,30 @@ namespace ChecklistApp {
       missableRule.whenFormulaSatisfied(missableFormula);
       missableRule.setRanges([itemDataRange]);
                             
-      this.sheet.setConditionalFormatRules([availableErrorRule,crossthroughCheckedRule,checkboxDisableRule,missableRule,missedRule,usedRule,notAvailableRule]);//.concat(existingRules,[notAvailableRule]));
+      const infoNoteRule = SpreadsheetApp.newConditionalFormatRule();
+      infoNoteRule.setBackground(COLOR.INFO_NOTE);
+      infoNoteRule.setFontColor(COLOR.WHITE);
+      infoNoteRule.whenFormulaSatisfied(infoNoteFormula);
+      infoNoteRule.setRanges([itemDataRange]);
+                            
+      const warnNoteRule = SpreadsheetApp.newConditionalFormatRule();
+      warnNoteRule.setBackground(COLOR.WARN_NOTE);
+      warnNoteRule.setFontColor(COLOR.WHITE);
+      warnNoteRule.whenFormulaSatisfied(warnNoteFormula);
+      warnNoteRule.setRanges([itemDataRange]);
+                            
+      this.sheet.setConditionalFormatRules([
+        availableErrorRule,
+        crossthroughCheckedRule,
+        checkboxDisableRule,
+        missedRule,
+        usedRule,
+        warnNoteRule,
+        infoNoteRule,
+        missableRule,
+        notAvailableRule
+      ]);//.concat(existingRules,[notAvailableRule]));
+
       if (!_skipMeta && this.metaSheet) {
         this.meta.updateChecklistConditionalFormatting();
       }
@@ -715,11 +745,12 @@ namespace ChecklistApp {
       }
     }
     ensureFilterSize(): void {
-      const filterRange = this.filter.getRange();
-      if (filterRange.getRow()        != this.headerRow 
-                            ||  filterRange.getColumn()     != 1 
-                            ||  filterRange.getLastRow()    != this.maxRows 
-                            ||  filterRange.getLastColumn() != this.lastColumn) {
+      const filterRange = this.filter && this.filter.getRange();
+
+      if (filterRange &&  (filterRange.getRow()        != this.headerRow 
+                       ||  filterRange.getColumn()     != 1 
+                       ||  filterRange.getLastRow()    != this.maxRows 
+                       ||  filterRange.getLastColumn() != this.lastColumn)) {
         this.toast("Please wait...","Expanding Filter",-1);
         this.createFilter(this.filter);
         this.toast("Done!", "ExpandingFilter");
@@ -738,8 +769,7 @@ namespace ChecklistApp {
     }
     quickFilterChange(event: EditEvent): void {
       time("quickFilterChange");
-      const FORMULA = Formula.FORMULA;
-      const {REGEXMATCH,A1,VALUE} = FORMULA;
+      const {FORMULA,REGEXMATCH,A1,VALUE} = Formula;
       const range = event.range;
                             
       const firstChangedColumn = range.getColumn();
@@ -751,7 +781,7 @@ namespace ChecklistApp {
         const existingCriteria = this.filter.getColumnFilterCriteria(column);
         if (changedValue) {
           let criteria: GoogleAppsScript.Spreadsheet.FilterCriteriaBuilder;
-          if (criteria) {
+          if (existingCriteria) {
             criteria = existingCriteria.copy();
           } else {
             criteria = SpreadsheetApp.newFilterCriteria();
@@ -764,7 +794,7 @@ namespace ChecklistApp {
         } else {
           if (existingCriteria && existingCriteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
             // Remove it, but don't remove the hiddenValues criteria
-            if (existingCriteria.getHiddenValues()) {
+            if (existingCriteria.getHiddenValues().length > 0) {
               this.filter.setColumnFilterCriteria(column, SpreadsheetApp.newFilterCriteria().setHiddenValues(existingCriteria.getHiddenValues()));
             } else {
               this.filter.removeColumnFilterCriteria(column);
@@ -779,8 +809,7 @@ namespace ChecklistApp {
     ensureTotalFormula(): void {
       time("totalFormula");
       // static imports
-      const {FORMULA} = Formula;
-      const {CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ} = FORMULA;
+      const {FORMULA,CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ,ROUND,DIV,MULT,MINUS} = Formula;
                             
       // TODO determine best way for reporting
       if (!this.hasRow(ROW.TITLE)) return;
@@ -789,13 +818,15 @@ namespace ChecklistApp {
       const itemColumn = this.toColumnIndex(COLUMN.ITEM);
       const statusColumn = this.toColumnIndex(COLUMN.STATUS);
                             
-      const total       = [A1(firstRow,itemColumn  ,null,itemColumn  ),VALUE("<>")                      ];
-      const checked     = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.CHECKED)   ,total];
-      const missed      = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.MISSED)    ,total];
-      const prUsed      = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.PR_USED)   ,total];
-      const available   = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.AVAILABLE) ,total];
-      const unknown     = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.UNKNOWN)   ,total];
-      const unavailable = [A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.PR_NOT_MET),total];
+      const hasValueArgs = [A1(firstRow,itemColumn  ,null,itemColumn  ),VALUE("<>")];
+
+      const total       = COUNTIFS(...hasValueArgs);
+      const checked     = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.CHECKED)   ,...hasValueArgs);
+      const missed      = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.MISSED)    ,...hasValueArgs);
+      const prUsed      = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.PR_USED)   ,...hasValueArgs);
+      const available   = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.AVAILABLE) ,...hasValueArgs);
+      const unknown     = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.UNKNOWN)   ,...hasValueArgs);
+      const unavailable = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.PR_NOT_MET),...hasValueArgs);
                             
                             
                             
@@ -803,15 +834,15 @@ namespace ChecklistApp {
         CONCAT(
           IF(
             OR(
-              GT(COUNTIFS(missed),VALUE.ZERO),
-              GT(COUNTIFS(prUsed),VALUE.ZERO)
+              GT(missed,VALUE.ZERO),
+              GT(prUsed,VALUE.ZERO)
             ),
             CONCAT(
               VALUE("M: "), 
-              COUNTIFS(missed), 
+              missed, 
               IF(
-                GT(COUNTIFS(prUsed),VALUE.ZERO),
-                CONCAT(VALUE(" ("),COUNTIFS(prUsed),VALUE(")")),
+                GT(prUsed,VALUE.ZERO),
+                CONCAT(VALUE(" ("),prUsed,VALUE(")")),
                 VALUE.EMPTYSTRING
               ),
               CHAR.NEWLINE
@@ -821,25 +852,24 @@ namespace ChecklistApp {
           VALUE("R: "),
           IF(
             EQ(
-              ADD(COUNTIFS(available),COUNTIFS(unavailable)),
+              ADD(available,unavailable),
               VALUE.ZERO
             ),
             VALUE("★"),
             CONCAT(
-              COUNTIFS(available),
+              available,
               VALUE("|"),
-              COUNTIFS(unavailable)
+              unavailable
             )
           ), 
           IF(
-            GT(COUNTIFS(unknown),VALUE.ZERO),
-            CONCAT(VALUE(" ("),COUNTIFS(unknown),VALUE(")")),
+            GT(unknown,VALUE.ZERO),
+            CONCAT(VALUE(" ("),unknown,VALUE(")")),
             VALUE.EMPTYSTRING
           ),
           CHAR.NEWLINE,
-          COUNTIFS(checked),
-          VALUE("/"),
-          COUNTIFS(total)
+          ROUND(MULT(DIV(checked,MINUS(total,prUsed)),VALUE(100)),VALUE.ONE),
+          VALUE("%")
         )
       );
                                                 
