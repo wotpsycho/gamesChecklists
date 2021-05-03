@@ -1521,10 +1521,10 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
       return this.child.toAvailableFormula();
     }
     toPRUsedFormula():string {
-      return this.child.toPRUsedFormula();
+      return VALUE.FALSE;
     }
     toUnknownFormula():string {
-      return this.child.toUnknownFormula();
+      return VALUE.FALSE;
     }
     isDirectlyMissable(): boolean {
       return true;
