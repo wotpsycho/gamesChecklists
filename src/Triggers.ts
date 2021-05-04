@@ -64,9 +64,28 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
       checklist.isChecklist && checklist.ensureTotalFormula();
       return;
     }
+
+    time("itemWasCheckedShortcut");
+    if (
+      event.value && 
+      event.oldValue && 
+      (event.value.toString().toUpperCase() === "TRUE" && event.oldValue.toString().toUpperCase() === "FALSE" 
+        || event.value.toString().toUpperCase() === "FALSE" && event.oldValue.toString().toUpperCase() === "TRUE") &&
+      event.range.getColumn() == 1
+    ) {
+      // Optimization for ultra-quick Item Checkbox Check; assumes a swap between True/False in column 1 is a Check and just refreshes filter
+      // Bypasses actual isChecklist check since that is primarily used for editing purposes, not Checkbox Check purposes
+      checklist.refreshFilter();
+      timeEnd("itemWasCheckedShortcut");
+      return;
+    }
+    timeEnd("itemWasCheckedShortcut");
+    
     
     time("isChecklist");
     if (checklist.isChecklist) {
+      // While a significant overhead (>1s), any non-Checkbox edit will need to make most of the same calls,
+      // so moving requests to first of handler does not increase overall time
       timeEnd("isChecklist");
       time("checklistHandleEdit");
       checklist.handleEdit(event);
