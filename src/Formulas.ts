@@ -165,6 +165,7 @@ namespace Formula {
   export const ISERROR:StringFormula = PrefixFormula("ISERROR");
   export const ISBLANK:StringFormula = PrefixFormula("ISBLANK");
   export const REGEXMATCH:StringFormula = PrefixFormula("REGEXMATCH");
+  export const HYPERLINK:StringFormula = PrefixFormula("HYPERLINK");
   
   export const CONCAT:StringFormula = PrefixFormula("CONCATENATE");
   export const CHAR = withConstants(PrefixFormula<number|string>("CHAR"),{

@@ -64,6 +64,7 @@ namespace Status {
     MISSED: "MISSED",
     CHOICE: "CHOICE", // DEPRECATED, alias for OPTION
     OPTION: "OPTION",
+    LINKED: "LINKED",
   };
 
   export function getActiveChecklistTranslator(): StatusFormulaTranslator {
@@ -204,17 +205,23 @@ namespace Status {
           }
         }
         if (checkboxControlledByInfos) {
+          const checkboxCell:Range = checkRange.getCell(i+1,1);
           const checkNotes:string[] = [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"];
           checkboxControlledByInfos.forEach(({row,value}) => {
             checkNotes.push(`•${value || ""} (Row ${row})`);
           });
-          const checkboxCell:Range = checkRange.getCell(i+1,1);
           itemDataRange.getCell(i+1,1).setFontStyle("italic");
-          checkboxCell.clearContent();//FORMULA(checkControlledInfo.choiceCheckedFormula));
           checkboxCell.clearDataValidations();
+          if (checkboxControlledByInfos.length == 1) {
+            checkboxCell.setFormula(FORMULA(Formula.HYPERLINK(
+              VALUE(`#gid=${this.checklist.sheetId}&range=${this.cellA1(checkboxControlledByInfos[0].row,COLUMN.ITEM).replace(/\$/g,"")}`),
+              VALUE.EMPTYSTR
+            )));
+          } else {
+            checkboxCell.clearContent();
+          }
           checkboxCell.setNote(checkNotes.join("\n"));
-        } else if (checkboxFormulas[i][0] || (!checkboxValues[i][0] && checkboxValues[i][0] !== false)) {
-          Logger.log(checkboxFormulas);
+        } else if (checkboxFormulas[i][0] || (VALUE(checkboxValues[i][0] as string) != VALUE.TRUE && VALUE(checkboxValues[i][0] as string) != VALUE.FALSE)) {
           const checkboxCell:Range = checkRange.getCell(i+1,1);
           checkboxCell.setValue(checkboxValues[i][0] || VALUE.FALSE); // overwrites formula with existing value if it isn't a choice
           checkboxCell.clearNote();
@@ -309,6 +316,8 @@ namespace Status {
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
         if (choiceRows[row]) {
           return OR(...choiceRows[row].map(row => Formula.A1(row,column as number)));
+        } else if (linkedRows[row]) {
+          return Formula.A1(linkedRows[row],column);
         }
       }
       return Formula.A1(row,column);
@@ -321,6 +330,8 @@ namespace Status {
         rowInfos = rowInfos.map(rowInfo => {
           if (choiceRows[rowInfo.row]) {
             return choiceRows[rowInfo.row].map(row => Object.assign({},rowInfo,{row:row}));
+          } else if (linkedRows[rowInfo.row]) {
+            return Object.assign({},rowInfo, {row: linkedRows[rowInfo.row]});
           } else {
             return rowInfo;
           }
@@ -440,13 +451,18 @@ namespace Status {
             case SPECIAL_PREFIXES.OPTION.toUpperCase():
               childFormulaNode = new OptionFormulaNode(content,this.translator,row);
               break;
+            case SPECIAL_PREFIXES.LINKED.toUpperCase():
+              this.rootNode = new LinkedFormulaNode(content,this.translator,row,lines.length == 1);
+              children.push(this.rootNode);
+              // LINKED is ONLY one allowed, will handle ERROR messaging if others present
+              return;
           }
         } else {
           childFormulaNode = new BooleanFormulaNode(line,this.translator,row);
         }
         children.push(childFormulaNode);
       }
-      this.rootNode = new RootNode(children,this.translator,row);
+      this.rootNode = new BooleanRootNode(children,this.translator,row);
     }
 
     toFormula():string {
@@ -473,13 +489,10 @@ namespace Status {
     }
 
     isControlled():boolean {
-      return !!choiceRows[this.row];
+      return this.rootNode.isControlled();
     }
     getControlledByInfos():sheetValueInfo[] {
-      if (this.isControlled()) {
-        const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-        return choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat();
-      }
+      return this.rootNode.getControlledByInfos();
     }
 
     getAllPossiblePreReqRows():ReadonlySet<row> {
@@ -800,7 +813,12 @@ namespace Status {
     }
   }
 
-  class RootNode extends BooleanFormulaNode {
+  interface RootNode extends FormulaNode<boolean> {
+    isControlled:() => boolean
+    getControlledByInfos:() => sheetValueInfo[]
+    toStatusFormula:() =>string
+  }
+  class BooleanRootNode extends BooleanFormulaNode implements RootNode {
     constructor(children:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
       super("",translator,row);
       if (children.length > 0) {
@@ -809,6 +827,16 @@ namespace Status {
         this.formulaType = AND;
       } else {
         this.value = true;
+      }
+    }
+
+    isControlled():boolean {
+      return !!choiceRows[this.row];
+    }
+    getControlledByInfos():sheetValueInfo[] {
+      if (this.isControlled()) {
+        const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+        return choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat();
       }
     }
     toStatusFormula(): string {
@@ -1542,6 +1570,50 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
     isDirectlyMissable(): boolean {
       return true;
+    }
+  }
+
+  const linkedRows:{[x:number]: row} = {};
+  class LinkedFormulaNode extends FormulaValueNode<boolean> implements RootNode {
+    readonly linkedRow:row
+    constructor(text:string, translator:StatusFormulaTranslator,row:row,isOnlyPreReq:boolean) {
+      super(text,translator,row);
+      if (!isOnlyPreReq) {
+        this.addError("LINKED Items cannot have other Pre-Reqs");
+      } else if (this.valueInfo.rowInfos.length != 1) {
+        this.addError("Must Link to a single Item");
+      } else {
+        this.linkedRow = this.valueInfo.rowInfos[0].row;
+        linkedRows[this.row] = this.linkedRow;
+      }
+    }
+    isControlled():boolean {
+      return this.linkedRow ? true : false;
+    }
+    getControlledByInfos():sheetValueInfo[] {
+      return this.linkedRow ? this.translator.getColumnValues(COLUMN.ITEM).byRow[this.linkedRow] : [];
+    }
+    toStatusFormula(): string {
+      if (this.hasErrors()) {
+        return VALUE(STATUS.ERROR);
+      } else {
+        return this.translator.cellA1(this.linkedRow,COLUMN.STATUS);
+      }
+    }
+    toAvailableFormula(): string {
+      return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toAvailableFormula();
+    }
+    toPRUsedFormula(): string {
+      return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toPRUsedFormula();
+    }
+    toRawMissedFormula(): string {
+      return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toRawMissedFormula();
+    }
+    toMissedFormula(): string {
+      return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toMissedFormula();
+    }
+    toUnknownFormula(): string {
+      return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toUnknownFormula();
     }
   }
 }
