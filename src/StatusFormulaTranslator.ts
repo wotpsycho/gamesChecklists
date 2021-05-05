@@ -310,15 +310,22 @@ namespace Status {
       return this.columnInfo[columnIndex];
     }
 
+    private transformCheckRows(...rows:row[]): row[] {
+      return rows.map(row => {
+        if (choiceRows[row]) {
+          return this.transformCheckRows(...choiceRows[row]);
+        } else if (linkedRows[row]) {
+          return this.transformCheckRows(linkedRows[row]); 
+        } else {
+          return row;
+        }
+      }).flat();
+    }
     cellA1 (row: row, column: column): string {
       column = this.checklist.toColumnIndex(column);
       // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
-        if (choiceRows[row]) {
-          return OR(...choiceRows[row].map(row => Formula.A1(row,column as number)));
-        } else if (linkedRows[row]) {
-          return Formula.A1(linkedRows[row],column);
-        }
+        return OR(...this.transformCheckRows(row).map( row => Formula.A1(row, column as number)));
       }
       return Formula.A1(row,column);
     }
@@ -328,13 +335,7 @@ namespace Status {
       // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
         rowInfos = rowInfos.map(rowInfo => {
-          if (choiceRows[rowInfo.row]) {
-            return choiceRows[rowInfo.row].map(row => Object.assign({},rowInfo,{row:row}));
-          } else if (linkedRows[rowInfo.row]) {
-            return Object.assign({},rowInfo, {row: linkedRows[rowInfo.row]});
-          } else {
-            return rowInfo;
-          }
+          return this.transformCheckRows(rowInfo.row).map (row => Object.assign({},rowInfo,{row: row}));
         }).flat();
       }
       const rangeCounts:{[x:string]:number} = {};
