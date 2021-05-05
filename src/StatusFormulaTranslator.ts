@@ -56,7 +56,7 @@ namespace Status {
   const MINUS = FormulaHelper(Formula.MINUS, /^ *(.+?) *- *(.+?) *$/,true);
   const ADD   = FormulaHelper(Formula.ADD  , /^ *(.+?) *\+ *(.+?) *$/,true);
   
-  const {FORMULA,A1,VALUE,IFS,IF,COUNTIF} = Formula;
+  const {FORMULA,VALUE,IFS,IF,COUNTIF} = Formula;
 
 
   const SPECIAL_PREFIXES:{[x:string]:string} = {
@@ -125,8 +125,11 @@ namespace Status {
       time("getStatusValues statusFormulas");
       const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
       timeEnd("getStatusValues statusFormulas");
+      time("getStatusValues checkValues");
+      const checkboxValues:unknown[][] = checkRange.getValues();
+      timeEnd("getStatusValues checkValues");
       time("getStatusValues checkFormulas");
-      const checkFormulas:string[][] = checkRange.getFormulas();
+      const checkboxFormulas:string[][] = checkRange.getFormulas();
       timeEnd("getStatusValues checkFormulas", "getStatusValues");
 
       // TODO add interactive validation?
@@ -185,7 +188,7 @@ namespace Status {
         hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
         const parser:CellFormulaParser = parsers[i];
         let note:string = null;
-        let checkChoiceInfos: rowChoiceInfo;
+        let checkboxControlledByInfos:sheetValueInfo[];
         if (parser) {
           statusFormulas[i] = FORMULA(parser.toFormula());
           if (parser.hasErrors()) {
@@ -196,23 +199,26 @@ namespace Status {
               note = "Possible to miss Pre-Reqs\n------------------------------\n" + allMissablePreReqs.join("\n");
             } 
           }
-          if (parser.isChoice()) {
-            checkChoiceInfos = parser.getChoiceInfo();
+          if (parser.isControlled()) {
+            checkboxControlledByInfos = parser.getControlledByInfos();
           }
         }
-        if (checkChoiceInfos) {
-          const checkNotes:string[] = ["Choose one of the following Items:"];
-          checkChoiceInfos.options.forEach(({row,value}) => {
-            checkNotes.push(`•${value} (Row ${row})`);
+        if (checkboxControlledByInfos) {
+          const checkNotes:string[] = [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"];
+          checkboxControlledByInfos.forEach(({row,value}) => {
+            checkNotes.push(`•${value || ""} (Row ${row})`);
           });
-          const checkCell:Range = checkRange.getCell(i+1,1);
+          const checkboxCell:Range = checkRange.getCell(i+1,1);
           itemDataRange.getCell(i+1,1).setFontStyle("italic");
-          checkCell.setFormula(FORMULA(checkChoiceInfos.choiceCheckedFormula));
-          checkCell.setNote(checkNotes.join("\n"));
-        } else if (checkFormulas[i][0]) {
-          const checkCell:Range = checkRange.getCell(i+1,1);
-          checkCell.setValue(checkCell.getValue()); // overwrites formula with existing value if it isn't a choice
-          checkCell.clearNote();
+          checkboxCell.clearContent();//FORMULA(checkControlledInfo.choiceCheckedFormula));
+          checkboxCell.clearDataValidations();
+          checkboxCell.setNote(checkNotes.join("\n"));
+        } else if (checkboxFormulas[i][0] || (!checkboxValues[i][0] && checkboxValues[i][0] !== false)) {
+          Logger.log(checkboxFormulas);
+          const checkboxCell:Range = checkRange.getCell(i+1,1);
+          checkboxCell.setValue(checkboxValues[i][0] || VALUE.FALSE); // overwrites formula with existing value if it isn't a choice
+          checkboxCell.clearNote();
+          checkboxCell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
         }
         if (hasDebugColumns) {
           timeEnd("debug generateFormula row"+(i+firstRow)); // Only report this timing if debug columns present
@@ -299,11 +305,27 @@ namespace Status {
 
     cellA1 (row: row, column: column): string {
       column = this.checklist.toColumnIndex(column);
-      return A1(row,column);
+      // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
+      if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
+        if (choiceRows[row]) {
+          return OR(...choiceRows[row].map(row => Formula.A1(row,column as number)));
+        }
+      }
+      return Formula.A1(row,column);
     }
 
     rowInfosToA1Counts(rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} {
       column = this.checklist.toColumnIndex(column);
+      // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
+      if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
+        rowInfos = rowInfos.map(rowInfo => {
+          if (choiceRows[rowInfo.row]) {
+            return choiceRows[rowInfo.row].map(row => Object.assign({},rowInfo,{row:row}));
+          } else {
+            return rowInfo;
+          }
+        }).flat();
+      }
       const rangeCounts:{[x:string]:number} = {};
       if (rowInfos.length === 0) return rangeCounts;
       let firstRow:row = rowInfos[0].row;
@@ -312,14 +334,14 @@ namespace Status {
       for (let i:number = 1; i < rowInfos.length; i++) {
         const rowInfo:rowInfo = rowInfos[i];
         if (rowInfo.row != lastRow+1 || rowInfo.num != num) {
-          rangeCounts[A1(firstRow,column,lastRow,column)] = num;
+          rangeCounts[Formula.A1(firstRow,column,lastRow,column)] = num;
           firstRow = lastRow = rowInfo.row;
           num = rowInfo.num;
         } else {
           lastRow = rowInfo.row;
         }
       }
-      rangeCounts[A1(firstRow,column,lastRow,column)] = num;
+      rangeCounts[Formula.A1(firstRow,column,lastRow,column)] = num;
       return rangeCounts;
     }
   }
@@ -450,17 +472,13 @@ namespace Status {
       return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
     }
 
-    isChoice():boolean {
+    isControlled():boolean {
       return !!choiceRows[this.row];
     }
-    getChoiceInfo():rowChoiceInfo {
-      if (this.isChoice()) {
+    getControlledByInfos():sheetValueInfo[] {
+      if (this.isControlled()) {
         const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-        const choiceInfo:rowChoiceInfo = {
-          choiceCheckedFormula: OR(...choiceRows[this.row].map(row => this.translator.cellA1(row,COLUMN.CHECK))),
-          options: choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat(),
-        };
-        return choiceInfo;
+        return choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat();
       }
     }
 
@@ -1223,8 +1241,8 @@ namespace Status {
     }
 
     /**
-* Total number of rows matching dependency
-*/
+    * Total number of rows matching dependency
+    */
     toTotalFormula(): string {
       if (this.hasValue()) return VALUE(this.value);
       return this.valueInfo.numPossible.toString();
@@ -1239,24 +1257,24 @@ namespace Status {
     }
 
     /**
-* Number that have been checked
-*/
+    * Number that have been checked
+    */
     toAvailableFormula():string { 
-    // Available should look directly at "check" column only to prevent circular references
+      // Available should look directly at "check" column only to prevent circular references
       return this._generateFormula(VALUE.TRUE,COLUMN.CHECK);
     }
 
     /**
-* 
-*/
+    * 
+    */
     toPRNotMetFormula():string {
       return MINUS(this.toTotalFormula(), this.toAvailableFormula());
     }
 
 
     /**
-* Number of dependencies that have been missed OR used
-*/
+    * Number of dependencies that have been missed OR used
+    */
     toMissedFormula():string {
       return this.toFormulaByStatus(STATUS.MISSED,STATUS.PR_USED);
     }
@@ -1274,21 +1292,21 @@ namespace Status {
       return this.toFormulaByNotStatus(STATUS.UNKNOWN);
     }
     /**
-* Number that have NOT been MISSED or PR_USED
-*/
+    * Number that have NOT been MISSED or PR_USED
+    */
     toNotMissedFormula():string {
       return this.toFormulaByNotStatus(STATUS.MISSED,STATUS.PR_USED);
     }
     /**
-* Number of dependencies that have had their Pre-Reqs used
-*/
+    * Number of dependencies that have had their Pre-Reqs used
+    */
     toPRUsedFormula():string {
       if (this.hasValue()) return VALUE(this.value);
       return this._generateFormula(STATUS.PR_USED);
     }
     /**
-* Number of dependencies that have NOT had their Pre-Reqs used
-*/
+    * Number of dependencies that have NOT had their Pre-Reqs used
+    */
     toPRNotUsedFormula():string {
       if (this.hasValue()) {
         return VALUE(this.value);
@@ -1303,16 +1321,16 @@ namespace Status {
     }
 
     /**
-* Minimum value, regardless of status
-*/
+    * Minimum value, regardless of status
+    */
     getMinValue():number {
       if (this.hasValue()) return this.value;
       return 0;
     }
 
     /**
-* Maximum value, regardless of status
-*/
+    * Maximum value, regardless of status
+    */
     getMaxValue():number {
       if (this.hasValue()) return this.value;
       return this.valueInfo.numPossible;
@@ -1393,10 +1411,6 @@ namespace Status {
     isVirtualChoice: boolean;
     choiceRow?: row;
     readonly options: row[]; // options is referenced in choiceRows, so don't allow overwrites
-  }
-  type rowChoiceInfo = {
-    choiceCheckedFormula:string;
-    options:sheetValueInfo[];
   }
   const choiceInfos:{[x:string]: choiceInfo} = {};
   const choiceRows:{[x:number]: row[]} = {};

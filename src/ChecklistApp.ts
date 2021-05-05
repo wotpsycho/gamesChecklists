@@ -387,8 +387,6 @@ namespace ChecklistApp {
       this.syncNotes();
       timeEnd("notes");
       
-      Status.validateAndGenerateStatusFormulasForChecklist(this);
-      
       time("quickFilter");
       this.clearQuickFilterValues();
       timeEnd("quickFilter");
@@ -397,6 +395,8 @@ namespace ChecklistApp {
       this.resetDataValidation(true);
       timeEnd("dataValidation");
       
+      Status.validateAndGenerateStatusFormulasForChecklist(this);
+
       time("available rules");
       //Add conditional formatting rules
       this.resetConditionalFormatting(true);
@@ -418,7 +418,6 @@ namespace ChecklistApp {
       
       time("settings");
       this.resetSetting(previousMode);
-      
       timeEnd("settings");
       
       this.toast("Done!", toastTitle,5);
@@ -598,8 +597,6 @@ namespace ChecklistApp {
       const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
       const allDataRange = this.getUnboundedRange(this.firstDataRow,1,null,this.lastColumn);
               
-              
-      const relativeCheckboxCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.CHECK),true);
       const relativeItemCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true);
       const relativePreReqCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.PRE_REQS),true);
       const relativeStatusCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.STATUS),true);
@@ -628,7 +625,7 @@ namespace ChecklistApp {
           NE(relativeStatusCell,VALUE(STATUS.AVAILABLE))
         )
       );
-      const crossthroughCheckedFormula = FORMULA(EQ(relativeCheckboxCell,VALUE.TRUE));
+      const crossthroughCheckedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
       const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
       const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^(INFO|NOTE)")));
       const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^WARN")));
