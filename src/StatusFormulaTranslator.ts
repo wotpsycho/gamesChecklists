@@ -207,16 +207,24 @@ namespace Status {
         if (checkboxControlledByInfos) {
           const checkboxCell:Range = checkRange.getCell(i+1,1);
           const checkNotes:string[] = [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"];
+          const controlledByRows = [];
           checkboxControlledByInfos.forEach(({row,value}) => {
-            checkNotes.push(`•${value || ""} (Row ${row})`);
+            if (value && value.toString().trim()) {
+              checkNotes.push(`•${value} (Row ${row})`);
+              if (!controlledByRows.includes(row)) controlledByRows.push(row);
+            }
           });
           itemDataRange.getCell(i+1,1).setFontStyle("italic");
           checkboxCell.clearDataValidations();
-          if (checkboxControlledByInfos.length == 1) {
-            checkboxCell.setFormula(FORMULA(Formula.HYPERLINK(
-              VALUE(`#gid=${this.checklist.sheetId}&range=${this.cellA1(checkboxControlledByInfos[0].row,COLUMN.ITEM).replace(/\$/g,"")}`),
-              VALUE.EMPTYSTR
-            )));
+          if (controlledByRows.length == 1) {
+            checkboxCell.setFormula(FORMULA(
+              Formula.HYPERLINK_TO_SHEET(
+                this.checklist.sheetId,
+                "",
+                controlledByRows[0],
+                this.checklist.toColumnIndex(COLUMN.ITEM)
+              )
+            ));
           } else {
             checkboxCell.clearContent();
           }
@@ -311,6 +319,9 @@ namespace Status {
     }
 
     private transformCheckRows(...rows:row[]): row[] {
+      // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
+      // TODO determine if direct circular dependecies should stay error or if there is a use case for UNKNOWN
+      // (currently, if there is a non-Controlled item in circular dependency, UNKNOWN behavior still works)
       return rows.map(row => {
         if (choiceRows[row]) {
           return this.transformCheckRows(...choiceRows[row]);
@@ -323,8 +334,8 @@ namespace Status {
     }
     cellA1 (row: row, column: column): string {
       column = this.checklist.toColumnIndex(column);
-      // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
+        // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
         return OR(...this.transformCheckRows(row).map( row => Formula.A1(row, column as number)));
       }
       return Formula.A1(row,column);
@@ -332,8 +343,8 @@ namespace Status {
 
     rowInfosToA1Counts(rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} {
       column = this.checklist.toColumnIndex(column);
-      // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
+        // Check column may need to transform which row for Controlled Items (Choice for OPTIONs, etc.)
         rowInfos = rowInfos.map(rowInfo => {
           return this.transformCheckRows(rowInfo.row).map (row => Object.assign({},rowInfo,{row: row}));
         }).flat();
