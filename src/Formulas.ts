@@ -206,7 +206,7 @@ namespace Formula {
     STRING:   (comment:string,...values):string => Formula.CONCAT(Formula.T(Formula.N(Formula.VALUE(comment))),...values),
   };
   
-  export const URL_TO_SHEET:(sheetId:number, rowOrRange?:Range|number,...a1RestArgs:(number|boolean)[]) => string = (sheetId:number, a1FirstArg?:(Range|number),...a1RestArgs:(number|boolean)[]) => {
+  export const urlToSheet:(sheetId:number, rowOrRange?:Range|number,...a1RestArgs:(number|boolean)[]) => string = (sheetId:number, a1FirstArg?:(Range|number),...a1RestArgs:(number|boolean)[]) => {
     let link = `#gid=${sheetId}`;
     if (a1FirstArg || a1RestArgs.length) {
       link += `&range=${Formula.A1(a1FirstArg,...a1RestArgs).replace(/\$/g,"")}`;
@@ -215,7 +215,7 @@ namespace Formula {
   };
   // HYPERLINK_TO_SHEET_A1([text],[sheetId],[argsForA1]...)
   export const HYPERLINK_TO_SHEET:(sheetId:number,text:string,rowOrRange?:Range|number,...a1RestArgs:(number|boolean)[]) => string = (sheetId:number, text:string, a1FirstArg?:(Range|number),...a1RestArgs:(number|boolean)[]) => {
-    return Formula.HYPERLINK(Formula.VALUE(Formula.URL_TO_SHEET(sheetId,a1FirstArg,...a1RestArgs)),Formula.VALUE(text));
+    return Formula.HYPERLINK(Formula.VALUE(Formula.urlToSheet(sheetId,a1FirstArg,...a1RestArgs)),Formula.VALUE(text));
   };
   export const FORMULA:StringFormula = (value:string) => "=" + value;
 }
