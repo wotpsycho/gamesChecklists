@@ -102,8 +102,12 @@ namespace ChecklistApp {
   // END APP SECTION
   
   export class Checklist extends ChecklistApp.SheetBase {
+    private requestId:string = Date.now().toString()
     private constructor(sheet: Sheet) {
       super(sheet,COLUMN_HEADERS,ROW_HEADERS);
+      time("cacheRequestId");
+      CacheService.getScriptCache().put("latestRequestId",this.requestId,60);
+      timeEnd("cacheRequestId");
     }
     private static readonly checklists:{[x:number]:Checklist} = {}
     static fromSheet(sheet: Sheet): Checklist {
@@ -232,6 +236,13 @@ namespace ChecklistApp {
     get settings(): Settings.ChecklistSettings {
       return Settings.ChecklistSettings.getSettingsForChecklist(this);
     }
+
+    get isLatest():boolean {
+      time("getCachedRequestId");
+      const cachedRequestId = CacheService.getScriptCache().get("latestRequestId");
+      timeEnd("getCachedRequestId");
+      return cachedRequestId == this.requestId;
+    }
     // END PROPERTY SECTIONS
     
     // Handlers
@@ -263,6 +274,7 @@ namespace ChecklistApp {
       time("populateAvailable");
       if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
         Status.validateAndGenerateStatusFormulasForChecklist(this);
+        Status.addLinksToPreReqs(this, range.getRowIndex(), range.getLastRow());
       }
       timeEnd("populateAvailable");
       
@@ -396,6 +408,7 @@ namespace ChecklistApp {
       timeEnd("dataValidation");
       
       Status.validateAndGenerateStatusFormulasForChecklist(this);
+      Status.addLinksToPreReqs(this);
 
       time("available rules");
       //Add conditional formatting rules
@@ -750,7 +763,7 @@ namespace ChecklistApp {
                        ||  filterRange.getLastColumn() != this.lastColumn)) {
         this.toast("Please wait...","Expanding Filter",-1);
         this.createFilter(this.filter);
-        this.toast("Done!", "ExpandingFilter");
+        this.toast("Done!", "Expanding Filter");
       }
     }
     // END FILTER SECTION

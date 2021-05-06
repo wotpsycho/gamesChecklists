@@ -79,6 +79,10 @@ namespace Status {
     StatusFormulaTranslator.fromChecklist(checklist).validateAndGenerateStatusFormulas();
   }
 
+  export function addLinksToPreReqs(checklist:Checklist = ChecklistApp.getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
+    StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqs(startRow,endRow);
+  }
+
   export class StatusFormulaTranslator {
     readonly checklist: Checklist;
     private constructor(checklist: Checklist) {
@@ -91,6 +95,24 @@ namespace Status {
         this.translators[checklist.id] = new StatusFormulaTranslator(checklist);
       }
       return this.translators[checklist.id];
+    }
+
+    private _parsers:CellFormulaParser[]
+    get parsers():CellFormulaParser[] {
+      if (this._parsers) return this._parsers;
+      time("parseCells");
+      
+      const parsers = [];
+      const preReqRange:Range = this.checklist.getColumnDataRange(COLUMN.PRE_REQS);
+      const preReqValues:unknown[][] = preReqRange.getValues();
+      const firstRow:row = preReqRange.getRow();
+      
+      for (let i:number = 0; i < preReqValues.length; i++) {
+        parsers[i+firstRow] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
+      }
+      this._parsers = parsers;
+      timeEnd("parseCells");
+      return parsers;
     }
 
     // PUBLIC FUNCTIONS
@@ -137,20 +159,11 @@ namespace Status {
       //const preReqValidations = preReqRange.getDataValidations(); 
 
       // will be overwriting these
-      const parsers:CellFormulaParser[] = [];
       const statusFormulas:string[] = [];
       const notes:string[] = [];
+      const controlledCheckboxes:{checkboxCell:Range,itemCell:Range,notes:string[],checkHyperlink?:string}[] = [];
+      const checkboxesToReset:Range[] = [];
 
-      time("parseCells");
-      for (let i:number = 0; i < preReqValues.length; i++) {
-        // if (preReqFormulas[i][0]) {
-        // Allow direct formulas, just use reference
-        // statusFormulas[i] = A1(i+firstRow, this.checklist.toColumnIndex(COLUMN.PRE_REQS));//"R" + (i+firstRow) + "C" + checklist.toColumnIndex(COLUMN.PRE_REQS);
-        // } else {
-        parsers[i] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
-        // }
-      }
-      timeEnd("parseCells");
       time("getDebugColumns");
       const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
         "isAvailable": {
@@ -183,11 +196,13 @@ namespace Status {
       });
       const hasDebugColumns:boolean = Object.keys(debugColumns).length > 0;
       timeEnd("getDebugColumns");
-      itemDataRange.setFontStyle("normal");
+
+      time("calculateValues");
+      // Generate our formulas
       time("generateFormulas");
       for (let i:number = 0; i < preReqValues.length; i++) {
         hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
-        const parser:CellFormulaParser = parsers[i];
+        const parser:CellFormulaParser = this.parsers[i+firstRow];
         let note:string = null;
         let checkboxControlledByInfos:sheetValueInfo[];
         if (parser) {
@@ -205,35 +220,29 @@ namespace Status {
           }
         }
         if (checkboxControlledByInfos) {
-          const checkboxCell:Range = checkRange.getCell(i+1,1);
-          const checkNotes:string[] = [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"];
+          const controlledData:{checkboxCell:Range,itemCell:Range,notes:string[],checkLink?:string} = {
+            checkboxCell: checkRange.getCell(i+1,1),
+            itemCell: itemDataRange.getCell(i+1,1),
+            notes: [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"],
+          };
           const controlledByRows = [];
           checkboxControlledByInfos.forEach(({row,value}) => {
             if (value && value.toString().trim()) {
-              checkNotes.push(`•${value} (Row ${row})`);
+              controlledData.notes.push(`•${value} (Row ${row})`);
               if (!controlledByRows.includes(row)) controlledByRows.push(row);
             }
           });
-          itemDataRange.getCell(i+1,1).setFontStyle("italic");
-          checkboxCell.clearDataValidations();
           if (controlledByRows.length == 1) {
-            checkboxCell.setFormula(FORMULA(
-              Formula.HYPERLINK_TO_SHEET(
-                this.checklist.sheetId,
-                "",
-                controlledByRows[0],
-                this.checklist.toColumnIndex(COLUMN.ITEM)
-              )
-            ));
-          } else {
-            checkboxCell.clearContent();
+            controlledData.checkLink = Formula.HYPERLINK_TO_SHEET(
+              this.checklist.sheetId,
+              "",
+              controlledByRows[0],
+              this.checklist.toColumnIndex(COLUMN.ITEM)
+            );
           }
-          checkboxCell.setNote(checkNotes.join("\n"));
+          controlledCheckboxes.push(controlledData);
         } else if (checkboxFormulas[i][0] || (VALUE(checkboxValues[i][0] as string) != VALUE.TRUE && VALUE(checkboxValues[i][0] as string) != VALUE.FALSE)) {
-          const checkboxCell:Range = checkRange.getCell(i+1,1);
-          checkboxCell.setValue(checkboxValues[i][0] || VALUE.FALSE); // overwrites formula with existing value if it isn't a choice
-          checkboxCell.clearNote();
-          checkboxCell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+          checkboxesToReset.push(checkRange.getCell(i+1,1));
         }
         if (hasDebugColumns) {
           timeEnd("debug generateFormula row"+(i+firstRow)); // Only report this timing if debug columns present
@@ -244,34 +253,132 @@ namespace Status {
         notes[i] = note;
       }
       timeEnd("generateFormulas");
-      time("setFormulasIndividual");
-      // Reduce client-side recalculations by only setting formula if changed
-      statusFormulas.forEach((statusFormula,i) => 
-        statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula)
-      );
-      timeEnd("setFormulasIndividual");
-      time("finalItemRow");
-      const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[ChecklistApp.FINAL_ITEM_TYPE];
-      if (finalItems) {
-        itemDataRange.setFontLine("none");
-        const dependendentRows = new Set<number>();
-        finalItems.forEach(finalItem => {
-          CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
+      timeEnd("calculateValues");
+
+      if (this.checklist.isLatest) {
+        time("writeValues");
+
+        time("setFormulasIndividual");
+        // Reduce client-side recalculations by only setting formula if changed
+        statusFormulas.forEach((statusFormula,i) => 
+          statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula)
+        );
+        timeEnd("setFormulasIndividual");
+
+        time("resetItemUnderlineItalics");
+        itemDataRange.setFontStyle("normal").setFontLine("none");
+        timeEnd("resetItemUnderlineItalics");
+
+        time("underlineRequiredItem");
+        const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[ChecklistApp.FINAL_ITEM_TYPE];
+        if (finalItems) {
+          const dependendentRows = new Set<number>();
+          finalItems.forEach(finalItem => {
+            CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
+          });
+          dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontLine("underline")));
+        }
+        timeEnd("underlineRequiredItem");
+        
+        time("controlledRows");
+        controlledCheckboxes.forEach(controlledCheckbox => {
+          controlledCheckbox.checkboxCell.clearDataValidations();
+          controlledCheckbox.itemCell.setFontStyle("italic");
+          if (controlledCheckbox.checkHyperlink) {
+            controlledCheckbox.checkboxCell.setFormula(FORMULA(controlledCheckbox.checkHyperlink));
+          } else {
+            controlledCheckbox.checkboxCell.clearContent();
+          }          
+          controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
         });
-        dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontLine("underline")));
+        timeEnd("controlledRows");
+
+        time("resetUnControlledRows");
+        checkboxesToReset.forEach(checkboxCell => {
+          checkboxCell.setValue(VALUE.FALSE);
+          checkboxCell.clearNote();
+          checkboxCell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+        });
+        timeEnd("resetUnControlledRows");
+
+        time("setNotes");
+        preReqRange.setNotes(notes.map(note => [note]));
+        timeEnd("setNotes");
+
+        time("debugColumnValues");
+        Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
+        timeEnd("debugColumnValues");
+        timeEnd("writeValues");
+      } else {
+        Logger.log("Not updating statuses, other request has come in");
+        return;
       }
-      timeEnd("finalItemRow");
-      time("setNotes");
-      preReqRange.setNotes(notes.map(note => [note]));
-      timeEnd("setNotes");
-
-
-      time("debugColumnValues");
-      Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
-      timeEnd("debugColumnValues");
-
       timeEnd("validateAndGenerateStatusFormulas");
-      return;
+    }
+
+    /**
+     * To prevent race conditions that are unavoidable when a User is editing directly, must get-modify-update range in a single operation
+     */
+    addLinksToPreReqs(startRow:row = this.checklist.firstDataRow,endRow = this.checklist.lastRow):void {
+      time("addLinksToPreReqs");
+      try {
+        const preReqRichTexts = [];
+        time("addLinks flush");
+        this.checklist.flush();
+        timeEnd("addLinks flush");
+        time("addLinks getRange");
+        const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
+        timeEnd("addLinks getRange");
+        time("addLinks getValues");
+        const preReqValues = preReqRange.getValues();
+        timeEnd("addLinks getValues");
+      
+        time("addLinks determineRichText");
+        let linkAdded = false;
+        for (let i = 0; i < preReqValues.length; i++) {
+          const parser = this.parsers[i+startRow];
+          const preReqValue = preReqValues[i][0].toString();
+          const richTextValue = SpreadsheetApp.newRichTextValue()
+            .setText(preReqValue);
+        
+          const directPreReqInfos = parser.getDirectPreReqInfos();
+          Object.entries(directPreReqInfos).forEach(([text, rows]) => {
+            const startIndex = preReqValue.indexOf(text);
+            if (text && startIndex >= 0) {
+              const rowRanges = this.rowsToRanges(rows,COLUMN.ITEM);
+              if (rowRanges.length == 1 && parser.preReqText === preReqValue) {
+              // For now, only link if it refers to single cell/range AND the value in the translator is the same as just read from flushed sheet
+              // TODO determine best way of linking multi
+                richTextValue.setLinkUrl(startIndex, startIndex+text.length,Formula.urlToSheet(this.checklist.sheetId,...rowRanges[0]));
+                linkAdded = true;
+              }
+            }
+          });
+          preReqRichTexts[i] = richTextValue.build();
+        }
+        timeEnd("addLinks determineRichText");
+
+        if (!linkAdded) {
+          Logger.log("No links added");
+          return;
+        }
+        time("preReqTextStyle");
+        preReqRange.setTextStyle(SpreadsheetApp.newTextStyle()
+          .setBold(false)
+          .setItalic(false)
+          .setUnderline(false)
+          .setForegroundColor(null)
+          .build());
+        timeEnd("preReqTextStyle");
+        time("setRichText");
+        preReqRange.setRichTextValues(preReqRichTexts.map(richText => [richText]));
+        timeEnd("setRichText");
+        time("endFlush");
+        this.checklist.flush();
+        timeEnd("endFlush");
+      } finally {
+        timeEnd("addLinksToPreReqs");
+      }
     }
 
     private readonly columnInfo: {[x:number]: columnValues} = {};
@@ -341,6 +448,28 @@ namespace Status {
       return Formula.A1(row,column);
     }
 
+    rowsToRanges(rows: row[], column?: column):number[][] {
+      const rowRanges = [];
+      if (!rows || rows.length == 0) return rowRanges;
+      if (column) column = this.checklist.toColumnIndex(column);
+      if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
+        rows = this.transformCheckRows(...rows);
+      }
+      rows = rows.sort((a,b) => a-b);
+      let firstRow:row = rows[0];
+      let lastRow:row = rows[0];
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i] != lastRow + 1) {
+          rowRanges.push([firstRow,column,lastRow,column]);
+          firstRow = lastRow = rows[i];
+        } else {
+          lastRow = rows[i];
+        }
+      }
+      rowRanges.push([firstRow,column,lastRow,column]);
+      return rowRanges;
+    }
+
     rowInfosToA1Counts(rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} {
       column = this.checklist.toColumnIndex(column);
       if (column == this.checklist.toColumnIndex(COLUMN.CHECK)) {
@@ -401,7 +530,7 @@ namespace Status {
   const quoteMapping:{[x:string]:string} = {};
   const parentheticalMapping:{[x:string]:string} = {};
 
-  const PREFIX_REGEX:RegExp = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) `, "i");
+  const PREFIX_REGEX:RegExp = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) (.+)$`, "i");
   class CellFormulaParser {
     private static readonly parsers: {[x:number]: CellFormulaParser} = {};
     static getParserForChecklistRow(translator: StatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
@@ -414,12 +543,14 @@ namespace Status {
     private readonly row: row;
     private readonly rootNode: RootNode;
     readonly translator: StatusFormulaTranslator;
+    readonly preReqText: string
     private constructor(translator: StatusFormulaTranslator, row:row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
       this.translator = translator;
       this.row = row;
+      this.preReqText = cellValue.toString();
 
       const lines:string[] = [];
-      cellValue.toString().split(/ *[\n;] */).forEach((line:string,i:number) => {
+      this.preReqText.split(/ *[\n;] */).forEach((line:string,i:number) => {
         if (i > 0 && line.indexOf("...") === 0) {
           lines[lines.length-1] += line.substring(3);
         } else {
@@ -450,8 +581,9 @@ namespace Status {
 
         let childFormulaNode: FormulaNode<boolean>;
         const prefixCheck:RegExpMatchArray = line.match(PREFIX_REGEX);
+        // specific Prefix node, or default to boolean node
         if (prefixCheck) { 
-          const content:string = line.substring(line.indexOf(" ")).trim();
+          const content:string = prefixCheck[2].trim();
           switch (prefixCheck[1].toUpperCase()) {
             case SPECIAL_PREFIXES.USES.toUpperCase():
               childFormulaNode = new UsesFormulaNode(content,this.translator,row);
@@ -498,6 +630,10 @@ namespace Status {
       const allMissableRows:row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
       const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
       return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
+    }
+
+    getDirectPreReqInfos() {
+      return this.rootNode.getDirectPreReqInfos();
     }
 
     isControlled():boolean {
@@ -670,6 +806,10 @@ namespace Status {
         }
       }
       return this._allPossiblePreReqRows;
+    }
+
+    getDirectPreReqInfos():{[x:string]:row[]} {
+      return this.children.reduce((preReqInfos, child) => Object.assign(child.getDirectPreReqInfos(),preReqInfos), {});
     }
 
     isInCircularDependency(): boolean {
@@ -1188,6 +1328,12 @@ namespace Status {
         }
       }
       return this._allPossiblePreReqRows;
+    }
+
+    getDirectPreReqInfos() {
+      return {
+        [this.text]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row)
+      };
     }
 
     getCircularDependencies(previous:row[] = []):ReadonlySet<row> {

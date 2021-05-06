@@ -426,5 +426,8 @@ namespace ChecklistApp {
       }
     }
 
+    flush():void {
+      SpreadsheetApp.flush();
+    }
   }
 }
