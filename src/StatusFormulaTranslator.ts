@@ -367,6 +367,7 @@ namespace Status {
           .setBold(false)
           .setItalic(false)
           .setUnderline(false)
+          .setStrikethrough(false)
           .setForegroundColor(null)
           .build());
         timeEnd("preReqTextStyle");
@@ -397,7 +398,7 @@ namespace Status {
         value.toString().split(/(\r|\n)+/).forEach(value => {
           const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
           const numReceived:number = Number(rawParsed[1] || rawParsed[2] || 1);
-          const rowSubValue = rawParsed[3];
+          const rowSubValue = rawParsed[4];
           const valueInfo: sheetValueInfo = {
             num: numReceived,
             value: rowSubValue,
@@ -521,7 +522,7 @@ namespace Status {
 
 
   // Essentially static defs
-  const PARSE_REGEX:RegExp = /^ *(?:(\d+)x|x(\d+) +)? *((?:(.*)!)?([^ ].*?)) *$/;
+  const PARSE_REGEX:RegExp = /^ *(?:(\d+)x|x(\d+) +)? *((?:SAME|COPY) )? *((?:(.*)!)?([^ ].*?)) *$/;
   let UID_Counter:number = 0;
   const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
   const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
@@ -586,23 +587,23 @@ namespace Status {
           const content:string = prefixCheck[2].trim();
           switch (prefixCheck[1].toUpperCase()) {
             case SPECIAL_PREFIXES.USES.toUpperCase():
-              childFormulaNode = new UsesFormulaNode(content,this.translator,row);
+              childFormulaNode = UsesFormulaNode.create(content,this.translator,row);
               break;
             case SPECIAL_PREFIXES.MISSED.toUpperCase():
-              childFormulaNode = new MissedFormulaNode(content,this.translator,row);
+              childFormulaNode = MissedFormulaNode.create(content,this.translator,row);
               break;
             case SPECIAL_PREFIXES.CHOICE.toUpperCase():
             case SPECIAL_PREFIXES.OPTION.toUpperCase():
-              childFormulaNode = new OptionFormulaNode(content,this.translator,row);
+              childFormulaNode = OptionFormulaNode.create(content,this.translator,row);
               break;
             case SPECIAL_PREFIXES.LINKED.toUpperCase():
-              this.rootNode = new LinkedFormulaNode(content,this.translator,row,lines.length == 1);
+              this.rootNode = LinkedFormulaNode.create(content,this.translator,row,lines.length == 1);
               children.push(this.rootNode);
               // LINKED is ONLY one allowed, will handle ERROR messaging if others present
               return;
           }
         } else {
-          childFormulaNode = new BooleanFormulaNode(line,this.translator,row);
+          childFormulaNode = BooleanFormulaNode.create(line,this.translator,row);
         }
         children.push(childFormulaNode);
       }
@@ -705,7 +706,7 @@ namespace Status {
     protected formulaType: FormulaHelper;
 
     readonly translator: StatusFormulaTranslator
-    constructor(text: string, translator: StatusFormulaTranslator,row: row) {
+    protected constructor(text: string, translator: StatusFormulaTranslator,row: row) {
       this.translator = translator;
       this.text = text.toString().trim();
       this.row = row;
@@ -839,8 +840,11 @@ namespace Status {
   }
 
   class BooleanFormulaNode extends FormulaNode<boolean> {
+    static create(text:string, translator:StatusFormulaTranslator,row:row):BooleanFormulaNode {
+      return new BooleanFormulaNode(text,translator,row);
+    }
     protected readonly children: FormulaNode<boolean>[]
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
       if (this.text) {
         for (const booleanFormulaTranslationHelper of [
@@ -852,7 +856,7 @@ namespace Status {
           if (booleanFormulaTranslationHelper.identify(this.text)) {
             this.formulaType = booleanFormulaTranslationHelper;
             const operands:string[] = booleanFormulaTranslationHelper.parseOperands(this.text);
-            this.children.push(...operands.map(operand => new BooleanFormulaNode(operand,this.translator,this.row)));
+            this.children.push(...operands.map(operand => BooleanFormulaNode.create(operand,this.translator,this.row)));
             return;
           }
         }
@@ -866,11 +870,11 @@ namespace Status {
         ]) {
         // Recursively handle comparison operators
           if (comparisonFormulaTranslationHelper.identify(this.text)) {
-            this.child = new ComparisonFormulaNode(this.text,this.translator,this.row,comparisonFormulaTranslationHelper);
+            this.child = ComparisonFormulaNode.create(this.text,this.translator,this.row,comparisonFormulaTranslationHelper);
             return;
           }
         } 
-        this.child = new BooleanFormulaValueNode(this.text,this.translator,this.row);
+        this.child = BooleanFormulaValueNode.create(this.text,this.translator,this.row);
       } else {
         this.value = true;
       }
@@ -1016,13 +1020,16 @@ namespace Status {
   }
 
   class ComparisonFormulaNode extends FormulaNode<boolean> {
+    static create(text: string, translator:StatusFormulaTranslator,row:row,formulaType: FormulaHelper) {
+      return new ComparisonFormulaNode(text,translator,row,formulaType);
+    }
     protected children: NumberNode[];
-    constructor(text: string, translator:StatusFormulaTranslator,row:row,formulaType: FormulaHelper) {
+    protected constructor(text: string, translator:StatusFormulaTranslator,row:row,formulaType: FormulaHelper) {
       super(text,translator,row);
 
       this.formulaType = formulaType;
       const operands:string[] = formulaType.parseOperands(this.text);
-      this.children.push(...operands.map(operand => new NumberFormulaNode(operand,this.translator,this.row)));
+      this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row)));
     }
 
     checkErrors(): void {
@@ -1113,8 +1120,11 @@ namespace Status {
   }
 
   class NumberFormulaNode extends FormulaNode<number> implements NumberNode {
+    static create(text: string, translator:StatusFormulaTranslator,row:row) {
+      return new NumberFormulaNode(text,translator,row);
+    }
     protected readonly children: NumberNode[]
-    constructor(text: string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text: string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
 
       for (const arithmeticFormulaTranslationHelper of [
@@ -1127,11 +1137,11 @@ namespace Status {
         if (arithmeticFormulaTranslationHelper.identify(this.text)) {
           this.formulaType = arithmeticFormulaTranslationHelper;
           const operands:string[] = arithmeticFormulaTranslationHelper.parseOperands(this.text);
-          this.children.push(...operands.map(operand => new NumberFormulaNode(operand,this.translator,this.row)));
+          this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row)));
           return;
         }
       }
-      this.child = new NumberFormulaValueNode(text,this.translator,this.row);
+      this.child = NumberFormulaValueNode.create(text,this.translator,this.row);
     }
 
     protected get child(): NumberNode {
@@ -1197,6 +1207,7 @@ namespace Status {
   type valueInfo = {
     numNeeded: number;
     isMulti: boolean;
+    isSame: boolean;
     key: string,
     altColumnName: string,
     id: string,
@@ -1210,7 +1221,7 @@ namespace Status {
 // Abstract intermediate class
   const valueInfoCache:{[x:number]: valueInfo} = {}; // TODO fix to work with multi CLs
   abstract class FormulaValueNode<T> extends FormulaNode<T> {
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
     }
 
@@ -1222,10 +1233,11 @@ namespace Status {
         if (rawParsed) {
           valueInfo = {
             numNeeded: Number(rawParsed[1] || rawParsed[2] || 1),
-            isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[2]) > 0 || rawParsed[5].indexOf("*") >= 0),
-            key: rawParsed[3],
-            altColumnName: rawParsed[4],
-            id: rawParsed[5],
+            isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[2]) > 0 || rawParsed[6].indexOf("*") >= 0),
+            isSame: !!rawParsed[3],
+            key: rawParsed[4],
+            altColumnName: rawParsed[5],
+            id: rawParsed[6],
             original: text,
             rowInfos: [],
             numPossible: undefined,
@@ -1233,18 +1245,18 @@ namespace Status {
           let match:RegExpMatchArray;
           if (quoteMapping[valueInfo.key]) {
             const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(quoteMapping[valueInfo.key]);
-            valueInfo.key = rawParsedQuote[3];
-            valueInfo.altColumnName = rawParsedQuote[4];
-            valueInfo.id = rawParsedQuote[5];
+            valueInfo.key = rawParsedQuote[4];
+            valueInfo.altColumnName = rawParsedQuote[5];
+            valueInfo.id = rawParsedQuote[6];
           } else if ((match = valueInfo.key.match(quoteRegex))){
             let unescaped = valueInfo.key;
             do {
               unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
             } while ((match = unescaped.match(quoteRegex)));
             const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(unescaped);
-            valueInfo.key = rawParsedQuote[3];
-            valueInfo.altColumnName = rawParsedQuote[4];
-            valueInfo.id = rawParsedQuote[5];
+            valueInfo.key = rawParsedQuote[4];
+            valueInfo.altColumnName = rawParsedQuote[5];
+            valueInfo.id = rawParsedQuote[6];
           }
           if (valueInfo.isMulti && !valueInfo.altColumnName && valueInfo.id.indexOf("*") < 0) {
           // Implicity prefix match on item for "[N]x [item]"
@@ -1332,7 +1344,7 @@ namespace Status {
 
     getDirectPreReqInfos() {
       return {
-        [this.text]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row)
+        [this.valueInfo.key]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row)
       };
     }
 
@@ -1362,16 +1374,23 @@ namespace Status {
   }
 
   class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
+    static create(text:string, translator:StatusFormulaTranslator,row:row) {
+      let node:FormulaValueNode<boolean> = new BooleanFormulaValueNode(text, translator, row);
+      if (node.valueInfo.isSame) {
+        node = SameFormulaNode.create(text,translator,row);
+      }
+      return node;
+    }
     protected readonly formulaType: FormulaHelper = GTE;
     protected readonly children: NumberFormulaValueNode[];
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
       if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
         this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
       } else {
         // CHECKED > NEEDED
-        this.availableChild = new NumberFormulaValueNode(this.text,this.translator,this.row);
-        this.neededChild = new NumberFormulaValueNode(this.valueInfo.numNeeded,this.translator,this.row); 
+        this.availableChild = NumberFormulaValueNode.create(this.text,this.translator,this.row);
+        this.neededChild = NumberFormulaValueNode.create(this.valueInfo.numNeeded,this.translator,this.row); 
       }
     }
     get availableChild(): NumberFormulaValueNode {
@@ -1418,8 +1437,11 @@ namespace Status {
   }
 
   class NumberFormulaValueNode extends FormulaValueNode<number> implements NumberNode {
+    static create(text: string|number, translator:StatusFormulaTranslator,row:row) {
+      return new NumberFormulaValueNode(text,translator,row);
+    }
     protected readonly children: FormulaValueNode<never>[]
-    constructor(text: string|number, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text: string|number, translator:StatusFormulaTranslator,row:row) {
       super(text.toString(),translator,row);
       if (Number(this.text) || this.text === "0") {
         this.value = Number(this.text);
@@ -1539,11 +1561,21 @@ namespace Status {
         return ADD(...counts);
       }
     }
+
+    checkErrors() {
+      super.checkErrors();
+      if (this.valueInfo.isSame) {
+        this.addError("Cannot use SAME with Numerical Equations");
+      }
+    }
   }
 
   const usesInfo: {[x:string]:{[x:number]: number}} = {}; // TODO make checklist-aware
   class UsesFormulaNode extends BooleanFormulaValueNode {
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    static create(text:string, translator:StatusFormulaTranslator,row:row) {
+      return new UsesFormulaNode(text,translator,row);
+    }
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
       this.useInfo[this.row] = this.valueInfo.numNeeded;
     }
@@ -1601,7 +1633,10 @@ namespace Status {
   const choiceInfos:{[x:string]: choiceInfo} = {};
   const choiceRows:{[x:number]: row[]} = {};
   class OptionFormulaNode extends FormulaValueNode<boolean> {
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    static create(text:string, translator:StatusFormulaTranslator,row:row): FormulaNode<boolean> {
+      return new OptionFormulaNode(text,translator,row);
+    }
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
 
       this.choiceInfo.options.push(this.row);
@@ -1708,10 +1743,13 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
   }
 
   class MissedFormulaNode extends FormulaNode<boolean> {
-    constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    static create(text:string, translator:StatusFormulaTranslator,row:row) {
+      return new MissedFormulaNode(text,translator,row);
+    }
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
       this.formulaType = NOT;
-      this.child = new BooleanFormulaNode(this.text,this.translator,this.row);
+      this.child = BooleanFormulaNode.create(this.text,this.translator,this.row);
     } 
 
     toMissedFormula():string {
@@ -1733,13 +1771,16 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
 
   const linkedRows:{[x:number]: row} = {};
   class LinkedFormulaNode extends FormulaValueNode<boolean> implements RootNode {
+    static create(text:string, translator:StatusFormulaTranslator,row:row,isOnlyPreReq:boolean) {
+      return new LinkedFormulaNode(text,translator,row,isOnlyPreReq);
+    }
     readonly linkedRow:row
-    constructor(text:string, translator:StatusFormulaTranslator,row:row,isOnlyPreReq:boolean) {
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,isOnlyPreReq:boolean) {
       super(text,translator,row);
       if (!isOnlyPreReq) {
         this.addError("LINKED Items cannot have other Pre-Reqs");
       } else if (this.valueInfo.rowInfos.length != 1) {
-        this.addError("Must Link to a single Item");
+        this.addError("Must LINK to a single Item only");
       } else {
         this.linkedRow = this.valueInfo.rowInfos[0].row;
         linkedRows[this.row] = this.linkedRow;
@@ -1773,5 +1814,49 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     toUnknownFormula(): string {
       return CellFormulaParser.getParserForChecklistRow(this.translator,this.linkedRow).toUnknownFormula();
     }
+  }
+
+  class SameFormulaNode extends FormulaValueNode<boolean> {
+    static create(text:string, translator:StatusFormulaTranslator,row:row) {
+      Logger.log("same");
+      return new SameFormulaNode(text,translator,row);
+    }
+    private sameRow:row
+    private get sameRowParser():CellFormulaParser {return this.sameRow && CellFormulaParser.getParserForChecklistRow(this.translator,this.sameRow); }
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+      super(text,translator,row);
+      if (this.valueInfo.rowInfos.length != 1) {
+        this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
+      } else if (this.valueInfo.isMulti) {
+        this.addError("Cannot use SAME with Numerical Equations");
+      } else {
+        this.sameRow = this.valueInfo.rowInfos[0].row;
+      } 
+    }
+    
+    toAvailableFormula() {
+      return this.sameRowParser && this.sameRowParser.toAvailableFormula();
+    }
+
+    toErrorFormula() {
+      return this.sameRowParser && this.sameRowParser.toErrorFormula();
+    }
+
+    toMissedFormula() {
+      return this.sameRowParser && this.sameRowParser.toMissedFormula();
+    }
+
+    toPRUsedFormula() {
+      return this.sameRowParser && this.sameRowParser.toPRUsedFormula();
+    }
+
+    toRawMissedFormula() {
+      return this.sameRowParser && this.sameRowParser.toRawMissedFormula();
+    }
+
+    toUnknownFormula() {
+      return this.sameRowParser && this.sameRowParser.toUnknownFormula();
+    }
+    
   }
 }
