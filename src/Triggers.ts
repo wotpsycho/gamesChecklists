@@ -53,7 +53,7 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
     time("getCL");
     const checklist = ChecklistApp.getActiveChecklist();
     timeEnd("getCL");
-    
+
     if (range.getA1Notation() == "A1") {
       // Debug hacks
       switch (event.value){
@@ -138,7 +138,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createAddonMenu()
     .addItem("Refresh Sheet...", "ResetChecklist")
     .addItem("Sync With Meta Sheet", "ProcessMeta")
-    .addItem("Attach Triggers", "AttackTriggers")
+    .addItem("Attach Triggers", "AttachTriggers")
     .addToUi();
   timeEnd();
 }
