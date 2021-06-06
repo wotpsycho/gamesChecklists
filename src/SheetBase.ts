@@ -4,6 +4,7 @@ namespace ChecklistApp {
   
   export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
   export type Range = GoogleAppsScript.Spreadsheet.Range;
+  export type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
   export type Filter = GoogleAppsScript.Spreadsheet.Filter;
   export type Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
 
@@ -184,7 +185,7 @@ namespace ChecklistApp {
       let columnIndex:number;
       if (!Number(column)) {
         if (!this.columns[column] && !this.columnsByHeader[column]) {
-          if (_allowMissingColumn && this.namedColumns.includes(column as string)) {
+          if (_allowMissingColumn) {
             return undefined;
           } else {
             throw new SheetBase.ChecklistSheetError("Invalid column:" + column);
@@ -272,6 +273,12 @@ namespace ChecklistApp {
 
     getColumnDataValues = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):sheetValue[] => 
       this.getColumnDataRange(column, _startRow, _numRows).getValues().map(row => row[0]);
+
+    getColumnDataRichTextValues = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):RichTextValue[] => 
+      this.getColumnDataRange(column, _startRow, _numRows).getRichTextValues().map(row => row[0]);
+
+    getColumnDataFormulas = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):string[] => 
+      this.getColumnDataRange(column, _startRow, _numRows).getFormulas().map(row => row[0]);
     
 
     // getColumnDataRangeFromRange(column:column, range:Range):Range {

@@ -215,6 +215,7 @@ namespace ChecklistApp {
       return super.editable;
     }
     set editable(isEditable: boolean) {
+      const changed = this.editable != isEditable;
       super.editable = isEditable;
       if (!isEditable) {
         const editableRanges:Range[] = [];
@@ -231,6 +232,7 @@ namespace ChecklistApp {
         protection.setUnprotectedRanges(editableRanges);
       }
       this.meta && this.meta.setEditable(isEditable);
+      if (changed) this.resetDataValidation();
     }
     
     get settings(): Settings.ChecklistSettings {
@@ -506,7 +508,7 @@ namespace ChecklistApp {
         }
       } else if (!hasQuickFilter && show) {
         this.ensureRow(ROW.QUICK_FILTER);
-        const filterValueRange: Range & {getBackgroundObject?: () => GoogleAppsScript.Spreadsheet.Color} = this.getRowRange(ChecklistApp.ROW.QUICK_FILTER, 2);
+        const filterValueRange: Range = this.getRowRange(ROW.QUICK_FILTER, 2);
         const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString(); // Type not updated?
         // HACK lighten the color
         const r = parseInt(color.slice(1,3),16);
@@ -517,6 +519,9 @@ namespace ChecklistApp {
         const newB = Math.floor((b+255)/2);
         const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
         filterValueRange.setBackground(newColor);
+        Object.entries(this.meta.getColumnDataValidations()).forEach(([columnName, dataValidation]) => {
+          filterValueRange.getCell(1,this.toColumnIndex(columnName) - 1).setDataValidation(dataValidation);
+        });
       }
       if (!this.editable) {
         this.editable = false;
@@ -556,44 +561,56 @@ namespace ChecklistApp {
     
     // DATA VALIDATION UTILITIES
     removeValidations(): void {
+      const filter = this.filter;
+      if (filter) this.removeFilter();
       this.getRange(1,1,this.maxRows,this.maxColumns).setDataValidation(null);
+      if (filter) this.createFilter(filter);
     }
     
     resetDataValidation(_skipMeta: boolean = false): void {
       time("checklist resetDataValidation");
+      const filter = this.filter;
+      if (filter) this.removeFilter();
       const {FORMULA,COUNTIF,A1,CONCAT,VALUE,LT} = Formula;
       const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       checks.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
       // Set Item validation
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
-      const prettyPrint = Formula.togglePrettyPrint(false);
-      const itemDataValidationFormula = FORMULA(
-        LT(
-          COUNTIF(
-            A1(itemDataRange),
-            CONCAT(
-              VALUE("="),
-              A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true)
-            )
-          ),
-          VALUE(2)
-        )
-      );
-      Formula.togglePrettyPrint(prettyPrint);
-      const itemDataValidation = SpreadsheetApp.newDataValidation();
-      itemDataValidation.setAllowInvalid(true);
-      itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
-      itemDataRange.setDataValidation(itemDataValidation);
+      const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
+      if (this.editable) {
+        const prettyPrint = Formula.togglePrettyPrint(false);
+        const itemDataValidationFormula = FORMULA(
+          LT(
+            COUNTIF(
+              A1(itemDataRange),
+              CONCAT(
+                VALUE("="),
+                A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true)
+              )
+            ),
+            VALUE(2)
+          )
+        );
+        Formula.togglePrettyPrint(prettyPrint);
+        const itemDataValidation = SpreadsheetApp.newDataValidation();
+        itemDataValidation.setAllowInvalid(true);
+        itemDataValidation.requireFormulaSatisfied(itemDataValidationFormula);
+        itemDataRange.setDataValidation(itemDataValidation);
               
-      this.getUnboundedColumnDataRange(COLUMN.PRE_REQS).setDataValidation(SpreadsheetApp.newDataValidation()
-        .setAllowInvalid(true)
-        .requireValueInRange(itemDataRange,true)
-      );
+        preReqDataRange.setDataValidation(SpreadsheetApp.newDataValidation()
+          .setAllowInvalid(true)
+          .requireValueInRange(itemDataRange,true)
+        );
+      } else {
+        itemDataRange.clearDataValidations();
+        preReqDataRange.clearDataValidations();
+      }
               
               
       if (!_skipMeta && this.meta) {
         this.meta.updateChecklistDataValidation();
       }
+      if (filter) this.createFilter(filter);
       timeEnd("checklist resetDataValidation");
     }
     // END DATA VALIDATION UTILITIES

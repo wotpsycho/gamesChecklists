@@ -33,13 +33,14 @@ namespace ChecklistMeta {
   
   
   type columnMetadata = {
-    column: ChecklistApp.column;
+    column: number;
     range: Range;
     metaColumn: number;
     formatHeaders: string[];
     metaValueCells: {
       any: Range,
     };
+    metaValueLinks: {[x:string]: {[x:string]: string}}
     lastMetaRow: number;
     missingValues: {[x:string]:true};
     metaRange: Range;
@@ -86,15 +87,25 @@ namespace ChecklistMeta {
               });
             }
             const metaValueCells = {};
+            const metaValueLinks = {};
             const metaValueRange = this.getColumnDataRange(column);
             
             const metaValues = this.getColumnDataValues(column);
+            const metaRichTexts = this.getColumnDataRichTextValues(column);
             let lastRow = this.firstDataRow;
             for (let i = 0; i < metaValues.length; i++) {
               const metaValue = metaValues[i];
               if (metaValue) {
-                metaValueCells[metaValue.toString()] = metaValueRange.getCell(i+1,1);
+                const metaValueString = metaValue.toString();
+                metaValueCells[metaValueString] = metaValueRange.getCell(i+1,1);
                 lastRow = i+this.firstDataRow;
+                metaRichTexts[i].getRuns().forEach(richTextRun => {
+                  if (richTextRun.getLinkUrl()) {
+                    if (!metaValueLinks[metaValueString])
+                      metaValueLinks[metaValueString] = {};
+                    metaValueLinks[metaValue.toString()][richTextRun.getText()] = richTextRun.getLinkUrl();
+                  }
+                });
               } else {
                 break; // Don't allow empty spaces
               }
@@ -103,6 +114,7 @@ namespace ChecklistMeta {
               metaColumn: column,
               formatHeaders: formatColumns,
               metaValueCells: metaValueCells,
+              metaValueLinks: metaValueLinks,
               lastMetaRow: lastRow,
               missingValues: {},
               metaRange: this.getColumnDataRange(column,this.firstDataRow,lastRow-this.firstDataRow+1),
@@ -156,16 +168,17 @@ namespace ChecklistMeta {
     }
     
     syncWithChecklist(_toastTitle: string = "Syncing Metadata"): void {
-      this.checklist.toast("Syncing Metadata...",_toastTitle);
+      this.checklist.toast("Syncing Metadata...",_toastTitle,-1);
       this.updateChecklistDataValidation();
       this.updateWithMissingValues();
       this.updateChecklistConditionalFormatting();
+      this.updateChecklistLinks();
       this.checklist.toast("Done!", _toastTitle);
     }
-    
-    updateChecklistDataValidation(): void {
-      time("meta setChecklistDataValidation");
-      Object.values(this.columnMetadata).forEach((metadata) => {
+
+    getColumnDataValidations(): {[x:string]: GoogleAppsScript.Spreadsheet.DataValidation} {
+      const validations = {};
+      Object.entries(this.columnMetadata).forEach( ([columnName,metadata]) => {
         if (metadata.metaValueCells && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
           const valueChoices = Object.keys(metadata.metaValueCells);
           if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !valueChoices.includes(ChecklistApp.FINAL_ITEM_TYPE)) {
@@ -176,9 +189,34 @@ namespace ChecklistMeta {
             .requireValueInList(valueChoices, true)
             .setAllowInvalid(true)
             .build();
-          metadata.range.setDataValidation(rangeValidation);
+          validations[columnName] = rangeValidation;
         }
       });
+      return validations;
+    }
+    
+    updateChecklistDataValidation(): void {
+      time("meta setChecklistDataValidation");
+      const columnValidations = this.getColumnDataValidations();
+
+      const filter = this.checklist.filter;
+      if (filter) this.checklist.removeFilter();
+      
+      const quickFilterRange = this.checklist.getRowRange(ChecklistApp.ROW.QUICK_FILTER);
+      Object.entries(this.columnMetadata).forEach(([columnName,metadata]) => {
+        if (columnValidations[columnName]){
+          const rangeValidation = columnValidations[columnName];
+          if (this.checklist.editable) {
+            metadata.range.setDataValidation(rangeValidation);
+          } else {
+            metadata.range.clearDataValidations();
+          }
+          if (quickFilterRange) {
+            quickFilterRange.getCell(1,metadata.column).setDataValidation(rangeValidation);
+          }
+        }
+      });
+      if (filter) this.checklist.createFilter(filter);
       timeEnd("meta setChecklistDataValidation");
     }
     
@@ -221,13 +259,12 @@ namespace ChecklistMeta {
               const [background, color] = [cell.getBackground(), cell.getFontColor()];
               const isBold = cell.getFontWeight() == "bold";
               const isItalic = cell.getFontStyle() == "italic";
-              const isUnderline = cell.getFontLine() == "underline";
               const isStrikethrough = cell.getFontLine() == "line-through";
               const isBackgroundWhite = background === "#ffffff";
               const isTextBlack = color === "#000000";
               const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
               const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue}\\n|${cellValue}$)`)));
+              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue})`)));
               Formula.togglePrettyPrint(prettyPrint);
               ruleBuilder.whenFormulaSatisfied(formula);
               ruleBuilder.setRanges(formatRanges);
@@ -243,13 +280,11 @@ namespace ChecklistMeta {
               if (isItalic) {
                 ruleBuilder.setItalic(true);
               }
-              if (isUnderline) {
-                ruleBuilder.setUnderline(true);
-              } else if (isStrikethrough) {
+              if (isStrikethrough) {
                 ruleBuilder.setStrikethrough(true);
               }
               formulaToRuleMap[formula] = ruleBuilder.build();
-              if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isUnderline || isStrikethrough) {
+              if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isStrikethrough) {
                 // Don't add the rule if there is no change. Keep in formula to remove old settings.
                 if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
                 newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
@@ -295,6 +330,35 @@ namespace ChecklistMeta {
       
       this.checklist.sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
       timeEnd("meta setConditionalFormatRules");
+    }
+
+    updateChecklistLinks(): void {
+      time("meta updateChecklistLinks");
+      Object.values(this.columnMetadata).forEach((metadata) => {
+        
+        if (metadata.metaValueLinks && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && Object.keys(metadata.metaValueLinks).length) {
+          const values = metadata.range.getValues().map(rowValues => rowValues[0]);
+          const richTexts = new Array(values.length);
+          values.forEach((value,i) => {
+            const richText = SpreadsheetApp.newRichTextValue().setText(value);
+            
+            let lineIndex:number = -1;
+            value.toString().split(/(\r|\n)+/).forEach((line: string) => {
+              lineIndex = value.toString().indexOf(line,lineIndex+1);
+              if (metadata.metaValueLinks[line]) {
+                Object.entries(metadata.metaValueLinks[line]).forEach(([subText,link]) => {
+                  const subTextStart = value.indexOf(subText,lineIndex);
+                  richText.setLinkUrl(subTextStart, subTextStart + subText.length, link);
+                });
+              }
+            });
+            richTexts[i] = richText.build();
+          });
+          metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
+          metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor("black").build());
+        }
+      });
+      timeEnd("meta updateChecklistLinks");
     }
     
     setEditable(isEditable: boolean = true): void {
