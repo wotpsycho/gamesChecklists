@@ -1,5 +1,4 @@
-/*exported Cell */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/* exported ChecklistApp */
 namespace ChecklistApp {
   
   export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;

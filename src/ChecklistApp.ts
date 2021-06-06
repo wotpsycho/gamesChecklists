@@ -1,6 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/* exported ChecklistApp */
 namespace ChecklistApp {
-  // export import Cell = GoogleAppsScript.Spreadsheet.Range;
   export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
   export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
 

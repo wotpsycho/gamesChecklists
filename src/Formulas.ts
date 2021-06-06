@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/* exported Formula */
 namespace Formula {
   type Formula<T> = (...value:T[]) => string
   export type StringFormula = Formula<string>
