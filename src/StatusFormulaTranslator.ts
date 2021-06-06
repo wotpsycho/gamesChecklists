@@ -51,21 +51,21 @@ namespace Status {
   const LT  = FormulaHelper(Formula.LT , /^ *(.+?) *< *(.+?) *$/);
   const LTE = FormulaHelper(Formula.LTE, /^ *(.+?) *<= *(.+?) *$/);
     
-  const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) *\* *(.+?) *$/,true);
-  const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) *\/ *(.+?) *$/,true);
-  const MINUS = FormulaHelper(Formula.MINUS, /^ *(.+?) *- *(.+?) *$/,true);
-  const ADD   = FormulaHelper(Formula.ADD  , /^ *(.+?) *\+ *(.+?) *$/,true);
+  const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) +\* +(.+?) *$/,true);
+  const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) +\/ +(.+?) *$/,true);
+  const MINUS = FormulaHelper(Formula.MINUS, /^ *(.+?) +- +(.+?) *$/,true);
+  const ADD   = FormulaHelper(Formula.ADD  , /^ *(.+?) +\+ +(.+?) *$/,true);
   
   const {FORMULA,VALUE,IFS,IF,COUNTIF} = Formula;
 
 
-  const SPECIAL_PREFIXES:{[x:string]:string} = {
-    USES  : "USES",
-    MISSED: "MISSED",
-    CHOICE: "CHOICE", // DEPRECATED, alias for OPTION
-    OPTION: "OPTION",
-    LINKED: "LINKED",
-  };
+  enum SPECIAL_PREFIXES  {
+    USES   = "USES",
+    MISSED = "MISSED",
+    CHOICE = "CHOICE", // DEPRECATED, alias for OPTION
+    OPTION = "OPTION",
+    LINKED = "LINKED",
+  }
 
   export function getActiveChecklistTranslator(): StatusFormulaTranslator {
     return getTranslatorForChecklist(ChecklistApp.getActiveChecklist());
@@ -161,7 +161,7 @@ namespace Status {
       // will be overwriting these
       const statusFormulas:string[] = [];
       const notes:string[] = [];
-      const controlledCheckboxes:{checkboxCell:Range,itemCell:Range,notes:string[],checkHyperlink?:string}[] = [];
+      const controlledCheckboxes:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],checkHyperlink?:string}[] = [];
       const checkboxesToReset:Range[] = [];
 
       time("getDebugColumns");
@@ -220,7 +220,8 @@ namespace Status {
           }
         }
         if (checkboxControlledByInfos) {
-          const controlledData:{checkboxCell:Range,itemCell:Range,notes:string[],checkLink?:string} = {
+          const controlledData:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],checkLink?:string} = {
+            row: i+firstRow,
             checkboxCell: checkRange.getCell(i+1,1),
             itemCell: itemDataRange.getCell(i+1,1),
             notes: [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"],
@@ -266,7 +267,7 @@ namespace Status {
         timeEnd("setFormulasIndividual");
 
         time("resetItemUnderlineItalics");
-        itemDataRange.setFontStyle("normal").setFontLine("none");
+        itemDataRange.setFontStyle("normal").setFontLine("none").setFontWeight("normal");
         timeEnd("resetItemUnderlineItalics");
 
         time("underlineRequiredItem");
@@ -276,7 +277,7 @@ namespace Status {
           finalItems.forEach(finalItem => {
             CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
           });
-          dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontLine("underline")));
+          dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontWeight("bold")));
         }
         timeEnd("underlineRequiredItem");
         
@@ -285,10 +286,13 @@ namespace Status {
           controlledCheckbox.checkboxCell.clearDataValidations();
           controlledCheckbox.itemCell.setFontStyle("italic");
           if (controlledCheckbox.checkHyperlink) {
-            controlledCheckbox.checkboxCell.setFormula(FORMULA(controlledCheckbox.checkHyperlink));
-          } else {
+            const formula = FORMULA(controlledCheckbox.checkHyperlink);
+            if (checkboxFormulas[controlledCheckbox.row - firstRow][0] !== formula) {
+              controlledCheckbox.checkboxCell.setFormula(formula);
+            }
+          } else if(checkboxFormulas[controlledCheckbox.row - firstRow][0] || checkboxValues[controlledCheckbox.row - firstRow][0] || checkboxValues[controlledCheckbox.row - firstRow][0] === false) {
             controlledCheckbox.checkboxCell.clearContent();
-          }          
+          }
           controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
         });
         timeEnd("controlledRows");
@@ -324,7 +328,7 @@ namespace Status {
       try {
         const preReqRichTexts = [];
         time("addLinks flush");
-        this.checklist.flush();
+        // this.checklist.flush();
         timeEnd("addLinks flush");
         time("addLinks getRange");
         const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
@@ -368,14 +372,14 @@ namespace Status {
           .setItalic(false)
           .setUnderline(false)
           .setStrikethrough(false)
-          .setForegroundColor(null)
+          .setForegroundColor("black")
           .build());
         timeEnd("preReqTextStyle");
         time("setRichText");
         preReqRange.setRichTextValues(preReqRichTexts.map(richText => [richText]));
         timeEnd("setRichText");
         time("endFlush");
-        this.checklist.flush();
+        // this.checklist.flush();
         timeEnd("endFlush");
       } finally {
         timeEnd("addLinksToPreReqs");
@@ -397,8 +401,8 @@ namespace Status {
         const rowValues:{[x:string]: sheetValueInfo} = {};
         value.toString().split(/(\r|\n)+/).forEach(value => {
           const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
-          const numReceived:number = Number(rawParsed[1] || rawParsed[2] || 1);
-          const rowSubValue = rawParsed[4];
+          const numReceived:number = Number(rawParsed[1] || rawParsed[6] || 1);
+          const rowSubValue = rawParsed[3];
           const valueInfo: sheetValueInfo = {
             num: numReceived,
             value: rowSubValue,
@@ -522,7 +526,7 @@ namespace Status {
 
 
   // Essentially static defs
-  const PARSE_REGEX:RegExp = /^ *(?:(\d+)x|x(\d+) +)? *((?:SAME|COPY) )? *((?:(.*)!)?([^ ].*?)) *$/;
+  const PARSE_REGEX:RegExp = /^ *(?:(\+?\d+)x )? *(?:(SAME|COPY) )? *((?:(.*)!)?([^ ].*?)) *(?: x(\+?\d+))? *$/;
   let UID_Counter:number = 0;
   const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
   const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
@@ -551,7 +555,7 @@ namespace Status {
       this.preReqText = cellValue.toString();
 
       const lines:string[] = [];
-      this.preReqText.split(/ *[\n;] */).forEach((line:string,i:number) => {
+      this.preReqText.split(/[\n;]/).forEach((line:string,i:number) => {
         if (i > 0 && line.indexOf("...") === 0) {
           lines[lines.length-1] += line.substring(3);
         } else {
@@ -559,6 +563,7 @@ namespace Status {
         }
       });
 
+      let linkedNode:LinkedFormulaNode;
       const children: FormulaNode<boolean>[] = [];
       for (let j:number = 0; j < lines.length; j++) {
         let line:string = lines[j].trim();
@@ -597,17 +602,20 @@ namespace Status {
               childFormulaNode = OptionFormulaNode.create(content,this.translator,row);
               break;
             case SPECIAL_PREFIXES.LINKED.toUpperCase():
-              this.rootNode = LinkedFormulaNode.create(content,this.translator,row,lines.length == 1);
-              children.push(this.rootNode);
+              childFormulaNode = linkedNode = LinkedFormulaNode.create(content,this.translator,row,lines.length == 1);
               // LINKED is ONLY one allowed, will handle ERROR messaging if others present
-              return;
+              break;
           }
         } else {
           childFormulaNode = BooleanFormulaNode.create(line,this.translator,row);
         }
         children.push(childFormulaNode);
       }
-      this.rootNode = new BooleanRootNode(children,this.translator,row);
+      if (linkedNode) {
+        this.rootNode = linkedNode;
+      } else {
+        this.rootNode = new BooleanRootNode(children,this.translator,row);
+      }
     }
 
     toFormula():string {
@@ -713,9 +721,6 @@ namespace Status {
 
       if (parentheticalMapping[this.text]) {
         this.text = parentheticalMapping[this.text];
-      }
-      if (quoteMapping[text]) {
-        this.text = quoteMapping[text];
       }
     }
 
@@ -1232,12 +1237,12 @@ namespace Status {
         const rawParsed: RegExpExecArray = PARSE_REGEX.exec(text);
         if (rawParsed) {
           valueInfo = {
-            numNeeded: Number(rawParsed[1] || rawParsed[2] || 1),
-            isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[2]) > 0 || rawParsed[6].indexOf("*") >= 0),
-            isSame: !!rawParsed[3],
-            key: rawParsed[4],
-            altColumnName: rawParsed[5],
-            id: rawParsed[6],
+            numNeeded: Number(rawParsed[1] || rawParsed[6] || 1),
+            isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[6]) > 0 || rawParsed[5].indexOf("*") >= 0),
+            isSame: !!rawParsed[2],
+            key: rawParsed[3],
+            altColumnName: rawParsed[4],
+            id: rawParsed[5],
             original: text,
             rowInfos: [],
             numPossible: undefined,
@@ -1245,24 +1250,33 @@ namespace Status {
           let match:RegExpMatchArray;
           if (quoteMapping[valueInfo.key]) {
             const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(quoteMapping[valueInfo.key]);
-            valueInfo.key = rawParsedQuote[4];
-            valueInfo.altColumnName = rawParsedQuote[5];
-            valueInfo.id = rawParsedQuote[6];
+            valueInfo.key = rawParsedQuote[3];
+            valueInfo.altColumnName = rawParsedQuote[4];
+            valueInfo.id = rawParsedQuote[5];
           } else if ((match = valueInfo.key.match(quoteRegex))){
             let unescaped = valueInfo.key;
             do {
               unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
             } while ((match = unescaped.match(quoteRegex)));
             const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(unescaped);
-            valueInfo.key = rawParsedQuote[4];
-            valueInfo.altColumnName = rawParsedQuote[5];
-            valueInfo.id = rawParsedQuote[6];
+            valueInfo.key = rawParsedQuote[3];
+            valueInfo.altColumnName = rawParsedQuote[4];
+            valueInfo.id = rawParsedQuote[5];
           }
           if (valueInfo.isMulti && !valueInfo.altColumnName && valueInfo.id.indexOf("*") < 0) {
           // Implicity prefix match on item for "[N]x [item]"
             valueInfo.id += "*";
           }
-          const columnInfo:columnValues = this.translator.getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
+          let originalMulti:string;
+          let columnInfo:columnValues = this.translator.getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
+          
+          if (!columnInfo) {
+            // Assume that "!" was NOT trying to reference a different column
+            columnInfo = this.translator.getColumnValues(COLUMN.ITEM);
+            originalMulti = valueInfo.altColumnName;
+            valueInfo.id = `${valueInfo.altColumnName}!${valueInfo.id}`;
+            valueInfo.altColumnName = undefined;
+          }
           if (columnInfo) {
             if (valueInfo.id.indexOf("*") < 0) {
               if (columnInfo.byValue[valueInfo.id]) {
@@ -1277,8 +1291,10 @@ namespace Status {
               });
             }
 
-          } else {
-            this.addError(`Could not find column "${valueInfo.altColumnName}"`);
+          }
+          if (originalMulti && valueInfo.rowInfos.length == 0) {
+            // Had a "!" where LHS did not match column and did not match item
+            this.addError(`Could not find column "${originalMulti}"`);
           }
           valueInfo.numPossible = valueInfo.rowInfos.reduce((total, rowInfo) => total + rowInfo.num, 0);
 
@@ -1310,7 +1326,6 @@ namespace Status {
           }
         }
       }
-
       return valueInfo;
     }
 
@@ -1461,6 +1476,7 @@ namespace Status {
     }
 
     toFormulaByNotStatus(...statuses:STATUS[]) {
+      if (this.hasValue()) return VALUE(this.value);
       return MINUS(this.toTotalFormula(), this.toFormulaByStatus(...statuses));
     }
 
@@ -1818,7 +1834,6 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
 
   class SameFormulaNode extends FormulaValueNode<boolean> {
     static create(text:string, translator:StatusFormulaTranslator,row:row) {
-      Logger.log("same");
       return new SameFormulaNode(text,translator,row);
     }
     private sameRow:row
