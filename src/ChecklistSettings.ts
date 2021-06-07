@@ -26,6 +26,7 @@ namespace Settings {
       AVAILABLE: "Available",
       REMAINING: "Remaining",
       CHECKED  : "Completed",
+      MISSED   : "Missed",
     },
     [SETTING.NOTES]       : {
       HIDE: "Hover Only",
@@ -74,6 +75,13 @@ namespace Settings {
     //   [SETTING_OPTIONS[SETTING.MODE].EDIT]   : "All items and columns are shown and editable, useful for fixing errors",
     //   [SETTING_OPTIONS[SETTING.MODE].CREATE] : `Mix of ${MODE.DYNAMIC} and ${MODE.EDIT}, only available items are shown and can edit/add new items`,
     // },
+    [SETTING.STATUS]: {
+      [SETTING_OPTIONS[SETTING.STATUS].ALL] : "All Items",
+      [SETTING_OPTIONS[SETTING.STATUS].AVAILABLE] : "Items with Pre-Reqs met",
+      [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items not yet Completed; Pre-Reqs may or may not be met",
+      [SETTING_OPTIONS[SETTING.STATUS].CHECKED] : "Completed Items",
+      [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items (Red Pre-Reqs Background), Options not Chosen (Purple BG), and Items which may or may not become available (unknown due to circular Pre-Reqs, Yellow BG)",
+    },
     [SETTING.ACTION]: {
       [SETTING_OPTIONS[SETTING.ACTION].REFRESH]     : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
       [SETTING_OPTIONS[SETTING.ACTION].META]        : "Formatting and dropdowns from Meta to Checklist, new values added to Meta for formatting",
@@ -401,12 +409,13 @@ namespace Settings {
 
   class StatusColumnFilterSetting extends ColumnFilterSetting {
     constructor(settings: ChecklistSettings,_initialValue: string = undefined) {
-      const {AVAILABLE,ALL,REMAINING,CHECKED} = SETTING_OPTIONS[SETTING.STATUS];
+      const {AVAILABLE,ALL,REMAINING,CHECKED,MISSED} = SETTING_OPTIONS[SETTING.STATUS];
       const optionToHiddenValues = {
         [ALL]      : [],
         [AVAILABLE]: [STATUS.CHECKED,STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN],
-        [REMAINING]: [STATUS.CHECKED,STATUS.MISSED,STATUS.PR_USED],
-        [CHECKED]  : [STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN,STATUS.AVAILABLE],
+        [REMAINING]: [STATUS.CHECKED,STATUS.MISSED,                  STATUS.PR_USED],
+        [CHECKED]  : [               STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN,STATUS.AVAILABLE],
+        [MISSED]   : [STATUS.CHECKED,              STATUS.PR_NOT_MET,                              STATUS.AVAILABLE],
       };
 
       super(settings,SETTING.STATUS,COLUMN.STATUS,optionToHiddenValues,_initialValue);
