@@ -328,7 +328,6 @@ namespace ChecklistApp {
     
     resetSettings(oldSettings:{[x in Settings.SETTING]: string}): void {
       this.setSettings(oldSettings);
-      this.settings.populateSettingsDropdowns();
     }
     
     // END Settings Section
@@ -402,6 +401,11 @@ namespace ChecklistApp {
       if (_resetData) {
         this.resetCheckmarks();
       }
+
+      // Add settings dropdowns early in case of timeout (for retries)
+      time("settingsDropdowns");
+      this.settings.populateSettingsDropdowns();
+      timeEnd("settingsDropdowns");
       
       // Update all notes
       time("notes");
@@ -437,7 +441,7 @@ namespace ChecklistApp {
       time("totals");
       this.ensureTotalFormula();
       timeEnd("totals");
-      
+
       time("settings");
       this.resetSettings(previousSettings);
       timeEnd("settings");
