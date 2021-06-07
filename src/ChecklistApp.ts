@@ -669,7 +669,7 @@ namespace ChecklistApp {
           NE(relativeStatusCell,VALUE(STATUS.AVAILABLE))
         )
       );
-      const crossthroughCheckedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
+      const checkedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
       const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
       const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^(INFO|NOTE)")));
       const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^WARN")));
@@ -698,13 +698,18 @@ namespace ChecklistApp {
       notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
       notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
                             
-      const crossthroughCheckedRule = SpreadsheetApp.newConditionalFormatRule();
-      crossthroughCheckedRule.setStrikethrough(true);
-      crossthroughCheckedRule.setBackground(COLOR.CHECKED_BG);
-      crossthroughCheckedRule.setFontColor(COLOR.CHECKED_TEXT);
-      crossthroughCheckedRule.whenFormulaSatisfied(crossthroughCheckedFormula);
-      crossthroughCheckedRule.setRanges([allDataRange]);
+      const checkedCrossthroughRule = SpreadsheetApp.newConditionalFormatRule();
+      checkedCrossthroughRule.setStrikethrough(true);
+      checkedCrossthroughRule.setBackground(COLOR.CHECKED_BG);
+      checkedCrossthroughRule.setFontColor(COLOR.CHECKED_TEXT);
+      checkedCrossthroughRule.whenFormulaSatisfied(checkedFormula);
+      checkedCrossthroughRule.setRanges([itemDataRange]);
                             
+      const checkedBGRule = SpreadsheetApp.newConditionalFormatRule();
+      checkedBGRule.setBackground(COLOR.CHECKED_BG);
+      checkedBGRule.setFontColor(COLOR.CHECKED_TEXT);
+      checkedBGRule.whenFormulaSatisfied(checkedFormula);
+      checkedBGRule.setRanges([allDataRange]);
                             
       const checkboxDisableRule = SpreadsheetApp.newConditionalFormatRule();
       checkboxDisableRule.setBackground(COLOR.DISABLED);
@@ -732,7 +737,8 @@ namespace ChecklistApp {
                             
       this.sheet.setConditionalFormatRules([
         availableErrorRule,
-        crossthroughCheckedRule,
+        checkedCrossthroughRule,
+        checkedBGRule,
         checkboxDisableRule,
         missedRule,
         usedRule,
