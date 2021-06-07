@@ -641,9 +641,12 @@ namespace Settings {
 
     execute() {
       time("toggleQuickFilter");
-      this.settings.checklist.toast("Toggling Quick Filter...",-1);
-      this.settings.checklist.toggleQuickFilterRow(this.enabled);
-      this.settings.checklist.toast(`Quick Filter ${typeof this.enabled == "undefined" ? "Toggled" : this.enabled ? "Enabled" : "Disabled"}`);
+      const hasQuickFilter = this.settings.checklist.hasRow(ROW.QUICK_FILTER);
+      if ((this.enabled === true && !hasQuickFilter) || (this.enabled === false && hasQuickFilter) || (typeof this.enabled == "undefined")) {
+        this.settings.checklist.toast("Toggling Quick Filter...",-1);
+        this.settings.checklist.toggleQuickFilterRow(this.enabled);
+        this.settings.checklist.toast(`Quick Filter ${typeof this.enabled == "undefined" ? "Toggled" : this.enabled ? "Enabled" : "Disabled"}`);
+      }
       timeEnd("toggleQuickFilter");
     }
   }
