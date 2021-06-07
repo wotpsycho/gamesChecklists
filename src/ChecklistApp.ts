@@ -231,7 +231,7 @@ namespace ChecklistApp {
         protection.setUnprotectedRanges(editableRanges);
       }
       this.meta && this.meta.setEditable(isEditable);
-      if (changed) this.resetDataValidation();
+      if (changed) this.resetEditingDataValidations();
     }
     
     get settings(): Settings.ChecklistSettings {
@@ -313,14 +313,22 @@ namespace ChecklistApp {
     getSetting(setting: Settings.SETTING): string {
       return this.settings.getSetting(setting);
     }
+
+    getSettings(): {[x in Settings.SETTING]: string} {
+      return this.settings.getSettings();
+    }
     
     setSetting(setting: Settings.SETTING, value: string): void {
       this.settings.setSetting(setting, value);
     }
+
+    setSettings(settings: {[x in Settings.SETTING]: string}):void {
+      this.settings.setSettings(settings);
+    }
     
-    resetSetting(_oldMode: string): void {
-      this.setSetting(Settings.SETTING.MODE,_oldMode);
-      this.settings.setDataValidation();
+    resetSettings(oldSettings:{[x in Settings.SETTING]: string}): void {
+      this.setSettings(oldSettings);
+      this.settings.populateSettingsDropdowns();
     }
     
     // END Settings Section
@@ -347,7 +355,7 @@ namespace ChecklistApp {
       
       const toastTitle = `${type} Checklist`;
       const toastMessage = `${type}...`;
-      const previousMode = this.getSetting(Settings.SETTING.MODE); // Preserve mode
+      const previousSettings = this.getSettings(); // Preserve settings
       
       this.toast(toastMessage, toastTitle, -1);
       Logger.log(`${type} checklist "${this.sheet.getName()}"`);
@@ -431,7 +439,7 @@ namespace ChecklistApp {
       timeEnd("totals");
       
       time("settings");
-      this.resetSetting(previousMode);
+      this.resetSettings(previousSettings);
       timeEnd("settings");
       
       this.toast("Done!", toastTitle,5);
@@ -570,9 +578,17 @@ namespace ChecklistApp {
       time("checklist resetDataValidation");
       const filter = this.filter;
       if (filter) this.removeFilter();
-      const {FORMULA,COUNTIF,A1,CONCAT,VALUE,LT} = Formula;
       const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       checks.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+      this.resetEditingDataValidations(_skipMeta);
+      if (filter) this.createFilter(filter);
+      timeEnd("checklist resetDataValidation");
+    }
+
+    resetEditingDataValidations(_skipMeta = false): void {
+      const filter = this.filter;
+      if (filter) this.removeFilter();
+      const {FORMULA,COUNTIF,A1,CONCAT,VALUE,LT} = Formula;
       // Set Item validation
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
       const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
@@ -610,7 +626,6 @@ namespace ChecklistApp {
         this.meta.updateChecklistDataValidation();
       }
       if (filter) this.createFilter(filter);
-      timeEnd("checklist resetDataValidation");
     }
     // END DATA VALIDATION UTILITIES
             
