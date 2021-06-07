@@ -77,10 +77,10 @@ namespace Settings {
     // },
     [SETTING.STATUS]: {
       [SETTING_OPTIONS[SETTING.STATUS].ALL] : "All Items",
-      [SETTING_OPTIONS[SETTING.STATUS].AVAILABLE] : "Items with Pre-Reqs met",
-      [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items not yet Completed; Pre-Reqs may or may not be met",
       [SETTING_OPTIONS[SETTING.STATUS].CHECKED] : "Completed Items",
-      [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items (Red Pre-Reqs Background), Options not Chosen (Purple BG), and Items which may or may not become available (unknown due to circular Pre-Reqs, Yellow BG)",
+      [SETTING_OPTIONS[SETTING.STATUS].AVAILABLE] : "Items with Pre-Reqs Completed",
+      [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items with Pre-Reqs Completed, or Pre-Reqs that may yet be Completed",
+      [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items [Red], Items not Chosen (and dependent Items) [Purple], and Items which may or may not become Available (Unknown due to circular dependency in Pre-Reqs) [Orange Pre-Reqs]",
     },
     [SETTING.ACTION]: {
       [SETTING_OPTIONS[SETTING.ACTION].REFRESH]     : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
@@ -200,7 +200,7 @@ namespace Settings {
       cell.setValue(`${setting}: ${this.getSetting(setting)}`);
       cell.setDataValidation(SpreadsheetApp.newDataValidation().setAllowInvalid(false).requireValueInList(Object.values(this.settings[setting].options).map(option => `${setting}: ${option}`),true));
       const notes = Object.entries(this.settings[setting].descriptions).reduce((notes,[option, description]) => {
-        if (description) notes.push(`•${option}: ${description}`);
+        if (description) notes.push(`• ${option}: ${description}`);
         return notes;
       },[]);
       if (notes.length) cell.setNote(notes.join("\n"));
