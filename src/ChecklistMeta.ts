@@ -23,7 +23,7 @@ namespace ChecklistMeta {
     return checklist && checklist.meta;
   }
   
-  export function promptMetaSheetCreate(checklist: { name: string; createMetaSheet: (arg0: string) => void; }, title: string = "Meta Sheet Create"): void {
+  export function promptMetaSheetCreate(checklist: ChecklistApp.Checklist, title: string = "Meta Sheet Create"): void {
     const ui = SpreadsheetApp.getUi();
     const defaultMetaSheetName = checklist.name + " Meta";
     const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
@@ -297,7 +297,7 @@ namespace ChecklistMeta {
                 .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${ChecklistApp.FINAL_ITEM_TYPE}\\n|${ChecklistApp.FINAL_ITEM_TYPE}$)`))))
                 .setBackground("#0000FF")
                 .setFontColor("#FFFFFF")
-                .setUnderline(true)
+                .setBold(true)
                 .setRanges(formatRanges)
                 .build()
               );
@@ -335,7 +335,7 @@ namespace ChecklistMeta {
     updateChecklistLinks(): void {
       time("meta updateChecklistLinks");
       Object.values(this.columnMetadata).forEach((metadata) => {
-        
+        metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setUnderline(false).build());
         if (metadata.metaValueLinks && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && Object.keys(metadata.metaValueLinks).length) {
           const values = metadata.range.getValues().map(rowValues => rowValues[0]);
           const richTexts = new Array(values.length);
@@ -372,8 +372,13 @@ namespace ChecklistMeta {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/* exported ProcessMeta */
 function ProcessMeta(): void {
   const meta = ChecklistMeta.getFromActiveChecklist(true);
   meta && meta.syncWithChecklist();
+}
+
+/* exported CreateMetaSheet */
+function CreateMetaSheet(): void {
+  ChecklistMeta.promptMetaSheetCreate(ChecklistApp.getActiveChecklist());
 }

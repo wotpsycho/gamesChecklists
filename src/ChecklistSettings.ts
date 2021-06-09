@@ -50,10 +50,10 @@ namespace Settings {
     },
     [SETTING.ACTION]      : {
       NONE        : "...",
+      QUICK_FILTER: "Toggle Quick Filter",
+      RESET       : "Reset",
       REFRESH     : "Refresh Checklist",
       META        : "Sync Meta",
-      QUICK_FILTER: "Toggle Quick Filter",
-      RESET       : "RESET",
     }
   };
 
@@ -79,14 +79,14 @@ namespace Settings {
       [SETTING_OPTIONS[SETTING.STATUS].ALL] : "All Items",
       [SETTING_OPTIONS[SETTING.STATUS].CHECKED] : "Completed Items",
       [SETTING_OPTIONS[SETTING.STATUS].AVAILABLE] : "Items with Pre-Reqs Completed",
-      [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items with Pre-Reqs Completed, or Pre-Reqs that may yet be Completed",
-      [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items [Red], Items not Chosen (and dependent Items) [Purple], and Items which may or may not become Available (Unknown due to circular dependency in Pre-Reqs) [Orange Pre-Reqs]",
+      [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items with Pre-Reqs Completed, or with Pre-Reqs that may yet be Completed",
+      [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items [Red], Not Chosen Items [Purple], and Unknown due to circular Pre-Reqs Items [Orange Pre-Reqs] (and their dependents)",
     },
     [SETTING.ACTION]: {
       [SETTING_OPTIONS[SETTING.ACTION].REFRESH]     : "Refresh the Checklist, resetting any formatting, filtering, and visibility changes",
       [SETTING_OPTIONS[SETTING.ACTION].META]        : "Formatting and dropdowns from Meta to Checklist, new values added to Meta for formatting",
       [SETTING_OPTIONS[SETTING.ACTION].QUICK_FILTER]: "Turn Quick Filter row On or Off",
-      [SETTING_OPTIONS[SETTING.ACTION].RESET]       : "Reset checkmarks for the Checklist after prompt",
+      [SETTING_OPTIONS[SETTING.ACTION].RESET]       : "Uncheck all Items (after prompt)",
     },
   };
 
@@ -165,9 +165,9 @@ namespace Settings {
           const [,setting,value] = event.value.match(SETTING_REGEX) || [];
           const [,oldSetting,oldValue] = event.oldValue.match(SETTING_REGEX) || [null,"[Unknown]","[Unknown]"];
           if (setting) {
-            this.checklist.toast(`Changing "${setting}": "${oldValue}" -> "${value}"...`,"Settings", -1);
+            if (setting != SETTING.ACTION) this.checklist.toast(`Changing "${setting}": "${oldValue}" -> "${value}"...`,"Settings", -1);
             this.setSetting(setting as SETTING,value);
-            this.checklist.toast("Done!","Settings");
+            if (setting != SETTING.ACTION) this.checklist.toast("Done!","Settings");
             if (setting == oldSetting) {
               return; // was a dropdown change, we're done; otherwise, was a manual change so want to update the settings row
             }
@@ -481,7 +481,7 @@ namespace Settings {
   class ChecklistActions extends ChecklistSetting {
     constructor(settings: ChecklistSettings) {
     // const {NONE,REFRESH,META,RESET} = SETTING_OPTIONS[SETTING.ACTION];
-      const {NONE,REFRESH,META,QUICK_FILTER} = SETTING_OPTIONS[SETTING.ACTION];
+      const {NONE,REFRESH,META,QUICK_FILTER,RESET} = SETTING_OPTIONS[SETTING.ACTION];
       const setNoneAction = new SetSettingAction(settings,SETTING.ACTION, NONE);
       const refreshAction = new class extends SettingAction{
         execute() {
@@ -494,18 +494,25 @@ namespace Settings {
           if (this.settings.checklist.meta) this.settings.checklist.syncMeta();
         }
       }(settings);
-      // const resetAction = new class extends SettingAction {
-      //   execute() {
-        
-      //     // const response = Che
-      //   }
-      // };
+      const resetAction = new class extends SettingAction {
+        execute() {
+          const ui = SpreadsheetApp.getUi();
+          const result = ui.prompt("Reset Checklist","Enter \"Reset\" to Uncheck all Items in the Checklist:", ui.ButtonSet.OK_CANCEL);
+          if (result.getSelectedButton() == ui.Button.OK && result.getResponseText().toUpperCase() == "RESET") {
+            this.settings.checklist.toast("Resetting Checklist", "Unchecking...", -1);
+            this.settings.checklist.resetCheckmarks();
+            this.settings.checklist.refreshFilter();
+            this.settings.checklist.toast("Resetting Checklist", "Done!");
+          }
+        }
+      }(settings);
       const descriptions = DESCRIPTIONS[SETTING.ACTION] || {};
       const options = {
         [NONE]   : new SettingOption(NONE   , []                           , descriptions[NONE]),
+        [QUICK_FILTER]: new SettingOption(QUICK_FILTER, [setNoneAction,new ToggleQuickFilterAction(settings)], descriptions[QUICK_FILTER]),
+        [RESET]  : new SettingOption(RESET, [setNoneAction,resetAction], descriptions[RESET]),
         [REFRESH]: new SettingOption(REFRESH, [setNoneAction,refreshAction], descriptions[REFRESH]),
         [META]   : new SettingOption(META   , [setNoneAction,metaAction], descriptions[META]),
-        [QUICK_FILTER]: new SettingOption(QUICK_FILTER, [setNoneAction,new ToggleQuickFilterAction(settings)], descriptions[QUICK_FILTER])
       };
       super(settings,SETTING.ACTION,options);
     }

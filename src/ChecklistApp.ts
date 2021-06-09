@@ -273,7 +273,7 @@ namespace ChecklistApp {
       timeEnd("updateSettings");
       
       time("populateAvailable");
-      if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range)) {
+      if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
         Status.validateAndGenerateStatusFormulasForChecklist(this);
         Status.addLinksToPreReqs(this, range.getRowIndex(), range.getLastRow());
       }
@@ -563,7 +563,7 @@ namespace ChecklistApp {
     // END STRUCTURE UTILITIES
     
     resetCheckmarks(): void {
-      this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(() => false));
+      this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(value => Formula.VALUE(value) == Formula.VALUE.TRUE ? false : value));
     }
     
     removeNotes(): void {

@@ -139,6 +139,7 @@ function onOpen() {
     .addItem("Refresh Sheet...", "ResetChecklist")
     .addItem("Sync With Meta Sheet", "ProcessMeta")
     .addItem("Attach Triggers", "AttachTriggers")
+    .addItem("Create Meta Sheet","CreateMetaSheet")
     .addToUi();
   timeEnd();
 }
