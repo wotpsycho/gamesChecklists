@@ -148,9 +148,6 @@ namespace Status {
       time("getStatusValues statusFormulas");
       const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
       timeEnd("getStatusValues statusFormulas");
-      time("getStatusValues checkValues");
-      const checkboxValues:unknown[][] = checkRange.getValues();
-      timeEnd("getStatusValues checkValues");
       time("getStatusValues checkFormulas");
       const checkboxFormulas:string[][] = checkRange.getFormulas();
       timeEnd("getStatusValues checkFormulas", "getStatusValues");
@@ -162,7 +159,6 @@ namespace Status {
       const statusFormulas:string[] = [];
       const notes:string[] = [];
       const controlledCheckboxes:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],checkHyperlink?:string}[] = [];
-      const checkboxesToReset:Range[] = [];
 
       time("getDebugColumns");
       const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
@@ -242,8 +238,6 @@ namespace Status {
             );
           }
           controlledCheckboxes.push(controlledData);
-        } else if (checkboxFormulas[i][0] || (VALUE(checkboxValues[i][0] as string) != VALUE.TRUE && VALUE(checkboxValues[i][0] as string) != VALUE.FALSE)) {
-          checkboxesToReset.push(checkRange.getCell(i+1,1));
         }
         if (hasDebugColumns) {
           timeEnd("debug generateFormula row"+(i+firstRow)); // Only report this timing if debug columns present
@@ -281,6 +275,10 @@ namespace Status {
         }
         timeEnd("underlineRequiredItem");
         
+        time("resetCheckboxes");
+        checkRange.clearNote().setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+        timeEnd("resetCheckboxes");
+
         time("controlledRows");
         controlledCheckboxes.forEach(controlledCheckbox => {
           controlledCheckbox.checkboxCell.clearDataValidations();
@@ -290,20 +288,12 @@ namespace Status {
             if (checkboxFormulas[controlledCheckbox.row - firstRow][0] !== formula) {
               controlledCheckbox.checkboxCell.setFormula(formula);
             }
-          } else if(checkboxFormulas[controlledCheckbox.row - firstRow][0] || checkboxValues[controlledCheckbox.row - firstRow][0] || checkboxValues[controlledCheckbox.row - firstRow][0] === false) {
+          } else { 
             controlledCheckbox.checkboxCell.clearContent();
           }
           controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
         });
         timeEnd("controlledRows");
-
-        time("resetUnControlledRows");
-        checkboxesToReset.forEach(checkboxCell => {
-          checkboxCell.setValue(VALUE.FALSE);
-          checkboxCell.clearNote();
-          checkboxCell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
-        });
-        timeEnd("resetUnControlledRows");
 
         time("setNotes");
         preReqRange.setNotes(notes.map(note => [note]));
@@ -1586,7 +1576,9 @@ namespace Status {
     }
   }
 
-  const usesInfo: {[x:string]:{[x:number]: number}} = {}; // TODO make checklist-aware
+  type useInfo = {[x:number]: number}
+  type usesInfo = {[x:string]: useInfo}
+  const usesInfo:usesInfo = {}; // TODO make checklist-aware
   class UsesFormulaNode extends BooleanFormulaValueNode {
     static create(text:string, translator:StatusFormulaTranslator,row:row) {
       return new UsesFormulaNode(text,translator,row);
@@ -1596,7 +1588,7 @@ namespace Status {
       this.useInfo[this.row] = this.valueInfo.numNeeded;
     }
 
-    get useInfo(): {[x:number]:number} {
+    get useInfo():useInfo {
       if (!usesInfo[this.valueInfo.key]) {
         usesInfo[this.valueInfo.key] = {};
       }
