@@ -530,6 +530,7 @@ namespace ChecklistApp {
         const newB = Math.floor((b+255)/2);
         const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
         filterValueRange.setBackground(newColor);
+        this.sheet.setRowHeight(filterValueRange.getRow(), this.sheet.getRowHeight(this.toRowIndex(ROW.SETTINGS)));
         Object.entries(this.meta.getColumnDataValidations()).forEach(([columnName, dataValidation]) => {
           filterValueRange.getCell(1,this.toColumnIndex(columnName) - 1).setDataValidation(dataValidation);
         });
