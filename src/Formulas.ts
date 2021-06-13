@@ -110,7 +110,16 @@ namespace Formula {
       formula, 
       Object.entries<T>(consts).reduce<{[x:string]:string}>((consts,[name,value]) => Object.assign(consts,{[name]:formula(value)}),{}) as {[key in keyof U]:string}
     );
-    
+  const withArgsTransform = <T>(formula:Formula<T>, transform:(...args:T[]) => T[]):Formula<T> =>
+    (...args:T[]) => 
+      formula(...transform(...args));
+  const withArgsShortCircuit = <T>(formula:Formula<T>, shortCircuit:(...args:T[]) => string) =>
+    (...args:T[]) => {
+      const shortCircuitValue = shortCircuit(...args);
+      return typeof shortCircuitValue != "undefined" ? shortCircuitValue : formula(...args);
+    };
+  
+  
   // Exports
   const prettyPrint = false;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -119,45 +128,136 @@ namespace Formula {
     //prettyPrint = value; // TODO Allow only in Debug options due to Max Formula Length
     return oldValue;
   };
-  export const AND:StringFormula = (...values:string[]):string => {
-    if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
-    if (values.includes(Formula.VALUE.TRUE)) {
-      values = values.filter(value => value != Formula.VALUE.TRUE);
-      if (values.length == 0) return Formula.VALUE.TRUE;
+  export const AND:StringFormula = withArgsShortCircuit(
+    withArgsTransform(
+      PrefixFormula("AND"),
+      (...args:string[]):string[] => {
+        const newArgs = args.filter(arg => arg != Formula.VALUE.TRUE);
+        if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.TRUE];
+        return newArgs;
+      }
+    ),
+    (...values:string[]):string => {
+      if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
+      if (values.length == 1) return values[0];
     }
-    if (values.length == 1) return values[0];
-    return PrefixFormula("AND")(...values);
-  };
-  export const OR:StringFormula = (...values:string[]):string => {
-    if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
-    if (values.includes(Formula.VALUE.FALSE)) {
-      values = values.filter(value => value != Formula.VALUE.FALSE);
-      if (values.length == 0) return Formula.VALUE.FALSE;
+  );
+  export const OR:StringFormula = withArgsShortCircuit(
+    withArgsTransform(
+      PrefixFormula("OR"),
+      (...args:string[]):string[] => {
+        const newArgs = args.filter(arg => arg != Formula.VALUE.FALSE);
+        if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.FALSE];
+        return newArgs;
+      }
+    ),
+    (...values:string[]):string => {
+      if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
+      if (values.length == 1) return values[0];
     }
-    if (values.length == 1) return values[0];
-    return PrefixFormula("OR")(...values);
-  };
-  export const NOT:StringFormula = (value:string):string => {
-    if (value == Formula.VALUE.TRUE) return Formula.VALUE.FALSE;
-    if (value == Formula.VALUE.FALSE) return Formula.VALUE.TRUE;
-    if (value && value.toString().match(/^NOT\(/)) return value.toString().substring(3); // NOT(NOT(...)) => (...)
-    return PrefixFormula("NOT")(value);
-  };
-  export const IF:StringFormula = PrefixFormula("IF");
-  export const IFS:StringFormula = PrefixFormula("IFS");
+  );
+  export const NOT:StringFormula = withArgsShortCircuit(
+    PrefixFormula("NOT"),
+    (value:string):string => {
+      if (value == Formula.VALUE.TRUE) return Formula.VALUE.FALSE;
+      if (value == Formula.VALUE.FALSE) return Formula.VALUE.TRUE;
+      if (value && value.toString().match(/^NOT\(/)) return value.toString().substring(3); // NOT("NOT(...)") => "(...)"
+    }
+  );
+  export const IF:StringFormula = withArgsShortCircuit(
+    PrefixFormula("IF"), 
+    (...args:string[]):string => {
+      if (args[0] == Formula.VALUE.TRUE) return args[1];
+      else if (args[0] == Formula.VALUE.FALSE) return args[2];
+    }
+  );
+  export const IFS:StringFormula = withArgsShortCircuit(
+    withArgsTransform(
+      PrefixFormula("IFS"),
+      (...args:string[]):string[] => {
+        const newArgs = [];
+        for (let i = 0; i < args.length; i+=2) {
+          if (args[i] != Formula.VALUE.FALSE) { // Take out any FALSE arguments
+            newArgs.push(args[i],args[i+1]);
+          }
+          if (args[i] == Formula.VALUE.TRUE)
+            break; // Short circuit if you reach a TRUE since all further can't be reached
+        }
+        return newArgs;
+      }
+    ),
+    (...args:string[]):string => {
+      if (args[0] == Formula.VALUE.TRUE) return args[1];
+    }
+  );
   export const IFERROR:StringFormula = PrefixFormula("IFERROR");
   
-  export const EQ:StringFormula = PrefixFormula("EQ");
-  export const NE:StringFormula = PrefixFormula("NE");
-  export const GT:StringFormula = InlineFormula(">");
-  export const GTE:StringFormula = InlineFormula(">=");
-  export const LT:StringFormula = InlineFormula("<");
-  export const LTE:StringFormula = InlineFormula("<=");
+  export const EQ:StringFormula = withArgsShortCircuit(
+    PrefixFormula("EQ"),
+    (...args:string[]):string => {
+      if (args[0] == args[1]) return Formula.VALUE.TRUE;
+    }
+  );
+  export const NE:StringFormula = withArgsShortCircuit(
+    PrefixFormula("NE"),
+    (...args:string[]):string => {
+      if (args[0] == args[1]) return Formula.VALUE.FALSE;
+    }
+  );
+  export const GT:StringFormula = withArgsShortCircuit(
+    InlineFormula(">"),
+    (...args:string[]):string => {
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) > Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+    }
+  );
+  export const GTE:StringFormula = withArgsShortCircuit(
+    InlineFormula(">="),
+    (...args:string[]):string => {
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) >= Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+    }
+  );
+  export const LT:StringFormula = withArgsShortCircuit(
+    InlineFormula("<"),
+    (...args:string[]):string => {
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) < Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+    }
+  );
+  export const LTE:StringFormula = withArgsShortCircuit(
+    InlineFormula("<="),
+    (...args:string[]):string => {
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) <= Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+    }
+  );
   
-  export const MULT:StringFormula = InlineFormula("*");
-  export const DIV:StringFormula = InlineFormula("/");
-  export const MINUS:StringFormula = InlineFormula("-");
-  export const ADD:StringFormula = InlineFormula("+");
+  export const MULT:StringFormula = withArgsTransform(
+    InlineFormula("*"),
+    (...args:string[]):string[] => {
+      const newArgs = args.filter(arg => arg != Formula.VALUE.ONE); // Remove 1s
+      if (args.length > 0 && newArgs.length == 0) return [Formula.VALUE.ONE]; // If all 1s, return 1
+      if (newArgs.includes(Formula.VALUE.ZERO)) return [Formula.VALUE.ZERO]; // If has 0, is 0
+      return newArgs;
+    }
+  );
+  export const DIV:StringFormula = withArgsTransform(
+    InlineFormula("/"),
+    (...args:string[]):string[] => {
+      if (args.length > 0 && args[0] == Formula.VALUE.ZERO) return [Formula.VALUE.ZERO]; // "0 /..."  == 0
+      return args.filter((arg,i) => i == 0 || arg != Formula.VALUE.ONE); // Remove ..."/ 1"
+    }
+  );
+  export const MINUS:StringFormula = withArgsTransform(
+    InlineFormula("-"),
+    (...args:string[]):string[] =>
+      args.filter((arg,i) => i == 0 || arg != Formula.VALUE.ZERO) // remove ..."- 0"
+  );
+  export const ADD:StringFormula = withArgsTransform(
+    InlineFormula("+"),
+    (...args:string[]):string[] => {
+      const newArgs = args.filter(arg => arg != Formula.VALUE.ZERO); // Remove 0s
+      if (args.length > 0 && newArgs.length == 0) return [Formula.VALUE.ZERO]; // If all 0s, return 0
+      return newArgs;
+    }
+  );
   
   export const COUNTIF:StringFormula = PrefixFormula("COUNTIF");
   export const COUNTIFS:StringFormula = PrefixFormula("COUNTIFS");
