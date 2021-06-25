@@ -255,7 +255,7 @@ namespace ChecklistMeta {
           if (formatRanges.length > 0) {
             const relativeCell = Formula.A1(metadata.range.getCell(1,1),true);//.getA1Notation();
             // This can be made into rules based on cells.
-            Object.entries(metadata.metaValueCells).forEach(([cellValue, cell]) => {
+            Object.entries(metadata.metaValueCells).sort(([cellValue1],[cellValue2]) => cellValue2.length - cellValue1.length).forEach(([cellValue, cell]) => {
               const [background, color] = [cell.getBackground(), cell.getFontColor()];
               const isBold = cell.getFontWeight() == "bold";
               const isItalic = cell.getFontStyle() == "italic";
