@@ -520,16 +520,25 @@ namespace ChecklistApp {
       } else if (!hasQuickFilter && show) {
         this.ensureRow(ROW.QUICK_FILTER);
         const filterValueRange: Range = this.getRowRange(ROW.QUICK_FILTER, 2);
-        const color = filterValueRange.getBackgroundObject().asRgbColor().asHexString(); // Type not updated?
+        const bgColor = filterValueRange.getBackgroundObject().asRgbColor().asHexString(); // Type not updated?
         // HACK lighten the color
-        const r = parseInt(color.slice(1,3),16);
-        const g = parseInt(color.slice(3,5),16);
-        const b = parseInt(color.slice(5,7),16);
-        const newR = Math.floor((r+255)/2);
-        const newG = Math.floor((g+255)/2);
-        const newB = Math.floor((b+255)/2);
-        const newColor = "#" + newR.toString(16) + newG.toString(16) + newB.toString(16);
-        filterValueRange.setBackground(newColor);
+        const bgR = parseInt(bgColor.slice(1,3),16);
+        const bgG = parseInt(bgColor.slice(3,5),16);
+        const bgB = parseInt(bgColor.slice(5,7),16);
+        const bgNewR = Math.floor((bgR+255)/2);
+        const bgNewG = Math.floor((bgG+255)/2);
+        const bgNewB = Math.floor((bgB+255)/2);
+        const bgNewColor = "#" + bgNewR.toString(16) + bgNewG.toString(16) + bgNewB.toString(16);
+        filterValueRange.setBackground(bgNewColor);
+        const fontColor = filterValueRange.getFontColorObject().asRgbColor().asHexString();
+        const fontR = parseInt(fontColor.slice(1,3),16);
+        const fontG = parseInt(fontColor.slice(3,5),16);
+        const fontB = parseInt(fontColor.slice(5,7),16);
+        const fontNewR = Math.floor(fontR/2);
+        const fontNewG = Math.floor(fontG/2);
+        const fontNewB = Math.floor(fontB/2);
+        const fontNewColor = "#" + fontNewR.toString(16) + fontNewG.toString(16) + fontNewB.toString(16);
+        filterValueRange.setFontColor(fontNewColor);
         this.sheet.setRowHeight(filterValueRange.getRow(), this.sheet.getRowHeight(this.toRowIndex(ROW.SETTINGS)));
         Object.entries(this.meta.getColumnDataValidations()).forEach(([columnName, dataValidation]) => {
           filterValueRange.getCell(1,this.toColumnIndex(columnName) - 1).setDataValidation(dataValidation);
@@ -676,8 +685,8 @@ namespace ChecklistApp {
       );
       const checkedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
       const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
-      const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^(INFO|NOTE)")));
-      const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("^WARN")));
+      const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)(INFO|NOTE)")));
+      const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)WARN")));
       
       Formula.togglePrettyPrint(prettyPrint);
                             
