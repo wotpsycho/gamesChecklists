@@ -8,6 +8,7 @@ namespace Formula {
   const isNumber = (value: unknown): boolean => {
     return typeof value == "number" || Number(value) > 0 || Number(value) < 0 || value === "0";
   };
+  const removeDuplicates = <T>(arr:T[]):T[] => arr.filter((val,i) => !arr.includes(val,i+1));
   
   const rcToR1C1 = (row: number, column: number, isRowRelative: boolean = false, isColumnRelative: boolean = false): string => {
     let address = "";
@@ -132,7 +133,7 @@ namespace Formula {
     withArgsTransform(
       PrefixFormula("AND"),
       (...args:string[]):string[] => {
-        const newArgs = args.filter(arg => arg != Formula.VALUE.TRUE);
+        const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.TRUE);
         if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.TRUE];
         return newArgs;
       }
@@ -146,7 +147,7 @@ namespace Formula {
     withArgsTransform(
       PrefixFormula("OR"),
       (...args:string[]):string[] => {
-        const newArgs = args.filter(arg => arg != Formula.VALUE.FALSE);
+        const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.FALSE);
         if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.FALSE];
         return newArgs;
       }
