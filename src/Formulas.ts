@@ -47,7 +47,7 @@ namespace Formula {
   // Factories
   const PrefixFormula = <T=string>(symbol:string):Formula<T> => 
     (...values: T[]): string => {
-      const _prettyPrint = prettyPrint && values.length > 1;
+      const _prettyPrint = prettyPrint && values.length > 1 && values.join().length > 40;
     
       let result = symbol + "(";
       if (values.length != 0) {
@@ -66,9 +66,9 @@ namespace Formula {
   
   const InlineFormula = <T=string>(symbol:string):Formula<T> => 
     (...values:T[]) => {
-      const _prettyPrint = prettyPrint && values.length > 1;
+      const _prettyPrint = prettyPrint && values.length > 1 && values.join().length > 40;
     
-      const joiner = _prettyPrint ? "\n" + symbol + "\n" : " " + symbol + " ";
+      const joiner = _prettyPrint ? "\n" + symbol + "\n" : symbol;
       const innerResult = values.join(joiner);
       if (_prettyPrint && values.length > 1) {
         return "(\n  " + innerResult.replace(/\n/g,"\n  ") + "\n)";
@@ -122,11 +122,11 @@ namespace Formula {
   
   
   // Exports
-  const prettyPrint = false;
+  let prettyPrint = true;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  export const togglePrettyPrint = (value:boolean = !prettyPrint): boolean => {
+  export const togglePrettyPrint = (shouldPrettyPrint:boolean = !prettyPrint): boolean => {
     const oldValue = prettyPrint;
-    //prettyPrint = value; // TODO Allow only in Debug options due to Max Formula Length
+    prettyPrint = shouldPrettyPrint; // TODO Allow only in Debug options due to Max Formula Length
     return oldValue;
   };
   export const AND:StringFormula = withArgsShortCircuit(

@@ -83,7 +83,12 @@ namespace Status {
   export function addLinksToPreReqs(checklist:Checklist = ChecklistApp.getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
     StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqs(startRow,endRow);
   }
-
+  
+  enum PHASE {
+    BUILDING = "BUILDING",
+    FINALIZING = "FINALIZING",
+    FINALIZED = "FINALIZED",
+  }
   export class StatusFormulaTranslator {
     readonly checklist: Checklist;
     private constructor(checklist: Checklist) {
@@ -100,17 +105,28 @@ namespace Status {
 
     private _parsers:CellFormulaParser[]
     get parsers():CellFormulaParser[] {
+      return this._parsers ?? (this._parsers = this.initializeParsers());
+    }
+
+    private _phase:PHASE = PHASE.BUILDING
+    get phase():PHASE {
+      return  this._phase;
+    }
+    private initializeParsers(): CellFormulaParser[] {
       if (this._parsers) return this._parsers;
       time("parseCells");
       
-      const parsers = [];
       const preReqRange:Range = this.checklist.getColumnDataRange(COLUMN.PRE_REQS);
       const preReqValues:unknown[][] = preReqRange.getValues();
       const firstRow:row = preReqRange.getRow();
+      const parsers:CellFormulaParser[] = new Array(firstRow + preReqValues.length);
       
       for (let i:number = 0; i < preReqValues.length; i++) {
         parsers[i+firstRow] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
       }
+      this._phase = PHASE.FINALIZING;
+      parsers.forEach(parser => parser?.finalize());
+      this._phase = PHASE.FINALIZED;
       this._parsers = parsers;
       timeEnd("parseCells");
       return parsers;
@@ -204,7 +220,15 @@ namespace Status {
         let checkboxControlledByInfos:sheetValueInfo[];
         if (parser) {
           statusFormulas[i] = FORMULA(parser.toFormula());
-          if (parser.hasErrors()) {
+          if (statusFormulas[i].length > 50_000 && Formula.togglePrettyPrint(false)) {
+            // Formula too long, but was pretty printing, try non-pretty
+            statusFormulas[i] = FORMULA(parser.toFormula());
+            Formula.togglePrettyPrint(true); // turn back on
+          }
+          if (statusFormulas[i].length > 50_000) {
+            statusFormulas[i] = FORMULA(VALUE(STATUS.ERROR));
+            note = "ERROR: ERROR: Resulting formula too large for Sheets to handle, please attempt to simplify Pre-Reqs dependencies";
+          } else if (parser.hasErrors()) {
             note = [...parser.getErrors()].map(error => `ERROR: ${error}`).join("\n");
           } else {
             const allMissablePreReqs:string[] = parser.getAllDirectlyMissablePreReqs();
@@ -246,9 +270,10 @@ namespace Status {
 
         time("setFormulasIndividual");
         // Reduce client-side recalculations by only setting formula if changed
-        statusFormulas.forEach((statusFormula,i) => 
-          statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula)
-        );
+        statusFormulas.forEach((statusFormula,i) => {
+          if (statusFormula.length > 40000) console.warn(`Long Formula Row ${i+firstRow}: ${statusFormula.length}`);
+          statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula);
+        });
         timeEnd("setFormulasIndividual");
 
         time("resetItemUnderlineItalics");
@@ -420,7 +445,7 @@ namespace Status {
       const rowRanges = [];
       if (!rows || rows.length == 0) return rowRanges;
       if (column) column = this.checklist.toColumnIndex(column);
-      rows = rows.sort((a,b) => a-b);
+      rows = rows.sort((a,b) => a-b).filter((row,i,rows) => rows.indexOf(row) == i);
       let firstRow:row = rows[0];
       let lastRow:row = rows[0];
       for (let i = 1; i < rows.length; i++) {
@@ -518,13 +543,15 @@ namespace Status {
       });
 
       const children: FormulaNode<boolean>[] = [];
-      let isLinked:boolean = false;
+      const linkedChildren: FormulaNode<boolean>[] = [];
+      let linkedFlag: boolean = false;
       for (let j:number = 0; j < lines.length; j++) {
         let line:string = lines[j].trim();
+        let isLinked = linkedFlag;
         if (!line) continue;
 
         if (line.trim().toUpperCase() == SPECIAL_PREFIXES.LINKED.toUpperCase()) {
-          isLinked = true;
+          linkedFlag = true;
           continue;
         }
 
@@ -569,19 +596,39 @@ namespace Status {
         } else {
           childFormulaNode = BooleanFormulaNode.create(line,this.translator,row);
         }
-        children.push(childFormulaNode);
+        if (isLinked) linkedChildren.push(childFormulaNode);
+        else children.push(childFormulaNode);
       }
-      if (isLinked) {
-        this.rootNode = new LinkedFormulaNode(children,this.translator,row);
+      if (linkedChildren.length) {
+        this.rootNode = new LinkedFormulaNode(children,linkedChildren,this.translator,row);
       } else {
         this.rootNode = new RootNode(children,this.translator,row);
       }
     }
 
+    /**
+     * Mark as finalized so that no further changes are allowed
+     */
+    finalize():void {
+      this.checkPhase(PHASE.FINALIZING);
+      this.rootNode.finalize();
+    }
+
+    private isPhase(phase:PHASE) {
+      return this.translator.phase == phase;
+    }
+    private checkPhase(...phases:PHASE[]) {
+      if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
+        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}"`);
+      }
+    }
+
     toFormula():string {
+      this.checkPhase(PHASE.FINALIZED);
       return this.toStatusFormula();
     }
     toCheckedFormula(): string {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toCheckedFormula();
     }
 
@@ -594,36 +641,58 @@ namespace Status {
     }
 
     getAllPossiblePreReqs():string[] {
+      this.checkPhase(PHASE.FINALIZED);
       const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
       return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row].map(info => info.value)).flat();
     }
 
     getAllDirectlyMissablePreReqs():string[] {
+      this.checkPhase(PHASE.FINALIZED);
       const allMissableRows:row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
       const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
       return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
     }
 
     getDirectPreReqInfos() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.getDirectPreReqInfos();
+    }
+    
+    getDirectPreReqRows(): ReadonlySet<number> {
+      return this.rootNode.getDirectPreReqRows();
     }
 
     isControlled():boolean {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.isControlled();
     }
     getControlledByInfos():sheetValueInfo[] {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.getControlledByInfos();
     }
 
+    addOption(row:row) {
+      this.checkPhase(PHASE.FINALIZING);
+      this.rootNode.addOption(row);
+    }
+
+    getChoiceInfo():choiceInfo {
+      this.checkPhase(PHASE.FINALIZED);
+      return this.rootNode.getChoiceInfo();
+    }
+
     getAllPossiblePreReqRows():ReadonlySet<row> {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.getAllPossiblePreReqRows();
     }
 
     isDirectlyMissable():boolean {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.isDirectlyMissable();
     }
 
     isInCircularDependency():boolean {
+      this.checkPhase(PHASE.FINALIZED);
       return this.getCircularDependencies().has(this.row);
     }
 
@@ -631,6 +700,7 @@ namespace Status {
     private _circularDependencies: ReadonlySet<row>;
     private _isCircular: boolean;
     getCircularDependencies(previous = []): ReadonlySet<row> {
+      this.checkPhase(PHASE.FINALIZED);
       if (this._circularDependencies) return this._circularDependencies;
       const circularDependencies: Set<row> = new Set<row>();
       if (this._lockCircular) {
@@ -645,25 +715,36 @@ namespace Status {
       this._circularDependencies = circularDependencies;
       return this._circularDependencies;
     }
+    toRawPreReqsMetFormula(): string {
+      this.checkPhase(PHASE.FINALIZED);
+      return this.rootNode.toRawPreReqsMetFormula();
+    }
     toPreReqsMetFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toPreReqsMetFormula();
     }
     toRawMissedFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toRawMissedFormula();
     }
     toMissedFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toMissedFormula();
     }
     toPRUsedFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toPRUsedFormula();
     }
     toUnknownFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toUnknownFormula();
     }
     toErrorFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toErrorFormula();
     }
     toStatusFormula() {
+      this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.toStatusFormula();
     }
   }
@@ -679,11 +760,26 @@ namespace Status {
     readonly translator: StatusFormulaTranslator
     protected constructor(text: string, translator: StatusFormulaTranslator,row: row) {
       this.translator = translator;
+      this.checkPhase(PHASE.BUILDING);
       this.text = text.toString().trim();
       this.row = row;
 
       if (parentheticalMapping[this.text]) {
         this.text = parentheticalMapping[this.text];
+      }
+    }
+    
+    finalize() {
+      this.checkPhase(PHASE.FINALIZING);
+      this.children.forEach(child => child.finalize());
+    }
+
+    protected isPhase(phase:PHASE) {
+      return this.translator.phase == phase;
+    }
+    protected checkPhase(...phases:PHASE[]) {
+      if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
+        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}"`);
       }
     }
 
@@ -949,14 +1045,26 @@ namespace Status {
         this.value = true;
       }
     }
+    
+    protected optionsRows:row[] = [];
+    getChoiceInfo(): choiceInfo {
+      return {
+        isVirtualChoice: false, 
+        choiceRow      : this.row, 
+        options        : this.optionsRows,
+      };
+    }
+    addOption(row: number) {
+      this.optionsRows.push(row);
+    }
 
     isControlled():boolean {
-      return !!choiceRows[this.row];
+      return this.optionsRows.length > 0;
     }
     getControlledByInfos():sheetValueInfo[] {
       if (this.isControlled()) {
         const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-        return choiceRows[this.row].map(optionRow => itemValues[optionRow]).flat();
+        return this.optionsRows.map(optionRow => itemValues[optionRow]).flat();
       }
     }
 
@@ -966,10 +1074,31 @@ namespace Status {
           this.addError("Controlled Rows cannot be in Pre-Req circular Dependency");
           return VALUE.FALSE;
         } else {
-          return OR(...choiceRows[this.row].map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator,optionRow).toCheckedFormula()));
+          return OR(...this.optionsRows.map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator,optionRow).toCheckedFormula()));
         }
       }
       return this.translator.cellA1(this.row, COLUMN.CHECK);
+    }
+
+    /**
+     * If this has options, only show this row if an Option is available
+     */
+    // static count = 0;
+    toPreReqsMetFormula():string {
+      // if (RootNode.count++ > 5_000) throw new Error();
+      const e = new Error();
+      if (e.stack && this.row > 740) Logger.log(e.stack);
+      Logger.log("prmf " + this.row);
+      if (this.optionsRows.length > 0) {
+        return OR(...this.optionsRows.map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator,optionRow).toPreReqsMetFormula()));
+      } else {
+        return this.toRawPreReqsMetFormula();
+      }
+    }
+
+    toRawPreReqsMetFormula() {
+      Logger.log("rprmf " + this.row);
+      return BooleanFormulaNode.prototype.toPreReqsMetFormula.call(this);//super.toPreReqsMetFormula();
     }
 
     toStatusFormula(): string {
@@ -1186,9 +1315,8 @@ namespace Status {
     altColumnName: string,
     id: string,
     original: string;
-    rowInfos: rowInfo[],
+    rowInfos:ReadonlyArray<Readonly<rowInfo>>,
     numPossible: number;
-    isChoice?: boolean;
     isVirtualChoice?: boolean;
     wasSelfReferential?: boolean;
   }
@@ -1199,7 +1327,9 @@ namespace Status {
       super(text,translator,row);
     }
 
-    get valueInfo(): valueInfo {
+    private _valueInfo:valueInfo
+    get valueInfo():Readonly<valueInfo> {
+      if (this._valueInfo) return {...this._valueInfo};
       const text:string = this.text;
       let valueInfo:valueInfo = valueInfoCache[text];
       if (!valueInfo) {
@@ -1250,13 +1380,13 @@ namespace Status {
           if (columnInfo) {
             if (valueInfo.id.indexOf("*") < 0) {
               if (columnInfo.byValue[valueInfo.id]) {
-                valueInfo.rowInfos.push(...(columnInfo.byValue[valueInfo.id]));
+                (valueInfo.rowInfos as rowInfo[]).push(...(columnInfo.byValue[valueInfo.id]));
               }
             } else {
               const search:RegExp = RegExp("^" + valueInfo.id.replace(/\*/g,".*") + "$");
               Object.entries(columnInfo.byValue).forEach(([value,columnValueInfos]) => {
                 if (value.match(search)) {
-                  valueInfo.rowInfos.push(...columnValueInfos);
+                  (valueInfo.rowInfos as rowInfo[]).push(...columnValueInfos);
                 }
               });
               if (!valueInfo.isMulti) { // Wildcards without a numNeeded should require all
@@ -1264,7 +1394,6 @@ namespace Status {
                 valueInfo.isMulti = true;
               }
             }
-
           }
           if (originalMulti && valueInfo.rowInfos.length == 0) {
             // Had a "!" where LHS did not match column and did not match item
@@ -1279,22 +1408,18 @@ namespace Status {
       if (valueInfo) {
         valueInfo = Object.assign({},valueInfo);
         if (valueInfo.rowInfos) {
-          if (choiceInfos[valueInfo.key]) {
-            valueInfo.isChoice = true;
-            if (valueInfo.rowInfos.length == 0) {
+          if (virtualChoices[valueInfo.key]) {
             // Is a choice with no row, set rows to choice's options' rows
-            //num vlaue row
-              const columnValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-              valueInfo.rowInfos = choiceInfos[valueInfo.key].options.map(optionRow => columnValues[optionRow]).flat();
-              valueInfo.numPossible = valueInfo.rowInfos.length;
-              valueInfo.isVirtualChoice = true;
-            }
+            const columnValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+            valueInfo.rowInfos = virtualChoices[valueInfo.key].options.map(optionRow => columnValues[optionRow]).flat();
+            valueInfo.numPossible = valueInfo.rowInfos.length;
+            valueInfo.isVirtualChoice = true;
           }
           valueInfo.rowInfos = [...valueInfo.rowInfos.map(rowInfo => Object.assign({},rowInfo))];
           // Remove self reference (simplest dependency resolution, v0)
           const rowIndex:number = valueInfo.rowInfos.findIndex(rowInfo => rowInfo.row == this.row);
           if (rowIndex >= 0) {
-            const removed:rowInfo[] = valueInfo.rowInfos.splice(rowIndex,1);
+            const removed:rowInfo[] = (valueInfo.rowInfos as rowInfo[]).splice(rowIndex,1);
             valueInfo.wasSelfReferential = true;
             if (!valueInfo.isVirtualChoice) valueInfo.numPossible -= removed[0].num;
           }
@@ -1302,6 +1427,9 @@ namespace Status {
             valueInfo.numNeeded = valueInfo.numPossible;
           }
         }
+      }
+      if (this.isPhase(PHASE.FINALIZED)) {
+        this._valueInfo = valueInfo; 
       }
       return valueInfo;
     }
@@ -1336,7 +1464,7 @@ namespace Status {
 
     getDirectPreReqInfos() {
       return {
-        [this.valueInfo.key]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row)
+        [this.valueInfo.key]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row).filter((row,i,arr) => arr.indexOf(row) == i)
       };
     }
 
@@ -1640,21 +1768,32 @@ namespace Status {
     }
   }
 
-  interface choiceInfo {
+  type choiceInfo = {
     isVirtualChoice: boolean;
     choiceRow?: row;
     readonly options: row[]; // options is referenced in choiceRows, so don't allow overwrites
   }
-  const choiceInfos:{[x:string]: choiceInfo} = {};
-  const choiceRows:{[x:number]: row[]} = {};
+  const virtualChoices:{[x:string]: choiceInfo} = {};
   class OptionFormulaNode extends FormulaValueNode<boolean> {
     static create(text:string, translator:StatusFormulaTranslator,row:row): FormulaNode<boolean> {
       return new OptionFormulaNode(text,translator,row);
     }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
-
-      this.choiceInfo.options.push(this.row);
+      if (this.isVirtualChoice) {
+        if (!virtualChoices[this.valueInfo.key]) {
+          virtualChoices[this.valueInfo.key] = {
+            isVirtualChoice: true,
+            options: []
+          };
+        } else 
+          this.choiceParser?.addOption(this.row);
+        virtualChoices[this.valueInfo.key].options.push(this.row);
+      }
+    }
+    finalize() {
+      super.finalize();
+      this.choiceParser?.addOption(this.row);
     }
 
     get isVirtualChoice(): boolean {
@@ -1663,20 +1802,15 @@ namespace Status {
     get choiceRow(): row {
       return this.isVirtualChoice ? undefined : this.valueInfo.rowInfos[0].row;
     }
+    get choiceParser(): CellFormulaParser {
+      return this.isVirtualChoice ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
+    }
     get choiceInfo(): choiceInfo {
-      if (!choiceInfos[this.valueInfo.key]) {
-      // Handles cache
-        const choiceInfo:choiceInfo = {
-          isVirtualChoice: this.isVirtualChoice,
-          choiceRow: this.choiceRow,
-          options: [],
-        };
-        choiceInfos[this.valueInfo.key] = choiceInfo;
-        if (this.choiceRow) {
-          choiceRows[this.choiceRow] = choiceInfo.options;
-        }
+      if (this.isVirtualChoice) {
+        return virtualChoices[this.valueInfo.key];
+      } else {
+        return this.choiceParser.getChoiceInfo();
       }
-      return choiceInfos[this.valueInfo.key];
     }
     static readonly usage:string = `OPTION Usage:
 OPTION [ChoiceID]
@@ -1707,10 +1841,12 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     toPreReqsMetFormula() {
-      return this._determineFormula(
-        NOT(this.toPRUsedFormula()),
-        STATUS.AVAILABLE
-      );
+      return this.isVirtualChoice 
+        ? NOT(this.toPRUsedFormula()) 
+        : AND(
+          NOT(this._getChoiceRowStatusFormula(STATUS.CHECKED)),
+          CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow).toRawPreReqsMetFormula()
+        );
     }
 
     toPRUsedFormula():string {
@@ -1815,8 +1951,12 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
   }
 
   class LinkedFormulaNode extends RootNode {
-    constructor(children:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
-      super(children,translator,row);
+    private readonly linkedChildren: FormulaNode<boolean>[];
+    private readonly unlinkedChildren: FormulaNode<boolean>[];
+    constructor(unlinkedChildren:FormulaNode<boolean>[], linkedChildren:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
+      super([...unlinkedChildren,...linkedChildren],translator,row);
+      this.unlinkedChildren = unlinkedChildren;
+      this.linkedChildren = linkedChildren;
     }
     isControlled():boolean {
       return true;
@@ -1864,14 +2004,28 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
         this.addError("LINKED Cannot be in Pre-Req circular dependency");
         return VALUE.FALSE;
       }
-      const availableFormulas = [];
-      this.getDirectPreReqRows().forEach(row => availableFormulas.push(
-        AND(
-          CellFormulaParser.getParserForChecklistRow(this.translator,row).toPreReqsMetFormula(),
-          NOT(CellFormulaParser.getParserForChecklistRow(this.translator,row).toCheckedFormula())
-        ))
-      );
-      return OR(...availableFormulas);
+      const linkedAvailableFormulas = [];
+      this.linkedChildren
+        .map(linkedChild => linkedChild.getDirectPreReqRows())
+        .reduce((rows:Set<number>,childRows) => {
+          childRows.forEach(rows.add,rows);
+          return rows;
+        }, new Set<number>())
+        .forEach(row => linkedAvailableFormulas.push(
+          AND(
+            CellFormulaParser.getParserForChecklistRow(this.translator,row).toPreReqsMetFormula(),
+            NOT(CellFormulaParser.getParserForChecklistRow(this.translator,row).toCheckedFormula())
+          ))
+        );
+      const preReqIsAvailableFormula = OR(...linkedAvailableFormulas);
+      if (this.unlinkedChildren.length > 0) {
+        return AND(
+          ...this.unlinkedChildren.map(child => child.toPreReqsMetFormula()),
+          preReqIsAvailableFormula
+        );
+      } else {
+        return preReqIsAvailableFormula;
+      }
     }
   }
 
