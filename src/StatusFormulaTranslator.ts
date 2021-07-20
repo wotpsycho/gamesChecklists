@@ -60,11 +60,12 @@ namespace Status {
 
 
   enum SPECIAL_PREFIXES  {
-    USES   = "USES",
-    MISSED = "MISSED",
-    CHOICE = "CHOICE", // DEPRECATED, alias for OPTION
-    OPTION = "OPTION",
-    LINKED = "LINKED",
+    USES     = "USES",
+    MISSED   = "MISSED",
+    CHOICE   = "CHOICE", // DEPRECATED, alias for OPTION
+    OPTION   = "OPTION",
+    LINKED   = "LINKED",
+    CHECKED  = "CHECKED",
     OPTIONAL = "OPTIONAL",
   }
 
@@ -307,7 +308,9 @@ namespace Status {
           } else { 
             controlledCheckbox.checkboxCell.clearContent();
           }
-          controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
+          if (controlledCheckbox.notes.length > 1) {
+            controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
+          }
         });
         timeEnd("controlledRows");
 
@@ -545,6 +548,7 @@ namespace Status {
       const children: FormulaNode<boolean>[] = [];
       const linkedChildren: FormulaNode<boolean>[] = [];
       let linkedFlag: boolean = false;
+      let checkedFlag: boolean = false;
       for (let j:number = 0; j < lines.length; j++) {
         let line:string = lines[j].trim();
         let isLinked = linkedFlag;
@@ -554,7 +558,10 @@ namespace Status {
           linkedFlag = true;
           continue;
         }
-
+        if (line.trim().toUpperCase() == SPECIAL_PREFIXES.CHECKED.toUpperCase()) {
+          checkedFlag = true;
+          continue;
+        }
         line = line.replace(/"([^"]+)"/g, (_match,text:string) => {
           const placeholder:string = getQuotePlaeholder();
           quoteMapping[placeholder] = text;
@@ -599,7 +606,9 @@ namespace Status {
         if (isLinked) linkedChildren.push(childFormulaNode);
         else children.push(childFormulaNode);
       }
-      if (linkedChildren.length) {
+      if (checkedFlag) {
+        this.rootNode = new CheckedRootNode(children,this.translator,row);
+      } else if (linkedChildren.length) {
         this.rootNode = new LinkedFormulaNode(children,linkedChildren,this.translator,row);
       } else {
         this.rootNode = new RootNode(children,this.translator,row);
@@ -2069,6 +2078,13 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     toUnknownFormula() {
       return this.sameRowParser && this.sameRowParser.toUnknownFormula();
     }
-    
+  }
+  class CheckedRootNode extends RootNode {
+    toCheckedFormula() {
+      return VALUE.TRUE;
+    }
+    isControlled() {
+      return true;
+    }
   }
 }
