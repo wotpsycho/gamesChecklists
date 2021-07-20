@@ -870,11 +870,12 @@ namespace ChecklistApp {
     ensureTotalFormula(): void {
       time("totalFormula");
       // static imports
-      const {FORMULA,CONCAT, A1, IF, GT, OR, ADD, COUNTIFS, VALUE, CHAR,EQ,ROUND,DIV,MULT,MINUS} = Formula;
+      const {FORMULA,CONCAT, A1, IF, GT, ADD, COUNTIFS, VALUE, CHAR,EQ,ROUND,DIV,MULT,MINUS} = Formula;
                             
       // TODO determine best way for reporting
       if (!this.hasRow(ROW.TITLE)) return;
-      const totalCell = this.getRange(ROW.TITLE,1);
+      const totalCell = this.getRange(ROW.TITLE,COLUMN.CHECK);
+      const missedCell = this.getRange(ROW.TITLE,COLUMN.PRE_REQS);
       const firstRow = this.firstDataRow;
       const itemColumn = this.toColumnIndex(COLUMN.ITEM);
       const statusColumn = this.toColumnIndex(COLUMN.STATUS);
@@ -888,54 +889,75 @@ namespace ChecklistApp {
       const available   = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.AVAILABLE) ,...hasValueArgs);
       const unknown     = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.UNKNOWN)   ,...hasValueArgs);
       const unavailable = COUNTIFS(A1(firstRow,statusColumn,null,statusColumn),VALUE(STATUS.PR_NOT_MET),...hasValueArgs);
-                            
-                            
-                            
-      const formula = FORMULA(
+      
+      const totalFormula = FORMULA(
         CONCAT(
           IF(
-            OR(
-              GT(missed,VALUE.ZERO),
-              GT(prUsed,VALUE.ZERO)
-            ),
-            CONCAT(
-              VALUE("M: "), 
-              missed, 
-              IF(
-                GT(prUsed,VALUE.ZERO),
-                CONCAT(VALUE(" ("),prUsed,VALUE(")")),
-                VALUE.EMPTYSTRING
-              ),
-              CHAR.NEWLINE
-            ),
-            VALUE.EMPTYSTRING
-          ),
-          VALUE("R: "),
-          IF(
-            EQ(
-              ADD(available,unavailable),
-              VALUE.ZERO
-            ),
+            EQ(ADD(unavailable,available), VALUE.ZERO),
             VALUE("★"),
             CONCAT(
+              VALUE("R: "),
               available,
-              VALUE("|"),
-              unavailable
+              VALUE("/"),
+              ADD(available,unavailable,unknown)
             )
-          ), 
-          IF(
-            GT(unknown,VALUE.ZERO),
-            CONCAT(VALUE(" ("),unknown,VALUE(")")),
-            VALUE.EMPTYSTRING
           ),
+          CHAR.NEWLINE,
+          VALUE("C: "),
+          ADD(checked,prUsed),
+          VALUE("/"),
+          total,
           CHAR.NEWLINE,
           ROUND(MULT(DIV(checked,MINUS(total,prUsed)),VALUE(100)),VALUE.ONE),
           VALUE("%")
         )
       );
-                                                
-      if (totalCell.getFormula() !== formula) {
-        totalCell.setFormula(formula);
+      const missedFormula = FORMULA(
+        CONCAT(
+          IF(
+            GT(missed,VALUE.ZERO),
+            CONCAT(
+              VALUE("Missed: "),
+              missed
+            ),
+            VALUE.EMPTYSTRING
+          ),
+          CHAR.NEWLINE,
+          IF(
+            GT(prUsed,VALUE.ZERO),
+            CONCAT(
+              VALUE("Not Chosen: "),
+              prUsed
+            ),
+            VALUE.EMPTYSTRING
+          ),
+          CHAR.NEWLINE,
+          IF(
+            GT(unknown,VALUE.ZERO),
+            CONCAT(
+              VALUE("Unknown: "),
+              unknown
+            ),
+            VALUE.EMPTYSTRING
+          )
+        )
+      );
+      if (totalCell && totalCell.getFormula() !== totalFormula) {
+        totalCell.setFormula(totalFormula);
+        totalCell.setNote([
+          "R: [Available]/[Remaining]",
+          "C: [Completed]/[Total]",
+          "[Percent Completed]%"
+        ].join("\n"));
+      }
+      if (missedCell && missedCell.getFormula() !== missedFormula) {
+        missedCell.setFormula(missedFormula);
+        missedCell.setNote([
+          "• Missed: Missed Items (and their dependents)",
+          "• Not Chosen: Options and Optional Items that were not Chosen or had Pre-Reqs Used for other Items (and their dependents)",
+          "• Unknown: Items with Circular Pre-Req Dependencies that may or may not become Available (and their dependents)",
+          "(Use \"View: Missed\" to view these Items)"
+        ].join("\n"));
       }
       timeEnd("totalFormula");
     }
