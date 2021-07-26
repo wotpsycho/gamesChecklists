@@ -202,7 +202,7 @@ namespace ChecklistMeta {
       const filter = this.checklist.filter;
       if (filter) this.checklist.removeFilter();
       
-      const quickFilterRange = this.checklist.getRowRange(ChecklistApp.ROW.QUICK_FILTER);
+      const quickFilterRange = this.checklist.hasRow(ChecklistApp.ROW.QUICK_FILTER) && this.checklist.getRowRange(ChecklistApp.ROW.QUICK_FILTER);
       Object.entries(this.columnMetadata).forEach(([columnName,metadata]) => {
         if (columnValidations[columnName]){
           const rangeValidation = columnValidations[columnName];
@@ -241,7 +241,8 @@ namespace ChecklistMeta {
       time("meta setConditionalFormatRules");
       const {FORMULA,REGEXMATCH,VALUE} = Formula;
       const formulaToRuleMap = {};
-      const newConditionalFormatRulesByColumn = []; // Hack, using as a map with int keys for sorting
+      const newConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Hack, using as a map with int keys for sorting
+      const primaryConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Always apply to primary column, even if is a secondary column for another column
       // Get validation
       Object.values(this.columnMetadata).forEach((metadata) => {
         // Conditional formatting rules for given columns
@@ -286,15 +287,19 @@ namespace ChecklistMeta {
               formulaToRuleMap[formula] = ruleBuilder.build();
               if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isStrikethrough) {
                 // Don't add the rule if there is no change. Keep in formula to remove old settings.
-                if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
+                if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) {
+                  newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
+                  primaryConditionalFormatRulesByColumn[metadata.metaColumn] = [];
+                }
                 newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
+                primaryConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.setRanges([metadata.range]).build());
               }
             });
             if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !metadata.metaValueCells[ChecklistApp.FINAL_ITEM_TYPE]) {
               // Default for FINAL_ITEM_TYPE 
               // TODO extract to a "Default styles"
               newConditionalFormatRulesByColumn[metadata.metaColumn].push(SpreadsheetApp.newConditionalFormatRule()
-                .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${ChecklistApp.FINAL_ITEM_TYPE}\\n|${ChecklistApp.FINAL_ITEM_TYPE}$)`))))
+                .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`(^|\\n)${ChecklistApp.FINAL_ITEM_TYPE}`))))
                 .setBackground("#0000FF")
                 .setFontColor("#FFFFFF")
                 .setBold(true)
@@ -319,15 +324,13 @@ namespace ChecklistMeta {
           continue;
         }
         if (formulaToRuleMap[criteriaValues[0]]) {
-          //      Logger.log("found duplicate formula: ", criteriaValues[0]);
           replacedRules.push(oldRules.splice(i,1)[0]);
           oldRule.getBooleanCondition().getCriteriaValues()[0];
         }
       }
       
       
-      const newConditionalFormatRules = newConditionalFormatRulesByColumn.filter(rules => rules && rules.length).reverse().flat();
-      
+      const newConditionalFormatRules = [primaryConditionalFormatRulesByColumn,newConditionalFormatRulesByColumn].map(columnRules => columnRules.filter(rules => rules && rules.length).reverse().flat()).flat();
       this.checklist.sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
       timeEnd("meta setConditionalFormatRules");
     }
