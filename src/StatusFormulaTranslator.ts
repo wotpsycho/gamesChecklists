@@ -166,9 +166,9 @@ namespace Status {
       time("getStatusValues statusFormulas");
       const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
       timeEnd("getStatusValues statusFormulas");
-      time("getStatusValues checkFormulas");
-      const checkboxFormulas:string[][] = checkRange.getFormulas();
-      timeEnd("getStatusValues checkFormulas", "getStatusValues");
+      time("getStatusValues checkValues");
+      const checkboxValues:string[][] = checkRange.getValues();
+      timeEnd("getStatusValues checkValues", "getStatusValues");
 
       // TODO add interactive validation?
       //const preReqValidations = preReqRange.getDataValidations(); 
@@ -176,7 +176,7 @@ namespace Status {
       // will be overwriting these
       const statusFormulas:string[] = [];
       const notes:string[] = [];
-      const controlledCheckboxes:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],checkHyperlink?:string}[] = [];
+      const controlledCheckboxes:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],formula:string}[] = [];
 
       time("getDebugColumns");
       const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
@@ -227,6 +227,7 @@ namespace Status {
             Formula.togglePrettyPrint(true); // turn back on
           }
           if (statusFormulas[i].length > 50_000) {
+            console.warn(`Too Long Formula Row ${i+firstRow}: ${statusFormulas[i].length}`);
             statusFormulas[i] = FORMULA(VALUE(STATUS.ERROR));
             note = "ERROR: ERROR: Resulting formula too large for Sheets to handle, please attempt to simplify Pre-Reqs dependencies";
           } else if (parser.hasErrors()) {
@@ -242,11 +243,12 @@ namespace Status {
           }
         }
         if (checkboxControlledByInfos) {
-          const controlledData:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],checkLink?:string} = {
+          const controlledData:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],formula:string} = {
             row: i+firstRow,
             checkboxCell: checkRange.getCell(i+1,1),
             itemCell: itemDataRange.getCell(i+1,1),
             notes: [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"],
+            formula: parser.toControlledFormula(),
           };
           checkboxControlledByInfos.forEach(({row,value}) => {
             if (value && value.toString().trim()) {
@@ -294,20 +296,13 @@ namespace Status {
         
         time("resetCheckboxes");
         checkRange.clearNote().setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+        checkRange.setValues(checkboxValues);
         timeEnd("resetCheckboxes");
 
         time("controlledRows");
         controlledCheckboxes.forEach(controlledCheckbox => {
-          controlledCheckbox.checkboxCell.clearDataValidations();
           controlledCheckbox.itemCell.setFontStyle("italic");
-          if (controlledCheckbox.checkHyperlink) {
-            const formula = FORMULA(controlledCheckbox.checkHyperlink);
-            if (checkboxFormulas[controlledCheckbox.row - firstRow][0] !== formula) {
-              controlledCheckbox.checkboxCell.setFormula(formula);
-            }
-          } else { 
-            controlledCheckbox.checkboxCell.clearContent();
-          }
+          controlledCheckbox.checkboxCell.setFormula(FORMULA(controlledCheckbox.formula));
           if (controlledCheckbox.notes.length > 1) {
             controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
           }
@@ -461,6 +456,9 @@ namespace Status {
       }
       rowRanges.push([firstRow,column,lastRow,column]);
       return rowRanges;
+    }
+    rowsToA1Ranges(rows: row[],column?: column):string[] {
+      return this.rowsToRanges(rows,column).map(range => Formula.A1(...range));
     }
 
     rowInfosToA1Counts(rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} {
@@ -636,10 +634,6 @@ namespace Status {
       this.checkPhase(PHASE.FINALIZED);
       return this.toStatusFormula();
     }
-    toCheckedFormula(): string {
-      this.checkPhase(PHASE.FINALIZED);
-      return this.rootNode.toCheckedFormula();
-    }
 
     hasErrors():boolean {
       return this.getErrors().size > 0;
@@ -678,6 +672,10 @@ namespace Status {
     getControlledByInfos():sheetValueInfo[] {
       this.checkPhase(PHASE.FINALIZED);
       return this.rootNode.getControlledByInfos();
+    }
+    toControlledFormula():string {
+      this.checkPhase(PHASE.FINALIZED);
+      return this.rootNode.toControlledFormula();
     }
 
     addOption(row:row) {
@@ -1076,16 +1074,17 @@ namespace Status {
         return this.optionsRows.map(optionRow => itemValues[optionRow]).flat();
       }
     }
-
-    toCheckedFormula(): string {
+    toControlledFormula(): string {
       if (this.isControlled()) {
         if (this.isInCircularDependency()) {
           this.addError("Controlled Rows cannot be in Pre-Req circular Dependency");
           return VALUE.FALSE;
         } else {
-          return OR(...this.optionsRows.map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator,optionRow).toCheckedFormula()));
+          return OR(...this.translator.rowsToA1Ranges(this.optionsRows,COLUMN.CHECK));
         }
       }
+    }
+    toCheckedFormula(): string {
       return this.translator.cellA1(this.row, COLUMN.CHECK);
     }
 
@@ -1605,13 +1604,7 @@ namespace Status {
     */
     toPreReqsMetFormula():string { 
       // Available should look directly at "check" column only to prevent circular references
-      if (this.hasValue()) {
-        return VALUE(this.value);
-      } else {
-        return ADD(...this.valueInfo.rowInfos.map(rowInfo => 
-          IF(CellFormulaParser.getParserForChecklistRow(this.translator,rowInfo.row).toCheckedFormula(), VALUE(rowInfo.num),VALUE.ZERO)
-        ));
-      }
+      return this._generateFormula(VALUE.TRUE,COLUMN.CHECK);
     }
 
     /**
@@ -1747,7 +1740,7 @@ namespace Status {
     }
 
     private _getPRUsedAmountFormula():string {
-      const usedAmoutArguments:string[] = Object.entries(this.useInfo).map(([row,numUsed]) => IF(CellFormulaParser.getParserForChecklistRow(this.translator,row as unknown as number).toCheckedFormula(),VALUE(numUsed),VALUE.ZERO));
+      const usedAmoutArguments:string[] = Object.entries(this.useInfo).map(([row,numUsed]) => IF(this.translator.cellA1(row as unknown as number,COLUMN.CHECK),VALUE(numUsed),VALUE.ZERO));
       return ADD(...usedAmoutArguments);
     }
 
@@ -1854,7 +1847,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
 
     toPRUsedFormula():string {
       return this._determineFormula(
-        OR(...this.choiceInfo.options.map(row => CellFormulaParser.getParserForChecklistRow(this.translator,row).toCheckedFormula())),
+        OR(...this.translator.rowsToA1Ranges(this.choiceInfo.options,COLUMN.CHECK)),
         STATUS.PR_USED,STATUS.CHECKED
       );
     }
@@ -1995,7 +1988,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
       return IFS(...ifsArgs);
       
     }
-    toCheckedFormula():string {
+    toControlledFormula():string {
       if (this.isInCircularDependency()) {
         this.addError("LINKED Cannot be in Pre-Req circular dependency");
         return VALUE.FALSE;
@@ -2017,7 +2010,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
         .forEach(row => linkedAvailableFormulas.push(
           AND(
             CellFormulaParser.getParserForChecklistRow(this.translator,row).toPreReqsMetFormula(),
-            NOT(CellFormulaParser.getParserForChecklistRow(this.translator,row).toCheckedFormula())
+            NOT(this.translator.cellA1(row,COLUMN.CHECK))
           ))
         );
       const preReqIsAvailableFormula = OR(...linkedAvailableFormulas);
@@ -2074,7 +2067,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
   }
   class CheckedRootNode extends RootNode {
-    toCheckedFormula() {
+    toControlledFormula() {
       return VALUE.TRUE;
     }
     isControlled() {

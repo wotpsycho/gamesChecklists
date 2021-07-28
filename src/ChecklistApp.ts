@@ -50,6 +50,9 @@ namespace ChecklistApp {
     DISABLED: "#d9d9d9",
     CHECKED_BG: "#d9ead3",
     CHECKED_TEXT: "#666666",
+    CONTROLLED_BG: "#9fc5e8",
+    CONTROLLED_TEXT: "#9fc5e9",
+    CONTROLLED_DISABLED_TEXT: "#d9d9da",
     MISSABLE: "#990000",
     INFO_NOTE: "#4a86e8",
     WARN_NOTE: "#dd0000",
@@ -646,7 +649,7 @@ namespace ChecklistApp {
     // CONDITIONAL FORMATTING UTILITIES
     resetConditionalFormatting(_skipMeta: boolean = false): void {
       time("checklist resetConditionalFormatting");
-      const {FORMULA,NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE} = Formula;
+      const {FORMULA,NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE,ISFORMULA,AND} = Formula;
       const prettyPrint = Formula.togglePrettyPrint(false);
               
       const checkboxDataRange = this.getUnboundedColumnDataRange(COLUMN.CHECK);
@@ -655,12 +658,13 @@ namespace ChecklistApp {
       const preReqDataRange = this.getUnboundedColumnDataRange(COLUMN.PRE_REQS);
       const allDataRange = this.getUnboundedRange(this.firstDataRow,1,null,this.lastColumn);
               
+      const relativeCheckCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.CHECK),true);
       const relativeItemCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.ITEM),true);
       const relativePreReqCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.PRE_REQS),true);
       const relativeStatusCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.STATUS),true);
       const relativeNotesCell = A1(this.firstDataRow,this.toColumnIndex(COLUMN.NOTES),true);
               
-      const notAvailableFormula = FORMULA(
+      const notAvailableFormula = (
         NOT(
           OR(
             ISBLANK(relativeStatusCell),
@@ -668,94 +672,109 @@ namespace ChecklistApp {
           )
         )
       );
-      const missedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.MISSED)));
-      const usedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.PR_USED)));
-      const statusErrorFormula = FORMULA(
+      const missedFormula = (EQ(relativeStatusCell,VALUE(STATUS.MISSED)));
+      const usedFormula = (EQ(relativeStatusCell,VALUE(STATUS.PR_USED)));
+      const statusErrorFormula = (
         IF(
           ISERROR(relativeStatusCell),
           VALUE.TRUE,
           REGEXMATCH(CONCAT(VALUE.EMPTYSTRING,relativeStatusCell),VALUE(STATUS.ERROR))
         )
       );
-      const checkboxDisableFormula = FORMULA(
+      const checkboxDisableFormula = (
         OR(
           ISBLANK(relativeItemCell),
           NE(relativeStatusCell,VALUE(STATUS.AVAILABLE))
         )
       );
-      const checkedFormula = FORMULA(EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
-      const missableFormula = FORMULA(REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
-      const infoNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)(INFO|NOTE)")));
-      const warnNoteFormula = FORMULA(REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)WARN")));
+      const checkedFormula = (EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
+      const controlledCheckFormula = (ISFORMULA(relativeCheckCell));
+      const missableFormula = (REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
+      const infoNoteFormula = (REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)(INFO|NOTE)")));
+      const warnNoteFormula = (REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)WARN")));
       
       Formula.togglePrettyPrint(prettyPrint);
                             
       const availableErrorRule = SpreadsheetApp.newConditionalFormatRule();
       availableErrorRule.setBackground(COLOR.ERROR);
-      availableErrorRule.whenFormulaSatisfied(statusErrorFormula);
+      availableErrorRule.whenFormulaSatisfied(FORMULA(statusErrorFormula));
       availableErrorRule.setRanges([preReqDataRange,statusDataRange]);
                             
       const missedRule = SpreadsheetApp.newConditionalFormatRule();
       missedRule.setBackground(COLOR.MISSED);
-      missedRule.whenFormulaSatisfied(missedFormula);
+      missedRule.whenFormulaSatisfied(FORMULA(missedFormula));
       missedRule.setRanges([allDataRange]);
       // missedRule.setRanges([preReqDataRange,statusDataRange]);
       
       const usedRule = SpreadsheetApp.newConditionalFormatRule();
       usedRule.setBackground(COLOR.USED);
-      usedRule.whenFormulaSatisfied(usedFormula);
+      usedRule.whenFormulaSatisfied(FORMULA(usedFormula));
       usedRule.setRanges([allDataRange]);
       // usedRule.setRanges([preReqDataRange,statusDataRange]);
                             
       const notAvailableRule = SpreadsheetApp.newConditionalFormatRule();
       notAvailableRule.setBackground(COLOR.UNAVAILABLE);
-      notAvailableRule.whenFormulaSatisfied(notAvailableFormula);
+      notAvailableRule.whenFormulaSatisfied(FORMULA(notAvailableFormula));
       notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
                             
       const checkedCrossthroughRule = SpreadsheetApp.newConditionalFormatRule();
       checkedCrossthroughRule.setStrikethrough(true);
       checkedCrossthroughRule.setBackground(COLOR.CHECKED_BG);
       checkedCrossthroughRule.setFontColor(COLOR.CHECKED_TEXT);
-      checkedCrossthroughRule.whenFormulaSatisfied(checkedFormula);
+      checkedCrossthroughRule.whenFormulaSatisfied(FORMULA(checkedFormula));
       checkedCrossthroughRule.setRanges([itemDataRange]);
                             
       const checkedBGRule = SpreadsheetApp.newConditionalFormatRule();
       checkedBGRule.setBackground(COLOR.CHECKED_BG);
       checkedBGRule.setFontColor(COLOR.CHECKED_TEXT);
-      checkedBGRule.whenFormulaSatisfied(checkedFormula);
+      checkedBGRule.whenFormulaSatisfied(FORMULA(checkedFormula));
       checkedBGRule.setRanges([allDataRange]);
                             
       const checkboxDisableRule = SpreadsheetApp.newConditionalFormatRule();
       checkboxDisableRule.setBackground(COLOR.DISABLED);
       checkboxDisableRule.setFontColor(COLOR.DISABLED);
-      checkboxDisableRule.whenFormulaSatisfied(checkboxDisableFormula);
+      checkboxDisableRule.whenFormulaSatisfied(FORMULA(checkboxDisableFormula));
       checkboxDisableRule.setRanges([checkboxDataRange]);
+
+      const checkboxControlledRule = SpreadsheetApp.newConditionalFormatRule();
+      checkboxControlledRule.setBackground(COLOR.CONTROLLED_BG);
+      checkboxControlledRule.setFontColor(COLOR.CONTROLLED_TEXT);
+      checkboxControlledRule.whenFormulaSatisfied(FORMULA(controlledCheckFormula));
+      checkboxControlledRule.setRanges([checkboxDataRange]);
+
+      const checkboxControlledDisabledRule = SpreadsheetApp.newConditionalFormatRule();
+      checkboxControlledDisabledRule.setBackground(COLOR.DISABLED);
+      checkboxControlledDisabledRule.setFontColor(COLOR.CONTROLLED_DISABLED_TEXT);
+      checkboxControlledDisabledRule.whenFormulaSatisfied(FORMULA(AND(checkboxDisableFormula,controlledCheckFormula)));
+      checkboxControlledDisabledRule.setRanges([checkboxDataRange]);
                             
       const missableRule = SpreadsheetApp.newConditionalFormatRule();
       missableRule.setBackground(COLOR.MISSABLE);
       missableRule.setFontColor(COLOR.WHITE);
-      missableRule.whenFormulaSatisfied(missableFormula);
+      missableRule.whenFormulaSatisfied(FORMULA(missableFormula));
       missableRule.setRanges([itemDataRange]);
                             
       const infoNoteRule = SpreadsheetApp.newConditionalFormatRule();
       infoNoteRule.setBackground(COLOR.INFO_NOTE);
       infoNoteRule.setFontColor(COLOR.WHITE);
-      infoNoteRule.whenFormulaSatisfied(infoNoteFormula);
+      infoNoteRule.whenFormulaSatisfied(FORMULA(infoNoteFormula));
       infoNoteRule.setRanges([itemDataRange]);
                             
       const warnNoteRule = SpreadsheetApp.newConditionalFormatRule();
       warnNoteRule.setBackground(COLOR.WARN_NOTE);
       warnNoteRule.setFontColor(COLOR.WHITE);
-      warnNoteRule.whenFormulaSatisfied(warnNoteFormula);
+      warnNoteRule.whenFormulaSatisfied(FORMULA(warnNoteFormula));
       warnNoteRule.setRanges([itemDataRange]);
                             
       this.sheet.setConditionalFormatRules([
         availableErrorRule,
         checkedCrossthroughRule,
         checkedBGRule,
+        checkboxControlledDisabledRule,
         checkboxDisableRule,
         missedRule,
         usedRule,
+        checkboxControlledRule,
         warnNoteRule,
         infoNoteRule,
         missableRule,
@@ -779,7 +798,7 @@ namespace ChecklistApp {
       try {
         if (this.filter) {
           const filterRange = this.filter.getRange();
-          for (let i = filterRange.getColumn(); i <= filterRange.getLastColumn(); i++) {
+          for (let i = filterRange.getLastColumn(); i >= filterRange.getColumn(); i--) {
             const criteria = this.filter.getColumnFilterCriteria(i);
             if (criteria) {
               this.filter.setColumnFilterCriteria(i,criteria);

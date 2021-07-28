@@ -31,7 +31,10 @@ namespace ChecklistApp {
     }
 
     get filter():Filter {
-      return this.sheet.getFilter();
+      time("getFilter");
+      const filter = this.sheet.getFilter();
+      timeEnd("getFilter");
+      return filter;
     }
 
     get name():string {
