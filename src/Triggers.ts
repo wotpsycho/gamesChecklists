@@ -61,7 +61,7 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
         case "meta": checklist.syncMeta(); break;
         case "FULL RESET": checklist.reset(true); break;
       }
-      checklist.isChecklist && checklist.ensureTotalFormula();
+      checklist.isChecklist && checklist.ensureTotalFormulas();
       return;
     }
 

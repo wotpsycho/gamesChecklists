@@ -301,7 +301,7 @@ namespace ChecklistApp {
       
       time("updateTotals");
       if (this.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
-        this.ensureTotalFormula();
+        this.ensureTotalFormulas();
       }
       timeEnd("updateTotals");
       
@@ -439,7 +439,7 @@ namespace ChecklistApp {
       timeEnd("filterCreate");
       
       time("totals");
-      this.ensureTotalFormula();
+      this.ensureTotalFormulas();
       timeEnd("totals");
 
       time("settings");
@@ -867,7 +867,7 @@ namespace ChecklistApp {
     }
     // END QUICK FILTER SECTION
     // REPORTING SECTION
-    ensureTotalFormula(): void {
+    ensureTotalFormulas(): void {
       time("totalFormula");
       // static imports
       const {FORMULA,CONCAT, A1, IF, GT, ADD, COUNTIFS, VALUE, CHAR,EQ,ROUND,DIV,MULT,MINUS} = Formula;
