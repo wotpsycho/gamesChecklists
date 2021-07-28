@@ -129,32 +129,33 @@ namespace Formula {
     prettyPrint = shouldPrettyPrint; // TODO Allow only in Debug options due to Max Formula Length
     return oldValue;
   };
-  export const AND:StringFormula = withArgsShortCircuit(
-    withArgsTransform(
+  const rangeRegExp = /^\(*(\$?[A-Z]+)?(\$?[1-9][0-9]*):(\$?[A-Z]+)?(\$?[1-9][0-9]*)\)*$/;
+  export const AND:StringFormula = withArgsTransform(
+    withArgsShortCircuit(
       PrefixFormula("AND"),
-      (...args:string[]):string[] => {
-        const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.TRUE);
-        if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.TRUE];
-        return newArgs;
+      (...values:string[]):string => {
+        if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
+        if (values.length == 1 && !values[0].match(rangeRegExp)) return values[0];
       }
     ),
-    (...values:string[]):string => {
-      if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
-      if (values.length == 1 && values[0].indexOf(":") < 0) return values[0];
+    (...args:string[]):string[] => {
+      const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.TRUE);
+      if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.TRUE];
+      return newArgs;
     }
   );
-  export const OR:StringFormula = withArgsShortCircuit(
-    withArgsTransform(
+  export const OR:StringFormula = withArgsTransform(
+    withArgsShortCircuit(
       PrefixFormula("OR"),
-      (...args:string[]):string[] => {
-        const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.FALSE);
-        if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.FALSE];
-        return newArgs;
+      (...values:string[]):string => {
+        if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
+        if (values.length == 1 && !values[0].match(rangeRegExp)) return values[0];
       }
     ),
-    (...values:string[]):string => {
-      if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
-      if (values.length == 1 && values[0].indexOf(":") < 0) return values[0];
+    (...args:string[]):string[] => {
+      const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.FALSE);
+      if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.FALSE];
+      return newArgs;
     }
   );
   export const NOT:StringFormula = withArgsShortCircuit(
@@ -172,23 +173,23 @@ namespace Formula {
       else if (args[0] == Formula.VALUE.FALSE) return args[2];
     }
   );
-  export const IFS:StringFormula = withArgsShortCircuit(
-    withArgsTransform(
+  export const IFS:StringFormula = withArgsTransform(
+    withArgsShortCircuit(
       PrefixFormula("IFS"),
-      (...args:string[]):string[] => {
-        const newArgs = [];
-        for (let i = 0; i < args.length; i+=2) {
-          if (args[i] != Formula.VALUE.FALSE) { // Take out any FALSE arguments
-            newArgs.push(args[i],args[i+1]);
-          }
-          if (args[i] == Formula.VALUE.TRUE)
-            break; // Short circuit if you reach a TRUE since all further can't be reached
-        }
-        return newArgs;
+      (...args:string[]):string => {
+        if (args[0] == Formula.VALUE.TRUE) return args[1];
       }
     ),
-    (...args:string[]):string => {
-      if (args[0] == Formula.VALUE.TRUE) return args[1];
+    (...args:string[]):string[] => {
+      const newArgs = [];
+      for (let i = 0; i < args.length; i+=2) {
+        if (args[i] != Formula.VALUE.FALSE) { // Take out any FALSE arguments
+          newArgs.push(args[i],args[i+1]);
+        }
+        if (args[i] == Formula.VALUE.TRUE)
+          break; // Short circuit if you reach a TRUE since all further can't be reached
+      }
+      return newArgs;
     }
   );
   export const IFERROR:StringFormula = PrefixFormula("IFERROR");
