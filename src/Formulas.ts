@@ -140,7 +140,7 @@ namespace Formula {
     ),
     (...values:string[]):string => {
       if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
-      if (values.length == 1) return values[0];
+      if (values.length == 1 && values[0].indexOf(":") < 0) return values[0];
     }
   );
   export const OR:StringFormula = withArgsShortCircuit(
@@ -154,7 +154,7 @@ namespace Formula {
     ),
     (...values:string[]):string => {
       if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
-      if (values.length == 1) return values[0];
+      if (values.length == 1 && values[0].indexOf(":") < 0) return values[0];
     }
   );
   export const NOT:StringFormula = withArgsShortCircuit(
@@ -297,6 +297,7 @@ namespace Formula {
   export const T = PrefixFormula("T");
   export const N = PrefixFormula("N");
   export const ROUND = PrefixFormula("ROUND");
+  export const ISFORMULA = PrefixFormula("ISFORMULA");
   export const COMMENT:{
     BOOLEAN: StringFormula,
     NUMBER: StringFormula,
