@@ -1840,7 +1840,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
       return this.isVirtualChoice 
         ? NOT(this.toPRUsedFormula()) 
         : AND(
-          NOT(this._getChoiceRowStatusFormula(STATUS.CHECKED)),
+          NOT(OR(...this.translator.rowsToA1Ranges(this.choiceInfo.options,COLUMN.CHECK))),
           CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow).toRawPreReqsMetFormula()
         );
     }
