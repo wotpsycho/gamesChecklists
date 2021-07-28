@@ -1092,12 +1092,7 @@ namespace Status {
     /**
      * If this has options, only show this row if an Option is available
      */
-    // static count = 0;
     toPreReqsMetFormula():string {
-      // if (RootNode.count++ > 5_000) throw new Error();
-      const e = new Error();
-      if (e.stack && this.row > 740) Logger.log(e.stack);
-      Logger.log("prmf " + this.row);
       if (this.optionsRows.length > 0) {
         return OR(...this.optionsRows.map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator,optionRow).toPreReqsMetFormula()));
       } else {
@@ -1106,7 +1101,6 @@ namespace Status {
     }
 
     toRawPreReqsMetFormula() {
-      Logger.log("rprmf " + this.row);
       return BooleanFormulaNode.prototype.toPreReqsMetFormula.call(this);//super.toPreReqsMetFormula();
     }
 
