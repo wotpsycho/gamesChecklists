@@ -159,24 +159,26 @@ namespace Status {
       time("getStatusValues preReqValues");
       const preReqValues:unknown[][] = preReqRange.getValues();
       timeEnd("getStatusValues preReqValues");
-      // TODO Remove direct formula logic, disabled now
-      // time("getStatusValues preReqFormulas"); 
-      // const preReqFormulas:string[][] = preReqRange.getFormulas();
-      // timeEnd("getStatusValues preReqFormulas");
       time("getStatusValues statusFormulas");
       const existingStatusFormulas:string[][] = statusDataRange.getFormulas();
       timeEnd("getStatusValues statusFormulas");
-      time("getStatusValues checkValues");
-      const checkboxValues:string[][] = checkRange.getValues();
-      timeEnd("getStatusValues checkValues", "getStatusValues");
+      time("getStatusValues checkFormulas");
+      const checkboxFormulas:string[][] = checkRange.getFormulas();
+      timeEnd("getStatusValues checkFormulas", "getStatusValues");
 
+      const numRows = preReqValues.length;
       // TODO add interactive validation?
       //const preReqValidations = preReqRange.getDataValidations(); 
 
-      // will be overwriting these
-      const statusFormulas:string[] = [];
-      const notes:string[] = [];
-      const controlledCheckboxes:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],formula:string}[] = [];
+      // Only set if has a formula to write
+      const statusFormulas:string[] = new Array(numRows);
+      const controlledFormulas:string[] = new Array(numRows);
+      // Fill with null to reset if not set
+      const notes:string[] = new Array(numRows).fill(null);
+      const checkNotes:string[] = new Array(numRows).fill(null);
+      const itemStyles:GoogleAppsScript.Spreadsheet.FontStyle[] = new Array(numRows).fill(null);
+      const itemWeights:GoogleAppsScript.Spreadsheet.FontWeight[] = new Array(numRows).fill(null);
+      const itemLines:GoogleAppsScript.Spreadsheet.FontLine[] = new Array(numRows).fill(null);
 
       time("getDebugColumns");
       const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
@@ -214,11 +216,10 @@ namespace Status {
       time("calculateValues");
       // Generate our formulas
       time("generateFormulas");
-      for (let i:number = 0; i < preReqValues.length; i++) {
+      for (let i:number = 0; i < numRows; i++) {
         hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
         const parser:CellFormulaParser = this.parsers[i+firstRow];
         let note:string = null;
-        let checkboxControlledByInfos:sheetValueInfo[];
         if (parser) {
           statusFormulas[i] = FORMULA(parser.toFormula());
           if (statusFormulas[i].length > 50_000 && Formula.togglePrettyPrint(false)) {
@@ -239,23 +240,16 @@ namespace Status {
             } 
           }
           if (parser.isControlled()) {
-            checkboxControlledByInfos = parser.getControlledByInfos();
+            const checkboxControlledByInfos:sheetValueInfo[] = parser.getControlledByInfos();
+            const controlNotes = [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"];
+            checkboxControlledByInfos.forEach(({row,value}) => {
+              if (value && value.toString().trim()) {
+                controlNotes.push(`•${value} (Row ${row})`);
+              }
+            });
+            checkNotes[i] = controlNotes.join("\n");
+            controlledFormulas[i] = FORMULA(parser.toControlledFormula());
           }
-        }
-        if (checkboxControlledByInfos) {
-          const controlledData:{row:row,checkboxCell:Range,itemCell:Range,notes:string[],formula:string} = {
-            row: i+firstRow,
-            checkboxCell: checkRange.getCell(i+1,1),
-            itemCell: itemDataRange.getCell(i+1,1),
-            notes: [checkboxControlledByInfos.length > 1 ? "Linked to these Items:" : "Linked to this Item:"],
-            formula: parser.toControlledFormula(),
-          };
-          checkboxControlledByInfos.forEach(({row,value}) => {
-            if (value && value.toString().trim()) {
-              controlledData.notes.push(`•${value} (Row ${row})`);
-            }
-          });
-          controlledCheckboxes.push(controlledData);
         }
         if (hasDebugColumns) {
           timeEnd("debug generateFormula row"+(i+firstRow)); // Only report this timing if debug columns present
@@ -279,39 +273,43 @@ namespace Status {
         });
         timeEnd("setFormulasIndividual");
 
-        time("resetItemUnderlineItalics");
-        itemDataRange.setFontStyle("normal").setFontLine("none").setFontWeight("normal");
-        timeEnd("resetItemUnderlineItalics");
-
-        time("underlineRequiredItem");
+        time("determineUnderlineRows");
         const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[ChecklistApp.FINAL_ITEM_TYPE];
         if (finalItems) {
           const dependendentRows = new Set<number>();
           finalItems.forEach(finalItem => {
             CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
           });
-          dependendentRows.forEach(row => (itemDataRange.getCell(row-firstRow+1,1).setFontWeight("bold")));
+          dependendentRows.forEach(row => itemWeights[row-firstRow] = "bold");//(itemDataRange.getCell(row-firstRow+1,1).setFontWeight("bold")));
         }
-        timeEnd("underlineRequiredItem");
-        
-        time("resetCheckboxes");
-        checkRange.clearNote().setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
-        checkRange.setValues(checkboxValues);
-        timeEnd("resetCheckboxes");
+        timeEnd("determineUnderlineRows");
 
         time("controlledRows");
-        controlledCheckboxes.forEach(controlledCheckbox => {
-          controlledCheckbox.itemCell.setFontStyle("italic");
-          controlledCheckbox.checkboxCell.setFormula(FORMULA(controlledCheckbox.formula));
-          if (controlledCheckbox.notes.length > 1) {
-            controlledCheckbox.checkboxCell.setNote(controlledCheckbox.notes.join("\n"));
+        controlledFormulas.forEach((controlledFormula,i) => {
+          const existingFormula = checkboxFormulas[i][0];
+          if (controlledFormula) {
+            itemStyles[i] = "italic";
+            if (existingFormula !== controlledFormula) {
+              checkRange.getCell(i+1,1).setFormula(controlledFormula);
+            }
+          } else if (existingFormula) {
+            // Had a formula but currently dosen't, set to FALSE
+            checkRange.getCell(i + 1, 1).setValue(VALUE.FALSE);
           }
         });
         timeEnd("controlledRows");
 
         time("setNotes");
         preReqRange.setNotes(notes.map(note => [note]));
+        checkRange.setNotes(checkNotes.map(note => [note]));
         timeEnd("setNotes");
+        
+        time("setItemUnderlineStyleWeight");
+        itemDataRange
+          .setFontStyles(itemStyles.map(style => [style]))
+          .setFontLines(itemLines.map(lines => [lines]))
+          .setFontWeights(itemWeights.map(weight => [weight]));
+        timeEnd("setItemUnderlineStyleWeight");
 
         time("debugColumnValues");
         Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
@@ -332,7 +330,7 @@ namespace Status {
       try {
         const preReqRichTexts = [];
         time("addLinks flush");
-        // this.checklist.flush();
+        this.checklist.flush();
         timeEnd("addLinks flush");
         time("addLinks getRange");
         const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
@@ -383,7 +381,7 @@ namespace Status {
         preReqRange.setRichTextValues(preReqRichTexts.map(richText => [richText]));
         timeEnd("setRichText");
         time("endFlush");
-        // this.checklist.flush();
+        this.checklist.flush();
         timeEnd("endFlush");
       } finally {
         timeEnd("addLinksToPreReqs");
