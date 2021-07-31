@@ -92,8 +92,17 @@ namespace Status {
   }
   export class StatusFormulaTranslator {
     readonly checklist: Checklist;
+    private requestId:string = Date.now().toString()
     private constructor(checklist: Checklist) {
       this.checklist = checklist;
+      CacheService.getScriptCache().put("latestTranslatorRequestId",this.requestId,60);
+    }
+
+    get isLatest():boolean {
+      time("getCachedRequestId");
+      const cachedRequestId = CacheService.getScriptCache().get("latestTranslatorRequestId");
+      timeEnd("getCachedRequestId");
+      return cachedRequestId == this.requestId;
     }
 
     private static readonly translators: {[x:number]: StatusFormulaTranslator} = {}
@@ -180,6 +189,10 @@ namespace Status {
       const itemWeights:GoogleAppsScript.Spreadsheet.FontWeight[] = new Array(numRows).fill(null);
       const itemLines:GoogleAppsScript.Spreadsheet.FontLine[] = new Array(numRows).fill(null);
 
+      time("fontSize");
+      const checkSizes:number[] = new Array(numRows).fill(itemDataRange.getFontSize());
+      timeEnd("fontSize");
+
       time("getDebugColumns");
       const debugColumns: {[x:string]: {formulaFunc: ()=>string,range?: Range, formulas?: string[][]}} = {
         "isAvailable": {
@@ -215,6 +228,7 @@ namespace Status {
 
       time("calculateValues");
       // Generate our formulas
+      this.parsers;
       time("generateFormulas");
       for (let i:number = 0; i < numRows; i++) {
         hasDebugColumns && time("debug generateFormula row"+(i+firstRow));
@@ -249,6 +263,7 @@ namespace Status {
             });
             checkNotes[i] = controlNotes.join("\n");
             controlledFormulas[i] = FORMULA(parser.toControlledFormula());
+            checkSizes[i] = 0;
           }
         }
         if (hasDebugColumns) {
@@ -262,14 +277,16 @@ namespace Status {
       timeEnd("generateFormulas");
       timeEnd("calculateValues");
 
-      if (this.checklist.isLatest) {
+      if (this.isLatest) {
         time("writeValues");
 
         time("setFormulasIndividual");
         // Reduce client-side recalculations by only setting formula if changed
         statusFormulas.forEach((statusFormula,i) => {
           if (statusFormula.length > 40000) console.warn(`Long Formula Row ${i+firstRow}: ${statusFormula.length}`);
-          statusFormula !== existingStatusFormulas[i][0] && statusDataRange.getCell(i+1,1).setFormula(statusFormula);
+          if (statusFormula !== existingStatusFormulas[i][0]) {
+            statusDataRange.getCell(i+1,1).setFormula(statusFormula);
+          }
         });
         timeEnd("setFormulasIndividual");
 
@@ -280,13 +297,14 @@ namespace Status {
           finalItems.forEach(finalItem => {
             CellFormulaParser.getParserForChecklistRow(this,finalItem.row).getAllPossiblePreReqRows().forEach(dependendentRows.add,dependendentRows);
           });
-          dependendentRows.forEach(row => itemWeights[row-firstRow] = "bold");//(itemDataRange.getCell(row-firstRow+1,1).setFontWeight("bold")));
+          dependendentRows.forEach(row => itemWeights[row-firstRow] = "bold");
         }
         timeEnd("determineUnderlineRows");
 
         time("controlledRows");
-        controlledFormulas.forEach((controlledFormula,i) => {
-          const existingFormula = checkboxFormulas[i][0];
+        checkboxFormulas.forEach((existingFormulaRow,i) => {
+          const existingFormula = existingFormulaRow[0];
+          const controlledFormula = controlledFormulas[i];
           if (controlledFormula) {
             itemStyles[i] = "italic";
             if (existingFormula !== controlledFormula) {
@@ -294,7 +312,7 @@ namespace Status {
             }
           } else if (existingFormula) {
             // Had a formula but currently dosen't, set to FALSE
-            checkRange.getCell(i + 1, 1).setValue(VALUE.FALSE);
+            checkRange.getCell(i+1, 1).setValue(VALUE.FALSE);
           }
         });
         timeEnd("controlledRows");
@@ -310,6 +328,10 @@ namespace Status {
           .setFontLines(itemLines.map(lines => [lines]))
           .setFontWeights(itemWeights.map(weight => [weight]));
         timeEnd("setItemUnderlineStyleWeight");
+
+        time("setCheckSize");
+        checkRange.setFontSizes(checkSizes.map(size => [size]));
+        timeEnd("setCheckSize");
 
         time("debugColumnValues");
         Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
@@ -328,9 +350,12 @@ namespace Status {
     addLinksToPreReqs(startRow:row = this.checklist.firstDataRow,endRow = this.checklist.lastRow):void {
       time("addLinksToPreReqs");
       try {
+        if (startRow < this.checklist.firstDataRow) startRow = this.checklist.firstDataRow;
+        if (endRow > this.checklist.lastRow) endRow = this.checklist.lastRow;
+        if (startRow > endRow) return;
         const preReqRichTexts = [];
         time("addLinks flush");
-        this.checklist.flush();
+        // this.checklist.flush();
         timeEnd("addLinks flush");
         time("addLinks getRange");
         const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
@@ -381,7 +406,7 @@ namespace Status {
         preReqRange.setRichTextValues(preReqRichTexts.map(richText => [richText]));
         timeEnd("setRichText");
         time("endFlush");
-        this.checklist.flush();
+        // this.checklist.flush();
         timeEnd("endFlush");
       } finally {
         timeEnd("addLinksToPreReqs");
@@ -1431,7 +1456,7 @@ namespace Status {
       if (this.isPhase(PHASE.FINALIZED)) {
         this._valueInfo = valueInfo; 
       }
-      return valueInfo;
+      return valueInfo ?? {} as valueInfo;
     }
 
     checkErrors():boolean {

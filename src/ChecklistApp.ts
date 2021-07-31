@@ -47,12 +47,10 @@ namespace ChecklistApp {
     UNAVAILABLE: "#fce5cd",
     MISSED: "#f4cccc",
     USED: "#ead1dc",
+    CONTROLLED: "#cfe2f3",
     DISABLED: "#d9d9d9",
     CHECKED_BG: "#d9ead3",
     CHECKED_TEXT: "#666666",
-    CONTROLLED_BG: "#9fc5e8",
-    CONTROLLED_TEXT: "#9fc5e9",
-    CONTROLLED_DISABLED_TEXT: "#d9d9da",
     MISSABLE: "#990000",
     INFO_NOTE: "#4a86e8",
     WARN_NOTE: "#dd0000",
@@ -277,8 +275,8 @@ namespace ChecklistApp {
       
       time("populateAvailable");
       if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
-        Status.validateAndGenerateStatusFormulasForChecklist(this);
-        Status.addLinksToPreReqs(this, range.getRowIndex(), range.getLastRow());
+        this.calculateStatusFormulas();
+        this.linkPreReqs(range);
       }
       timeEnd("populateAvailable");
       
@@ -442,7 +440,7 @@ namespace ChecklistApp {
       timeEnd("filterCreate");
       
       time("totals");
-      this.ensureTotalFormulas();
+      this.ensureTotalFormulas(true);
       timeEnd("totals");
 
       time("settings");
@@ -649,7 +647,7 @@ namespace ChecklistApp {
     // CONDITIONAL FORMATTING UTILITIES
     resetConditionalFormatting(_skipMeta: boolean = false): void {
       time("checklist resetConditionalFormatting");
-      const {FORMULA,NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE,ISFORMULA,AND} = Formula;
+      const {FORMULA,NOT,IF,ISERROR,ISBLANK,OR,REGEXMATCH,A1,VALUE,EQ,CONCAT,NE,ISFORMULA} = Formula;
       const prettyPrint = Formula.togglePrettyPrint(false);
               
       const checkboxDataRange = this.getUnboundedColumnDataRange(COLUMN.CHECK);
@@ -688,7 +686,7 @@ namespace ChecklistApp {
         )
       );
       const checkedFormula = (EQ(relativeStatusCell,VALUE(STATUS.CHECKED)));
-      const controlledCheckFormula = (ISFORMULA(relativeCheckCell));
+      const controlledFormula = (ISFORMULA(relativeCheckCell));
       const missableFormula = (REGEXMATCH(relativePreReqCell,VALUE("(^|\\n)MISSED ")));
       const infoNoteFormula = (REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)(INFO|NOTE)")));
       const warnNoteFormula = (REGEXMATCH(relativeNotesCell, VALUE("(^|\\n)WARN")));
@@ -716,6 +714,11 @@ namespace ChecklistApp {
       notAvailableRule.setBackground(COLOR.UNAVAILABLE);
       notAvailableRule.whenFormulaSatisfied(FORMULA(notAvailableFormula));
       notAvailableRule.setRanges([preReqDataRange,statusDataRange]);
+
+      const controlledRule = SpreadsheetApp.newConditionalFormatRule();
+      controlledRule.setBackground(COLOR.CONTROLLED);
+      controlledRule.whenFormulaSatisfied(FORMULA(controlledFormula));
+      controlledRule.setRanges([preReqDataRange,statusDataRange]);
                             
       const checkedCrossthroughRule = SpreadsheetApp.newConditionalFormatRule();
       checkedCrossthroughRule.setStrikethrough(true);
@@ -735,19 +738,7 @@ namespace ChecklistApp {
       checkboxDisableRule.setFontColor(COLOR.DISABLED);
       checkboxDisableRule.whenFormulaSatisfied(FORMULA(checkboxDisableFormula));
       checkboxDisableRule.setRanges([checkboxDataRange]);
-
-      const checkboxControlledRule = SpreadsheetApp.newConditionalFormatRule();
-      checkboxControlledRule.setBackground(COLOR.CONTROLLED_BG);
-      checkboxControlledRule.setFontColor(COLOR.CONTROLLED_TEXT);
-      checkboxControlledRule.whenFormulaSatisfied(FORMULA(controlledCheckFormula));
-      checkboxControlledRule.setRanges([checkboxDataRange]);
-
-      const checkboxControlledDisabledRule = SpreadsheetApp.newConditionalFormatRule();
-      checkboxControlledDisabledRule.setBackground(COLOR.DISABLED);
-      checkboxControlledDisabledRule.setFontColor(COLOR.CONTROLLED_DISABLED_TEXT);
-      checkboxControlledDisabledRule.whenFormulaSatisfied(FORMULA(AND(checkboxDisableFormula,controlledCheckFormula)));
-      checkboxControlledDisabledRule.setRanges([checkboxDataRange]);
-                            
+                     
       const missableRule = SpreadsheetApp.newConditionalFormatRule();
       missableRule.setBackground(COLOR.MISSABLE);
       missableRule.setFontColor(COLOR.WHITE);
@@ -770,15 +761,14 @@ namespace ChecklistApp {
         availableErrorRule,
         checkedCrossthroughRule,
         checkedBGRule,
-        checkboxControlledDisabledRule,
         checkboxDisableRule,
         missedRule,
         usedRule,
-        checkboxControlledRule,
         warnNoteRule,
         infoNoteRule,
         missableRule,
-        notAvailableRule
+        notAvailableRule,
+        controlledRule
       ]);//.concat(existingRules,[notAvailableRule]));
 
       if (!_skipMeta && this.metaSheet) {
@@ -790,8 +780,10 @@ namespace ChecklistApp {
     // RESET/INIT/STRUCTURE SECTION
                           
     // FILTER SECTION
-    removeFilter(): void {
-      if (this.filter) this.filter.remove();
+    removeFilter(): Filter {
+      const filter = this.filter;
+      if (filter) this.filter.remove();
+      return filter;
     }
     refreshFilter(): void {
       time("refreshFilter");
@@ -886,7 +878,7 @@ namespace ChecklistApp {
     }
     // END QUICK FILTER SECTION
     // REPORTING SECTION
-    ensureTotalFormulas(): void {
+    ensureTotalFormulas(forceWrite = false): void {
       time("totalFormula");
       // static imports
       const {FORMULA,CONCAT, A1, IF, GT, ADD, COUNTIFS, VALUE, CHAR,EQ,ROUND,DIV,MULT,MINUS} = Formula;
@@ -961,7 +953,7 @@ namespace ChecklistApp {
           )
         )
       );
-      if (totalCell && totalCell.getFormula() !== totalFormula) {
+      if (totalCell && (forceWrite || totalCell.getFormula() !== totalFormula)) {
         totalCell.setFormula(totalFormula);
         totalCell.setNote([
           "R: [Available]/[Remaining]",
@@ -969,7 +961,7 @@ namespace ChecklistApp {
           "[Percent Completed]%"
         ].join("\n"));
       }
-      if (missedCell && missedCell.getFormula() !== missedFormula) {
+      if (missedCell && (forceWrite || missedCell.getFormula() !== missedFormula)) {
         missedCell.setFormula(missedFormula);
         missedCell.setNote([
           "• Missed: Missed Items (and their dependents)",
@@ -981,5 +973,13 @@ namespace ChecklistApp {
       timeEnd("totalFormula");
     }
     // END REPORTING SECTION
+    // STATUS SECTION
+    calculateStatusFormulas():void {
+      Status.validateAndGenerateStatusFormulasForChecklist(this);
+    }
+    linkPreReqs(range:Range = this.getColumnDataRange(COLUMN.PRE_REQS)):void {
+      Status.addLinksToPreReqs(this, range.getRow(), range.getLastRow());
+    }
+    // END STATUS SECTION
   }                                        
 }                            
