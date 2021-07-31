@@ -57,9 +57,13 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
     if (range.getA1Notation() == "A1") {
       // Debug hacks
       switch (event.value){
-        case "reset":  checklist.reset(); break;
+        case "reset": 
+        case "refresh": checklist.reset(); break;
         case "meta": checklist.syncMeta(); break;
         case "FULL RESET": checklist.reset(true); break;
+        case "link": checklist.isChecklist && checklist.linkPreReqs(); break;
+        case "status":
+        default: checklist.isChecklist && checklist.calculateStatusFormulas(); break;
       }
       checklist.isChecklist && checklist.ensureTotalFormulas();
       return;
