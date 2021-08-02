@@ -428,7 +428,7 @@ namespace Status {
         const rowValues:{[x:string]: sheetValueInfo} = {};
         value.toString().split(/(\r|\n)+/).forEach(value => {
           const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
-          const numReceived:number = Number(rawParsed[1] || rawParsed[6] || 1);
+          const numReceived:number = Number(rawParsed[1] || rawParsed[7] || 1);
           const rowSubValue = rawParsed[3];
           const valueInfo: sheetValueInfo = {
             num: numReceived,
@@ -455,6 +455,27 @@ namespace Status {
       this.columnInfo[columnIndex] = {byRow,byValue};
       timeEnd(`getColumnValues ${column}`);
       return this.columnInfo[columnIndex];
+    }
+
+    getRowCounts(column:column,id:string):{[x:number]:number} {
+      if (!this.checklist.hasColumn(column)) return;
+      const columnInfo:columnValues = this.getColumnValues(column);
+      let rows:{[x:number]:number};
+      const addRows = (valueInfos: sheetValueInfo[]) => valueInfos.forEach(valueInfo => {
+        rows || (rows = {});
+        rows[valueInfo.row] = (rows[valueInfo.row] || 0) + valueInfo.num;
+      });
+      if (columnInfo.byValue[id]) {
+        addRows(columnInfo.byValue[id]);
+      } else if (id.indexOf("*") >= 0 || id.indexOf(".") >= 0) {
+        const search:RegExp = RegExp("^" + id.replace(/\*/g,".*") + "$");
+        Object.keys(columnInfo.byValue).forEach(value => {
+          if (value.match(search)) {
+            addRows(columnInfo.byValue[value]);
+          }
+        });
+      }
+      return rows;
     }
 
     cellA1 (row: row, column: column): string {
@@ -484,21 +505,21 @@ namespace Status {
       return this.rowsToRanges(rows,column).map(range => Formula.A1(...range));
     }
 
-    rowInfosToA1Counts(rowInfos: ReadonlyArray<rowInfo>, column: column): {[x:string]: number} {
+    rowCountsToA1Counts(rowCounts: Readonly<{[x:number]:number}>, column: column): {[x:string]: number} {
       column = this.checklist.toColumnIndex(column);
       const rangeCounts:{[x:string]:number} = {};
-      if (rowInfos.length === 0) return rangeCounts;
-      let firstRow:row = rowInfos[0].row;
-      let lastRow:row = rowInfos[0].row;
-      let num:number = rowInfos[0].num;
-      for (let i:number = 1; i < rowInfos.length; i++) {
-        const rowInfo:rowInfo = rowInfos[i];
-        if (rowInfo.row != lastRow+1 || rowInfo.num != num) {
+      const rows = Object.keys(rowCounts).map(row => Number(row)).sort((a,b)=>a-b);
+      if (rows.length === 0) return rangeCounts;
+      let firstRow:row = rows[0];
+      let lastRow:row = rows[0];
+      let num:number = rowCounts[rows[0]];
+      for (let i:number = 1; i < rows.length; i++) {
+        if (rows[i] != lastRow+1 || rowCounts[rows[i]] != num) {
           rangeCounts[Formula.A1(firstRow,column,lastRow,column)] = num;
-          firstRow = lastRow = rowInfo.row;
-          num = rowInfo.num;
+          firstRow = lastRow = rows[i];
+          num = rowCounts[rows[i]];
         } else {
-          lastRow = rowInfo.row;
+          lastRow = rows[i];
         }
       }
       rangeCounts[Formula.A1(firstRow,column,lastRow,column)] = num;
@@ -512,10 +533,6 @@ namespace Status {
     row: row;
     column: column;
   };
-  type rowInfo = {
-    num: number;
-    row: row;
-  };
   type columnValues = {
     byRow: {
       [x:number]: sheetValueInfo[];
@@ -526,10 +543,8 @@ namespace Status {
   };
 
   // static imports
-
-
   // Essentially static defs
-  const PARSE_REGEX:RegExp = /^ *(?:(\+?\d+|ALL)x )? *(?:(SAME|COPY) )? *((?:(.*)!)?([^ ].*?)) *(?: x(\+?\d+|ALL))? *$/;
+  const PARSE_REGEX:RegExp = /^ *(?:(\+?\d+|ALL)x )? *(?:(SAME|COPY) )? *((?:(.*)!(?:([^ ].*?)#)?)?([^ ].*?)) *(?: x(\+?\d+|ALL))? *$/;
   let UID_Counter:number = 0;
   const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
   const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
@@ -706,9 +721,9 @@ namespace Status {
       this.rootNode.addOption(row);
     }
 
-    getChoiceInfo():choiceInfo {
+    getOptions():row[] {
       this.checkPhase(PHASE.FINALIZED);
-      return this.rootNode.getChoiceInfo();
+      return this.rootNode.getOptions();
     }
 
     getAllPossiblePreReqRows():ReadonlySet<row> {
@@ -1077,12 +1092,8 @@ namespace Status {
     }
     
     protected optionsRows:row[] = [];
-    getChoiceInfo(): choiceInfo {
-      return {
-        isVirtualChoice: false, 
-        choiceRow      : this.row, 
-        options        : this.optionsRows,
-      };
+    getOptions(): row[] {
+      return [...this.optionsRows];
     }
     addOption(row: number) {
       this.optionsRows.push(row);
@@ -1331,26 +1342,34 @@ namespace Status {
     }
   }
 
-  type valueInfo = {
-    isAll: boolean;
-    numNeeded: number;
-    isMulti: boolean;
+  type valueInfo =  {
+    key:string; // UID for the Ref
+    altColumnName: string;
+    altColumnId: string;
+    itemId: string;
     isSame: boolean;
-    key: string,
-    altColumnName: string,
-    id: string,
-    original: string;
-    rowInfos:ReadonlyArray<Readonly<rowInfo>>,
-    numPossible: number;
-    isVirtualChoice?: boolean;
-    wasSelfReferential?: boolean;
-  }
-// Abstract intermediate class
-  const valueInfoCache:{[x:number]: valueInfo} = {}; // TODO fix to work with multi CLs
+    rowCounts:{[x:number]:number}; // Row
+    numNeeded:number;
+    numPossible:number;
+    isVirtual:boolean;
+  };
+  type virtualValueInfo = {
+    [P in keyof valueInfo]?:valueInfo[P];
+  } & {
+    rowCounts:valueInfo["rowCounts"];
+  };
+
+  // Virtual Items, require rowCounts and can override any of the other valueInfo fields, 
+  // e.g. Virtual Choice has a numPossible of 1, numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
+  const virtualItems:{[x:string]: virtualValueInfo} = {};
+  const valueInfoCache:{[x:number]: valueInfo} = {}; // TODO fix to work with multi CLs?
+  // Abstract intermediate class
   abstract class FormulaValueNode<T> extends FormulaNode<T> {
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
     }
+
+    protected wasSelfReferential: boolean;
 
     private _valueInfo:valueInfo
     get valueInfo():Readonly<valueInfo> {
@@ -1358,99 +1377,116 @@ namespace Status {
       const text:string = this.text;
       let valueInfo:valueInfo = valueInfoCache[text];
       if (!valueInfo) {
-        const rawParsed: RegExpExecArray = PARSE_REGEX.exec(text);
-        if (rawParsed) {
-          valueInfo = {
-            isAll: rawParsed[1] == "ALL" || rawParsed[6] == "ALL",
-            numNeeded: Number(rawParsed[1] || rawParsed[6] || 1),
-            isMulti: !!(Number(rawParsed[1]) > 0 || Number(rawParsed[6]) > 0),
-            isSame: !!rawParsed[2],
-            key: rawParsed[3],
-            altColumnName: rawParsed[4],
-            id: rawParsed[5],
-            original: text,
-            rowInfos: [],
-            numPossible: undefined,
-          };
-          let match:RegExpMatchArray;
-          if (quoteMapping[valueInfo.key]) {
-            const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(quoteMapping[valueInfo.key]);
-            valueInfo.key = rawParsedQuote[3];
-            valueInfo.altColumnName = rawParsedQuote[4];
-            valueInfo.id = rawParsedQuote[5];
-          } else if ((match = valueInfo.key.match(quoteRegex))){
-            let unescaped = valueInfo.key;
-            do {
-              unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
-            } while ((match = unescaped.match(quoteRegex)));
-            const rawParsedQuote:RegExpExecArray = PARSE_REGEX.exec(unescaped);
-            valueInfo.key = rawParsedQuote[3];
-            valueInfo.altColumnName = rawParsedQuote[4];
-            valueInfo.id = rawParsedQuote[5];
+        const initialParse: RegExpExecArray = PARSE_REGEX.exec(text);
+        if (initialParse) {
+          // Looks properly formed
+          let unescapedText = text;
+          if (quoteMapping[initialParse[3]]) {
+            // Whole item was in quotes, replace with original, e.g. `5x "Say Hi"` should match 5 items of `Say Hi`
+            unescapedText = text.replace(initialParse[3],quoteMapping[initialParse[3]]);
+          } else {
+            // Only part was quoted, keep as quotes, e.g. `5x Say "Hi"` should match 5 items of `Say "Hi"`
+            let match:RegExpMatchArray;
+            while ((match = unescapedText.match(quoteRegex))) {
+              unescapedText = unescapedText.replace(match[0],`"${quoteMapping[match[0]]}"`);
+            }
           }
-          if (valueInfo.isMulti && !valueInfo.altColumnName && valueInfo.id.indexOf("*") < 0) {
-          // Implicity prefix match on item for "[N]x [item]"
-            valueInfo.id += "*";
-          }
-          let originalMulti:string;
-          let columnInfo:columnValues = this.translator.getColumnValues(valueInfo.altColumnName || COLUMN.ITEM);
-          
-          if (!columnInfo) {
-            // Assume that "!" was NOT trying to reference a different column
-            columnInfo = this.translator.getColumnValues(COLUMN.ITEM);
-            originalMulti = valueInfo.altColumnName;
-            valueInfo.id = `${valueInfo.altColumnName}!${valueInfo.id}`;
-            valueInfo.altColumnName = undefined;
-          }
-          if (columnInfo) {
-            if (valueInfo.id.indexOf("*") < 0) {
-              if (columnInfo.byValue[valueInfo.id]) {
-                (valueInfo.rowInfos as rowInfo[]).push(...(columnInfo.byValue[valueInfo.id]));
+          const rawParsed = unescapedText == text ? initialParse : PARSE_REGEX.exec(unescapedText);
+          // 1 = Number of items/ALL
+          // 2 = SAME/COPY
+          // 3 = Full Item Identifier
+          // 4 = Alt Column Name (before a !)
+          // 5 = Alt Column Identifier, if Item Identifier is present (between ! and #)
+          // 6 = Item Identifier (no !/#, or after #), OR Alt Column Identifier if Alt Column is present without Item (! without #)
+          const allRequested:boolean = rawParsed[1] == "ALL" || rawParsed[7] == "ALL";
+          const numRequested:number = !allRequested && (rawParsed[1] || rawParsed[7]) && Number(rawParsed[1] || rawParsed[7]);
+          const isSame = !!rawParsed[2];
+          const key:string = rawParsed[3];
+          const altColumnName:string = rawParsed[4];
+          let altColumnId:string = altColumnName && (rawParsed[5] || rawParsed[6]);
+          let itemId:string = altColumnName ? rawParsed[5] && rawParsed[6] : rawParsed[6];
+          // let altColumnInfo:columnValues;
+          let hasAltColumn = false;
+          let altColumnRows:{[x:number]:number};
+          if (altColumnName) {
+            hasAltColumn = this.translator.checklist.hasColumn(altColumnName);
+            // altColumnInfo = this.translator.getColumnValues(altColumnName);
+            if (hasAltColumn) {
+              // Has the column
+              altColumnRows = this.translator.getRowCounts(altColumnName, altColumnId);
+              if (!altColumnRows && itemId) {
+                // Assume # is part of the id and try again
+                altColumnId = `${altColumnId}#${itemId}`;
+                itemId = "";
+                altColumnRows = this.translator.getRowCounts(altColumnName,altColumnId);
               }
+            }
+            if (!altColumnRows) {
+              // Assume ! (and #) is part of Item if it didn't match a column/rows
+              itemId = `${altColumnName}!${altColumnId}${itemId ? `#${itemId}` : ""}`;
+            }
+          }
+          let itemRows:{[x:number]:number};
+          if (itemId) {
+            // const itemValues = this.translator.getColumnValues(COLUMN.ITEM);
+            if (itemId.indexOf("*")< 0 && (allRequested || numRequested)) {
+              itemId += "*";
+            }
+            itemRows = this.translator.getRowCounts(COLUMN.ITEM,itemId);
+          }
+          const rowCounts:{[x:number]:number} = [];
+          if (altColumnRows && itemRows) {
+            Object.keys(itemRows).filter(itemRow => altColumnRows[itemRow]).forEach(itemRow => rowCounts[itemRow] = itemRows[itemRow]);
+            if (Object.keys(rowCounts).length == 0) {
+              this.addError(`Could not find any Item "${itemId}" that also has "${altColumnId}" in "${altColumnName}" column`);
+            }
+          } else if (altColumnRows || itemRows) {
+            const rows = altColumnRows || itemRows;
+            Object.keys(rows).forEach(row => rowCounts[row] = rows[row]);
+          } else if (altColumnName) {
+            // If had an alt column, can determine those errors now with specificity
+            if (!hasAltColumn) {
+              this.addError(`Could not find column "${altColumnName}"`);
             } else {
-              const search:RegExp = RegExp("^" + valueInfo.id.replace(/\*/g,".*") + "$");
-              Object.entries(columnInfo.byValue).forEach(([value,columnValueInfos]) => {
-                if (value.match(search)) {
-                  (valueInfo.rowInfos as rowInfo[]).push(...columnValueInfos);
-                }
-              });
-              if (!valueInfo.isMulti) { // Wildcards without a numNeeded should require all
-                valueInfo.isAll = true; //numNeeded = valueInfo.rowInfos.reduce((total,rowInfo) => total + rowInfo.num, 0);
-                valueInfo.isMulti = true;
+              this.addError(`Could not find "${altColumnId}" in "${altColumnName}" column`);
+              if (altColumnId.indexOf("#") > 0) {
+                this.addError(`Could not find ${altColumnId.substring(0,altColumnId.indexOf("#"))} in "${altColumnName}" column`);
               }
             }
           }
-          if (originalMulti && valueInfo.rowInfos.length == 0) {
-            // Had a "!" where LHS did not match column and did not match item
-            this.addError(`Could not find column "${originalMulti}"`);
-          }
-          valueInfo.numPossible = valueInfo.rowInfos.reduce((total, rowInfo) => total + rowInfo.num, 0);
-
+          valueInfo = {
+            key,
+            altColumnName,
+            altColumnId,
+            itemId,
+            rowCounts,
+            isSame,
+            numNeeded: numRequested,
+            isVirtual: false,
+            numPossible: undefined,
+          };
           valueInfoCache[text] = valueInfo;
         }
       }
       // Copy cached object
       if (valueInfo) {
         valueInfo = Object.assign({},valueInfo);
-        if (valueInfo.rowInfos) {
-          if (virtualChoices[valueInfo.key]) {
-            // Is a choice with no row, set rows to choice's options' rows
-            const columnValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-            valueInfo.rowInfos = virtualChoices[valueInfo.key].options.map(optionRow => columnValues[optionRow]).flat();
-            valueInfo.numPossible = valueInfo.rowInfos.length;
-            valueInfo.isVirtualChoice = true;
-          }
-          valueInfo.rowInfos = [...valueInfo.rowInfos.map(rowInfo => Object.assign({},rowInfo))];
+        if (virtualItems[valueInfo.key]) {
+          valueInfo = {
+            ...valueInfo,
+            ...virtualItems[valueInfo.key],
+            isVirtual: true,
+          };
+        }
+        if (valueInfo.rowCounts) {
+          valueInfo.rowCounts = {...valueInfo.rowCounts};
           // Remove self reference (simplest dependency resolution, v0)
-          const rowIndex:number = valueInfo.rowInfos.findIndex(rowInfo => rowInfo.row == this.row);
-          if (rowIndex >= 0) {
-            const removed:rowInfo[] = (valueInfo.rowInfos as rowInfo[]).splice(rowIndex,1);
-            valueInfo.wasSelfReferential = true;
-            if (!valueInfo.isVirtualChoice) valueInfo.numPossible -= removed[0].num;
+          if (valueInfo.rowCounts[this.row]) {
+            delete valueInfo.rowCounts[this.row];
+            this.wasSelfReferential = true;
           }
-          if (valueInfo.isAll) {
-            valueInfo.numNeeded = valueInfo.numPossible;
-          }
+          valueInfo.numPossible = Object.values(valueInfo.rowCounts).reduce((total,count) => total + count, 0);
+          if (!valueInfo.numNeeded) valueInfo.numNeeded = valueInfo.numPossible;
         }
       }
       if (this.isPhase(PHASE.FINALIZED)) {
@@ -1465,7 +1501,7 @@ namespace Status {
           this.addError(`Could not find "${this.text}"`);
           return true;
         } else if (this.valueInfo.numPossible == 0) {
-          this.addError(`Could not find ${this.valueInfo.isMulti ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (except itself)" : ""}`);
+          this.addError(`Could not find ${this.valueInfo.numNeeded > 1 ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.itemId}"${this.wasSelfReferential ? " (except itself)" : ""}`);
           return true;
         }
       }
@@ -1477,9 +1513,9 @@ namespace Status {
         if (this.isInCircularDependency()) {
           this._allPossiblePreReqRows = this.getCircularDependencies();
         } else {
-          const allPossiblePreReqs:Set<row> = new Set(this.valueInfo.rowInfos.map(rowInfo => rowInfo.row));
-          this.valueInfo.rowInfos.forEach(rowInfo => 
-            CellFormulaParser.getParserForChecklistRow(this.translator,rowInfo.row).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
+          const allPossiblePreReqs:Set<row> = new Set(Object.keys(this.valueInfo.rowCounts).map(key => Number(key)));
+          Object.keys(this.valueInfo.rowCounts).forEach(row => 
+            CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
           );
           this._allPossiblePreReqRows = allPossiblePreReqs;
         }
@@ -1489,12 +1525,12 @@ namespace Status {
 
     getDirectPreReqInfos() {
       return {
-        [this.valueInfo.key]: this.valueInfo.rowInfos.map(rowInfo => rowInfo.row).filter((row,i,arr) => arr.indexOf(row) == i)
+        [this.valueInfo.key]: Object.keys(this.valueInfo.rowCounts).filter((row,i,arr) => arr.indexOf(row) == i).map(row => Number(row))
       };
     }
 
     getDirectPreReqRows() {
-      return new Set<row>(this.valueInfo.rowInfos.map(rowInfo => rowInfo.row));
+      return new Set<row>(Object.keys(this.valueInfo.rowCounts).map(row => Number(row)));
     }
 
     getCircularDependencies(previous:row[] = []):ReadonlySet<row> {
@@ -1505,8 +1541,8 @@ namespace Status {
       } else {
         previous.push(this.row);
         this._lockCircular = true;
-        this.valueInfo.rowInfos.forEach(rowInfo => {
-          CellFormulaParser.getParserForChecklistRow(this.translator,rowInfo.row).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
+        Object.keys(this.valueInfo.rowCounts).forEach(row => {
+          CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
         });
         this._lockCircular = false;
       }
@@ -1516,7 +1552,7 @@ namespace Status {
     }
 
     isDirectlyMissable():boolean {
-      if (this.valueInfo.isVirtualChoice) return false;
+      if (virtualItems[this.valueInfo.key]) return false;
       return super.isDirectlyMissable(); 
     }
 
@@ -1587,7 +1623,7 @@ namespace Status {
       if (super.checkErrors()) {
         return true;
       } else if (this.valueInfo.numPossible < this.valueInfo.numNeeded) {
-        this.addError(`There are only ${this.valueInfo.numPossible}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.id}"${this.valueInfo.wasSelfReferential ? " (when excluding itself)" : ""}`);
+        this.addError(`There are only ${this.valueInfo.numPossible}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.itemId}"${this.wasSelfReferential ? " (when excluding itself)" : ""}`);
         return true;
       }
     }
@@ -1709,7 +1745,7 @@ namespace Status {
         return VALUE.ZERO;
       } else {
         const vals: (string|number|boolean)[] = Array.isArray(values) ? values : [values];
-        const counts:string[] = Object.entries(this.translator.rowInfosToA1Counts(this.valueInfo.rowInfos, column)).reduce((counts,[range,count]) => {
+        const counts:string[] = Object.entries(this.translator.rowCountsToA1Counts(this.valueInfo.rowCounts, column)).reduce((counts,[range,count]) => {
           vals.forEach(value => {
             const countIf:string = COUNTIF(range, VALUE(value));
             counts.push(count == 1 ? countIf : MULT(countIf,VALUE(count)));
@@ -1786,28 +1822,23 @@ namespace Status {
       }
     }
   }
-
-  type choiceInfo = {
-    isVirtualChoice: boolean;
-    choiceRow?: row;
-    readonly options: row[]; // options is referenced in choiceRows, so don't allow overwrites
-  }
-  const virtualChoices:{[x:string]: choiceInfo} = {};
   class OptionFormulaNode extends FormulaValueNode<boolean> {
     static create(text:string, translator:StatusFormulaTranslator,row:row): FormulaNode<boolean> {
       return new OptionFormulaNode(text,translator,row);
     }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
+      const valueInfo = this.valueInfo;
       if (this.isVirtualChoice) {
-        if (!virtualChoices[this.valueInfo.key]) {
-          virtualChoices[this.valueInfo.key] = {
-            isVirtualChoice: true,
-            options: []
+        if (!virtualItems[valueInfo.key]) {
+          virtualItems[valueInfo.key] = {
+            key: valueInfo.key, 
+            rowCounts: {}, 
+            numPossible: 1,
+            numNeeded: 1,
           };
-        } else 
-          this.choiceParser?.addOption(this.row);
-        virtualChoices[this.valueInfo.key].options.push(this.row);
+        }
+        virtualItems[valueInfo.key].rowCounts[this.row] = 1;
       }
     }
     finalize() {
@@ -1816,19 +1847,19 @@ namespace Status {
     }
 
     get isVirtualChoice(): boolean {
-      return this.valueInfo.isVirtualChoice || !this.valueInfo.rowInfos.length;
+      return this.valueInfo.isVirtual || !Object.keys(this.valueInfo.rowCounts).length;
     }
     get choiceRow(): row {
-      return this.isVirtualChoice ? undefined : this.valueInfo.rowInfos[0].row;
+      return this.isVirtualChoice ? undefined : Number(Object.keys(this.valueInfo.rowCounts)[0]);
     }
     get choiceParser(): CellFormulaParser {
       return this.isVirtualChoice ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
     }
-    get choiceInfo(): choiceInfo {
+    get choiceOptions(): row[] {
       if (this.isVirtualChoice) {
-        return virtualChoices[this.valueInfo.key];
+        return Object.keys(virtualItems[this.valueInfo.key].rowCounts).map(row => Number(row));
       } else {
-        return this.choiceParser.getChoiceInfo();
+        return this.choiceParser.getOptions();
       }
     }
     static readonly usage:string = `OPTION Usage:
@@ -1845,13 +1876,13 @@ Example: Item "Yes" and Item "No" both have Pre-Req "OPTION Yes or No?"
 NOTE: CHOICE is a deprecated alias for OPTION`;
     checkErrors():boolean {
       let hasError = false;
-      if (this.choiceInfo.options.length < 2) {
+      if (this.choiceOptions.length < 2) {
         this.addError(`This is the only OPTION for Choice "${this.valueInfo.key}"\n\n${OptionFormulaNode.usage}`);
         hasError = true;
       }
       if (!this.isVirtualChoice) {
-        if (this.valueInfo.rowInfos.length != 1) {
-          this.addError(`"${this.valueInfo.key}" refers to ${this.valueInfo.rowInfos.length} Items\n\n${OptionFormulaNode.usage}`);
+        if (Object.keys(this.valueInfo.rowCounts).length != 1) {
+          this.addError(`"${this.valueInfo.key}" refers to ${Object.keys(this.valueInfo.rowCounts).length} Items\n\n${OptionFormulaNode.usage}`);
           hasError = true;
         }
         hasError = super.checkErrors() || hasError;
@@ -1863,14 +1894,14 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
       return this.isVirtualChoice 
         ? NOT(this.toPRUsedFormula()) 
         : AND(
-          NOT(OR(...this.translator.rowsToA1Ranges(this.choiceInfo.options,COLUMN.CHECK))),
+          NOT(OR(...this.translator.rowsToA1Ranges(this.choiceOptions,COLUMN.CHECK))),
           CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow).toRawPreReqsMetFormula()
         );
     }
 
     toPRUsedFormula():string {
       return this._determineFormula(
-        OR(...this.translator.rowsToA1Ranges(this.choiceInfo.options,COLUMN.CHECK)),
+        OR(...this.translator.rowsToA1Ranges(this.choiceOptions,COLUMN.CHECK)),
         STATUS.PR_USED,STATUS.CHECKED
       );
     }
@@ -2056,12 +2087,12 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     private get sameRowParser():CellFormulaParser {return this.sameRow && CellFormulaParser.getParserForChecklistRow(this.translator,this.sameRow); }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
-      if (this.valueInfo.rowInfos.length != 1) {
+      if (Object.keys(this.valueInfo.rowCounts).length != 1) {
         this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
-      } else if (this.valueInfo.isMulti && this.valueInfo.numPossible > 1) {
+      } else if ( this.valueInfo.numPossible > 1) {
         this.addError("Cannot use SAME with Numerical Equations");
       } else {
-        this.sameRow = this.valueInfo.rowInfos[0].row;
+        this.sameRow = Number(Object.keys(this.valueInfo.rowCounts)[0]);
       } 
     }
     
