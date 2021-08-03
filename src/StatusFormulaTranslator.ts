@@ -41,15 +41,28 @@ namespace Status {
         parseOperands,
       });
   };
-  const OR  = FormulaHelper(Formula.OR , /^ *(.+?) *\|\|? *(.+?) *$/,true);
+  const ReversibleFormulaHelper = (formula:Formula.StringFormula, regEx:RegExp, reversibleRegEx:RegExp):FormulaHelper => {
+    const parseOperands = (text:string):string[] => {
+      let match = text && text.match(regEx);
+      if (match) return match.slice(1);
+      match = text && text.match(reversibleRegEx);
+      if (match) return match.slice(1).reverse();
+    };
+    return Object.assign(
+      (...args:string[]) => formula(...args), 
+      formula, {
+        generateFormula: formula,
+        identify: (text:string):boolean => !!(text && (text.match(regEx) || text.match(reversibleRegEx))),
+        parseOperands,
+      });
+  };
+  const OR  = FormulaHelper(Formula.OR , /^ *(.+?) *\|\| *(.+?) *$/,true);
   const AND = FormulaHelper(Formula.AND, /^ *(.+?) *&& *(.+?) *$/,true);
   const NOT = FormulaHelper(Formula.NOT, /^ *! *(.+?) *$/);
   const EQ  = FormulaHelper(Formula.EQ , /^ *(.+?) *== *(.+?) *$/);
   const NE  = FormulaHelper(Formula.NE , /^ *(.+?) *!= *(.+?) *$/);
-  const GT  = FormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/);
-  const GTE = FormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/);
-  const LT  = FormulaHelper(Formula.LT , /^ *(.+?) *< *(.+?) *$/);
-  const LTE = FormulaHelper(Formula.LTE, /^ *(.+?) *<= *(.+?) *$/);
+  const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/, /^ *(.+?) *< *(.+?) *$/);
+  const GTE = ReversibleFormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/, /^ *(.+?) *<= *(.+?) *$/);
     
   const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) +\* +(.+?) *$/,true);
   const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) +\/ +(.+?) *$/,true);
@@ -975,8 +988,6 @@ namespace Status {
           NE, 
           GTE,
           GT,
-          LTE,
-          LT
         ]) {
         // Recursively handle comparison operators
           if (comparisonFormulaTranslationHelper.identify(this.text)) {
@@ -1186,12 +1197,6 @@ namespace Status {
         case GT:
           isError = !(this.children[0].getMaxValue() > this.children[1].getMinValue());
           break;
-        case LTE:
-          isError = !(this.children[0].getMinValue() <= this.children[1].getMaxValue());
-          break;
-        case LT:
-          isError = !(this.children[0].getMinValue() < this.children[1].getMaxValue());
-          break;
       }
       if (isError) {
         this.addError("Formula cannot be satisfied: " + this.text);
@@ -1221,21 +1226,15 @@ namespace Status {
       const minStatuses: string[] = (statusesForMin && !Array.isArray(statusesForMin)) ? [statusesForMin] : (statusesForMin as string[] || []);
       const maxNotStatuses: string[] = (notStatusesForMax && !Array.isArray(notStatusesForMax))  ? [notStatusesForMax] : (notStatusesForMax as string[] || []);
       switch (this.formulaType) {
-        case LT: {
-          return GTE(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses));
-        }
-        case LTE: {
-          return GT(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses));
-        }
         case GT: {
-          return LTE(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
+          return Formula.LTE(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
         }
         case GTE: {
-          return LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
+          return Formula.LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
         }
         case EQ: {
           return OR(
-            LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
+            Formula.LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses)),
             GT(this.children[0].toFormulaByStatus(...minStatuses),this.children[1].toFormulaByNotStatus(...maxNotStatuses))
           );
         }
@@ -1597,23 +1596,23 @@ namespace Status {
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toRawMissedFormula()),
           VALUE(this.valueInfo.numNeeded)
         ),
-        LT(this.availableChild.toPRNotUsedFormula(),VALUE(this.valueInfo.numNeeded))
+        Formula.LT(this.availableChild.toPRNotUsedFormula(),VALUE(this.valueInfo.numNeeded))
       );
     }
     toRawMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return LT(this.availableChild.toRawNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
+      return Formula.LT(this.availableChild.toRawNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
 
     }
     toMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return LT(this.availableChild.toNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
+      return Formula.LT(this.availableChild.toNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
     }
     toUnknownFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
       return AND(
         NOT(this.toMissedFormula()),
-        LT(
+        Formula.LT(
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toMissedFormula(),this.availableChild.toUnknownFormula()),
           VALUE(this.valueInfo.numNeeded)
         )
@@ -1787,7 +1786,7 @@ namespace Status {
 
     toPRUsedFormula():string {
       return OR(
-        LT(
+        Formula.LT(
           MINUS(
             this.availableChild.toTotalFormula(),
             this._getPRUsedAmountFormula()
