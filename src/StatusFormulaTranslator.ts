@@ -14,9 +14,24 @@ namespace Status {
   const STATUS = ChecklistApp.STATUS;
   const COLUMN = ChecklistApp.COLUMN;
 
-  const FormulaHelper = (formula:Formula.StringFormula, regEx:RegExp, isFlexible:boolean = false):FormulaHelper => {
+  const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
+  const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
+  const getNumItemInfo = (text:string,_defaultNum:number = undefined):{num?:number,item:string} => {
+    let match = text.match(numItemsPrefixRegExp);
+    if (match) {
+      return {num: Number(match[1]), item: match[2]};
+    } else if ((match = text.match(numItemsPostfixRegExp))) {
+      return {num: Number(match[2]), item: match[1]};
+    } else if (_defaultNum || _defaultNum === 0){
+      return {num: _defaultNum, item:text};
+    } else {
+      return {item:text};
+    }
+  };
+
+  const FormulaHelper = (formula:Formula.StringFormula, regExp:RegExp, isFlexible:boolean = false):FormulaHelper => {
     const parseOperands = (text:string):string[] => {
-      const match = text && text.match(regEx);
+      const match = text && text.match(regExp);
       if (!match) return;
       if (!isFlexible) return match.slice(1);
 
@@ -37,22 +52,23 @@ namespace Status {
       (...args:string[]) => formula(...args), 
       formula, {
         generateFormula: formula,
-        identify: (text:string):boolean => !!(text && text.match(regEx)),
+        identify: (text:string):boolean => !!(text && text.match(regExp)),
         parseOperands,
       });
   };
-  const ReversibleFormulaHelper = (formula:Formula.StringFormula, regEx:RegExp, reversibleRegEx:RegExp):FormulaHelper => {
+  const ReversibleFormulaHelper = (formula:Formula.StringFormula, regExp:RegExp, reversibleRegExp:RegExp):FormulaHelper => {
     const parseOperands = (text:string):string[] => {
-      let match = text && text.match(regEx);
+      if (!text) return;
+      let match = text.match(regExp);
       if (match) return match.slice(1);
-      match = text && text.match(reversibleRegEx);
+      match = text.match(reversibleRegExp);
       if (match) return match.slice(1).reverse();
     };
     return Object.assign(
       (...args:string[]) => formula(...args), 
       formula, {
         generateFormula: formula,
-        identify: (text:string):boolean => !!(text && (text.match(regEx) || text.match(reversibleRegEx))),
+        identify: (text:string):boolean => !!(text && (text.match(regExp) || text.match(reversibleRegExp))),
         parseOperands,
       });
   };
@@ -63,6 +79,8 @@ namespace Status {
   const NE  = FormulaHelper(Formula.NE , /^ *(.+?) *!= *(.+?) *$/);
   const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/, /^ *(.+?) *< *(.+?) *$/);
   const GTE = ReversibleFormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/, /^ *(.+?) *<= *(.+?) *$/);
+  const X_ITEMS = ReversibleFormulaHelper(Formula.GTE, numItemsPostfixRegExp, numItemsPrefixRegExp);
+  
     
   const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) +\* +(.+?) *$/,true);
   const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) +\/ +(.+?) *$/,true);
@@ -71,6 +89,22 @@ namespace Status {
   
   const {FORMULA,VALUE,IFS,IF,COUNTIF} = Formula;
 
+  const formulaTypeToString = (formulaType:FormulaHelper) => {
+    switch(formulaType) {
+      case OR: return "||";
+      case AND: return "&&";
+      case NOT: return "!";
+      case EQ: return "==";
+      case NE: return "!=";
+      case GT: return ">";
+      case X_ITEMS:
+      case GTE: return ">=";
+      case MULT: return "*";
+      case DIV: return "/";
+      case MINUS: return "-";
+      case ADD: return "+";
+    }
+  };
 
   enum SPECIAL_PREFIXES  {
     USES     = "USES",
@@ -440,19 +474,16 @@ namespace Status {
       values.forEach((value,i) => {
         const rowValues:{[x:string]: sheetValueInfo} = {};
         value.toString().split(/(\r|\n)+/).forEach(value => {
-          const rawParsed:RegExpMatchArray = value.toString().match(PARSE_REGEX) || [];
-          const numReceived:number = Number(rawParsed[1] || rawParsed[7] || 1);
-          const rowSubValue = rawParsed[3];
-          const valueInfo: sheetValueInfo = {
-            num: numReceived,
-            value: rowSubValue,
-            row: firstRow+i,
-            column: columnIndex,
-          };
-          if (rowValues[rowSubValue]) {
-            rowValues[rowSubValue].num += numReceived;
+          const itemInfo = getNumItemInfo(value.trim(),1);
+          if (rowValues[itemInfo.item]) {
+            rowValues[itemInfo.item].num += itemInfo.num;
           } else {
-            rowValues[rowSubValue] = valueInfo;
+            rowValues[itemInfo.item] = {
+              num: itemInfo.num,
+              value: itemInfo.item,
+              row: firstRow+i,
+              column: columnIndex,
+            };
           }
         });
         byRow[firstRow+i] = Object.values(rowValues);
@@ -557,16 +588,15 @@ namespace Status {
 
   // static imports
   // Essentially static defs
-  const PARSE_REGEX:RegExp = /^ *(?:(\+?\d+|ALL)x )? *(?:(SAME|COPY) )? *((?:(.*)!(?:([^ ].*?)#)?)?([^ ].*?)) *(?: x(\+?\d+|ALL))? *$/;
   let UID_Counter:number = 0;
   const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
   const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
   const getQuotePlaeholder = ():string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
-  const quoteRegex:RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
+  const quoteRegExp:RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
   const quoteMapping:{[x:string]:string} = {};
   const parentheticalMapping:{[x:string]:string} = {};
 
-  const PREFIX_REGEX:RegExp = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) (.+)$`, "i");
+  const PREFIX_REG_EXP:RegExp = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) (.+)$`, "i");
   class CellFormulaParser {
     private static readonly parsers: {[x:number]: CellFormulaParser} = {};
     static getParserForChecklistRow(translator: StatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
@@ -626,7 +656,7 @@ namespace Status {
           line = line.replace(parenMatcher, placeholder);
         }
         let childFormulaNode: FormulaNode<boolean>;
-        const prefixCheck:RegExpMatchArray = line.match(PREFIX_REGEX);
+        const prefixCheck:RegExpMatchArray = line.match(PREFIX_REG_EXP);
         // specific Prefix node, or default to boolean node
         if (prefixCheck) { 
           const content:string = prefixCheck[2].trim();
@@ -878,7 +908,14 @@ namespace Status {
     hasValue(): boolean {
       return typeof this.value !== "undefined";
     }
-
+    
+    updateValue(value: T) {
+      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
+      if (!this.hasValue()) {
+        throw new Error("Cannot update value on a non-value node");
+      }
+      this.value = value;
+    }
 
     toErrorFormula(): string {
       return VALUE(this.hasErrors());
@@ -988,6 +1025,7 @@ namespace Status {
           NE, 
           GTE,
           GT,
+          X_ITEMS,
         ]) {
         // Recursively handle comparison operators
           if (comparisonFormulaTranslationHelper.identify(this.text)) {
@@ -1177,29 +1215,35 @@ namespace Status {
 
       this.formulaType = formulaType;
       const operands:string[] = formulaType.parseOperands(this.text);
-      this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row)));
+      this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row, formulaType == X_ITEMS)));
     }
 
     checkErrors(): boolean {
       let isError: boolean;
+      const lMin:number = this.children[0].getMinValue();
+      const lMax:number = this.children[0].getMaxValue();
+      const rMin:number = this.children[1].getMinValue();
+      const rMax:number = this.children[1].getMaxValue();
       switch (this.formulaType) {
         case EQ:
-          isError = this.children[0].getMaxValue() < this.children[1].getMinValue() || this.children[0].getMinValue() > this.children[1].getMaxValue();
+          isError = lMax < rMin || lMin > rMax;
           break;
         case NE: {
-          const lMax:number = this.children[0].getMaxValue();
-          isError = lMax == this.children[0].getMinValue() && lMax == this.children[1].getMinValue() && lMax == this.children[1].getMaxValue();
+          isError = lMax == lMin && lMax == rMin && lMax == rMax;
           break;
         }
         case GTE:
-          isError = !(this.children[0].getMaxValue() >= this.children[1].getMinValue());
+        case X_ITEMS:
+          isError = lMax < rMin;
           break;
         case GT:
-          isError = !(this.children[0].getMaxValue() > this.children[1].getMinValue());
+          isError = lMax <= rMin;
           break;
       }
       if (isError) {
-        this.addError("Formula cannot be satisfied: " + this.text);
+        const lRange = lMin == lMax ? lMin : `[${lMin}..${lMax}]`;
+        const rRange = rMin == rMax ? rMin : `[${rMin}..${rMax}]`;
+        this.addError(`Formula cannot be satisfied: "${this.text} ${this.formulaType.name}" cannot be satisfied: ${lRange} cannot be ${formulaTypeToString(this.formulaType)} ${rRange}`);
         return true;
       }
     }
@@ -1229,7 +1273,8 @@ namespace Status {
         case GT: {
           return Formula.LTE(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
         }
-        case GTE: {
+        case GTE:
+        case X_ITEMS: {
           return Formula.LT(this.children[0].toFormulaByNotStatus(...maxNotStatuses),this.children[1].toFormulaByStatus(...minStatuses));
         }
         case EQ: {
@@ -1257,11 +1302,11 @@ namespace Status {
   }
 
   class NumberFormulaNode extends FormulaNode<number> implements NumberNode {
-    static create(text: string, translator:StatusFormulaTranslator,row:row) {
-      return new NumberFormulaNode(text,translator,row);
+    static create(text: string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      return new NumberFormulaNode(text,translator,row,_implicitPrefix);
     }
     protected readonly children: NumberNode[]
-    protected constructor(text: string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text: string, translator:StatusFormulaTranslator,row:row,_implicitPrefix) {
       super(text,translator,row);
 
       for (const arithmeticFormulaTranslationHelper of [
@@ -1274,11 +1319,11 @@ namespace Status {
         if (arithmeticFormulaTranslationHelper.identify(this.text)) {
           this.formulaType = arithmeticFormulaTranslationHelper;
           const operands:string[] = arithmeticFormulaTranslationHelper.parseOperands(this.text);
-          this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row)));
+          this.children.push(...operands.map(operand => NumberFormulaNode.create(operand,this.translator,this.row,_implicitPrefix)));
           return;
         }
       }
-      this.child = NumberFormulaValueNode.create(text,this.translator,this.row);
+      this.child = NumberFormulaValueNode.create(text,this.translator,this.row,_implicitPrefix);
     }
 
     protected get child(): NumberNode {
@@ -1341,169 +1386,81 @@ namespace Status {
     }
   }
 
-  type valueInfo =  {
-    key:string; // UID for the Ref
-    altColumnName: string;
-    altColumnId: string;
-    itemId: string;
-    isSame: boolean;
-    rowCounts:{[x:number]:number}; // Row
-    numNeeded:number;
-    numPossible:number;
-    isVirtual:boolean;
-  };
   type virtualValueInfo = {
-    [P in keyof valueInfo]?:valueInfo[P];
-  } & {
-    rowCounts:valueInfo["rowCounts"];
-  };
+    rowCounts: {[x:number]:number},
+    numPossible?: number,
+    numNeeded?: number;
+  }
 
-  // Virtual Items, require rowCounts and can override any of the other valueInfo fields, 
-  // e.g. Virtual Choice has a numPossible of 1, numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
+  // Virtual Items, require rowCounts and can override the numNeeded and numPossible
+  // e.g. Virtual Choice has a numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
   const virtualItems:{[x:string]: virtualValueInfo} = {};
-  const valueInfoCache:{[x:number]: valueInfo} = {}; // TODO fix to work with multi CLs?
+  
   // Abstract intermediate class
+  const PARSE_REG_EXP:RegExp = /^(?:(.+?)!([^ ](?:.*?[^ ])?)(?:#([^ ].*))?)$/;
+  const unescapeValue = (text:string):string => {
+    if (quoteMapping[text]) {
+      text = quoteMapping[text];
+    }
+    let match:RegExpMatchArray;
+    while ((match = text.match(quoteRegExp))) {
+      text = text.replace(match[0],`"${quoteMapping[match[0]]}"`);
+    }
+    return text;
+  };
   abstract class FormulaValueNode<T> extends FormulaNode<T> {
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
-      super(text,translator,row);
-    }
+    protected altColumnName:string;
+    protected altColumnId:string;
+    protected itemId:string;
+    protected readonly rowCounts: {[x:number]:number} = {};
+    protected isVirtual = false;
+    protected isSelfReferential = false;
 
-    protected wasSelfReferential: boolean;
-
-    private _valueInfo:valueInfo
-    get valueInfo():Readonly<valueInfo> {
-      if (this._valueInfo) return {...this._valueInfo};
-      const text:string = this.text;
-      let valueInfo:valueInfo = valueInfoCache[text];
-      if (!valueInfo) {
-        const initialParse: RegExpExecArray = PARSE_REGEX.exec(text);
-        if (initialParse) {
-          // Looks properly formed
-          let unescapedText = text;
-          if (quoteMapping[initialParse[3]]) {
-            // Whole item was in quotes, replace with original, e.g. `5x "Say Hi"` should match 5 items of `Say Hi`
-            unescapedText = text.replace(initialParse[3],quoteMapping[initialParse[3]]);
-          } else {
-            // Only part was quoted, keep as quotes, e.g. `5x Say "Hi"` should match 5 items of `Say "Hi"`
-            let match:RegExpMatchArray;
-            while ((match = unescapedText.match(quoteRegex))) {
-              unescapedText = unescapedText.replace(match[0],`"${quoteMapping[match[0]]}"`);
-            }
-          }
-          const rawParsed = unescapedText == text ? initialParse : PARSE_REGEX.exec(unescapedText);
-          // 1 = Number of items/ALL
-          // 2 = SAME/COPY
-          // 3 = Full Item Identifier
-          // 4 = Alt Column Name (before a !)
-          // 5 = Alt Column Identifier, if Item Identifier is present (between ! and #)
-          // 6 = Item Identifier (no !/#, or after #), OR Alt Column Identifier if Alt Column is present without Item (! without #)
-          const allRequested:boolean = rawParsed[1] == "ALL" || rawParsed[7] == "ALL";
-          const numRequested:number = !allRequested && (rawParsed[1] || rawParsed[7]) && Number(rawParsed[1] || rawParsed[7]);
-          const isSame = !!rawParsed[2];
-          const key:string = rawParsed[3];
-          const altColumnName:string = rawParsed[4];
-          let altColumnId:string = altColumnName && (rawParsed[5] || rawParsed[6]);
-          let itemId:string = altColumnName ? rawParsed[5] && rawParsed[6] : rawParsed[6];
-          // let altColumnInfo:columnValues;
-          let hasAltColumn = false;
-          let altColumnRows:{[x:number]:number};
-          if (altColumnName) {
-            hasAltColumn = this.translator.checklist.hasColumn(altColumnName);
-            // altColumnInfo = this.translator.getColumnValues(altColumnName);
-            if (hasAltColumn) {
-              // Has the column
-              altColumnRows = this.translator.getRowCounts(altColumnName, altColumnId);
-              if (!altColumnRows && itemId) {
-                // Assume # is part of the id and try again
-                altColumnId = `${altColumnId}#${itemId}`;
-                itemId = "";
-                altColumnRows = this.translator.getRowCounts(altColumnName,altColumnId);
-              }
-            }
-            if (!altColumnRows) {
-              // Assume ! (and #) is part of Item if it didn't match a column/rows
-              itemId = `${altColumnName}!${altColumnId}${itemId ? `#${itemId}` : ""}`;
-            }
-          }
-          let itemRows:{[x:number]:number};
-          if (itemId) {
-            // const itemValues = this.translator.getColumnValues(COLUMN.ITEM);
-            if (itemId.indexOf("*")< 0 && (allRequested || numRequested)) {
-              itemId += "*";
-            }
-            itemRows = this.translator.getRowCounts(COLUMN.ITEM,itemId);
-          }
-          const rowCounts:{[x:number]:number} = [];
-          if (altColumnRows && itemRows) {
-            Object.keys(itemRows).filter(itemRow => altColumnRows[itemRow]).forEach(itemRow => rowCounts[itemRow] = itemRows[itemRow]);
-            if (Object.keys(rowCounts).length == 0) {
-              this.addError(`Could not find any Item "${itemId}" that also has "${altColumnId}" in "${altColumnName}" column`);
-            }
-          } else if (altColumnRows || itemRows) {
-            const rows = altColumnRows || itemRows;
-            Object.keys(rows).forEach(row => rowCounts[row] = rows[row]);
-          } else if (altColumnName) {
-            // If had an alt column, can determine those errors now with specificity
-            if (!hasAltColumn) {
-              this.addError(`Could not find column "${altColumnName}"`);
-            } else {
-              this.addError(`Could not find "${altColumnId}" in "${altColumnName}" column`);
-              if (altColumnId.indexOf("#") > 0) {
-                this.addError(`Could not find ${altColumnId.substring(0,altColumnId.indexOf("#"))} in "${altColumnName}" column`);
-              }
-            }
-          }
-          valueInfo = {
-            key,
-            altColumnName,
-            altColumnId,
-            itemId,
-            rowCounts,
-            isSame,
-            numNeeded: numRequested,
-            isVirtual: false,
-            numPossible: undefined,
-          };
-          valueInfoCache[text] = valueInfo;
-        }
-      }
-      // Copy cached object
-      if (valueInfo) {
-        valueInfo = Object.assign({},valueInfo);
-        if (virtualItems[valueInfo.key]) {
-          valueInfo = {
-            ...valueInfo,
-            ...virtualItems[valueInfo.key],
-            isVirtual: true,
-          };
-        }
-        if (valueInfo.rowCounts) {
-          valueInfo.rowCounts = {...valueInfo.rowCounts};
-          // Remove self reference (simplest dependency resolution, v0)
-          if (valueInfo.rowCounts[this.row]) {
-            delete valueInfo.rowCounts[this.row];
-            this.wasSelfReferential = true;
-          }
-          valueInfo.numPossible = Object.values(valueInfo.rowCounts).reduce((total,count) => total + count, 0);
-          if (!valueInfo.numNeeded) valueInfo.numNeeded = valueInfo.numPossible;
-        }
-      }
-      if (this.isPhase(PHASE.FINALIZED)) {
-        this._valueInfo = valueInfo; 
-      }
-      return valueInfo ?? {} as valueInfo;
-    }
-
-    checkErrors():boolean {
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implictPrefix:boolean = false) {
+      super(unescapeValue(text),translator,row);
       if (!this.hasValue()) {
-        if (!this.valueInfo) {
-          this.addError(`Could not find "${this.text}"`);
-          return true;
-        } else if (this.valueInfo.numPossible == 0) {
-          this.addError(`Could not find ${this.valueInfo.numNeeded > 1 ? "any of " : ""}${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.itemId}"${this.wasSelfReferential ? " (except itself)" : ""}`);
-          return true;
+        const match:RegExpMatchArray = this.text.match(PARSE_REG_EXP);
+        if (match) {
+          [,this.altColumnName,this.altColumnId,this.itemId] = match;
+        } else {
+          this.itemId = this.text;
+        }
+        if (this.itemId && _implictPrefix && this.itemId.indexOf("*") < 0) {
+          this.itemId += "*";
+        }
+        const altColumnRows:{[x:number]:number} = this.altColumnName && this.translator.getRowCounts(this.altColumnName, this.altColumnId);
+        const itemRows:{[x:number]:number} = this.itemId && (this.translator.getRowCounts(COLUMN.ITEM,this.itemId) || []);
+        if (altColumnRows && itemRows) {
+          // Intersect Column & Item
+          Object.keys(itemRows).filter(itemRow => altColumnRows[itemRow]).forEach(itemRow => this.rowCounts[itemRow] = itemRows[itemRow]);
+        } else if (altColumnRows || itemRows) {
+          // Found [column]![columnId] or [itemId]
+          const rows = altColumnRows || itemRows;
+          Object.keys(rows).forEach(row => this.rowCounts[row] = rows[row]);
+        }
+        if (this.rowCounts[this.row]) {
+          this.isSelfReferential = true;
+          delete this.rowCounts[this.row];
         }
       }
+    }
+
+    finalize() {
+      super.finalize();
+      if (!this.hasValue()) {
+        if (virtualItems[this.text]) {
+          Object.keys(virtualItems[this.text].rowCounts).map(row => this.rowCounts[row] = virtualItems[this.text].rowCounts[row]);
+          this.isVirtual = true;
+        }
+      }
+    }
+
+    get numPossible():number {
+      return (this.isVirtual && virtualItems[this.text].numPossible) || Object.values(this.rowCounts).reduce((total,count) => total + count,0);
+    }
+
+    get rows():number[] {
+      return Object.keys(this.rowCounts).map(row => Number(row)).sort((a,b)=>a-b);
     }
 
     protected _allPossiblePreReqRows:ReadonlySet<row>;
@@ -1512,8 +1469,8 @@ namespace Status {
         if (this.isInCircularDependency()) {
           this._allPossiblePreReqRows = this.getCircularDependencies();
         } else {
-          const allPossiblePreReqs:Set<row> = new Set(Object.keys(this.valueInfo.rowCounts).map(key => Number(key)));
-          Object.keys(this.valueInfo.rowCounts).forEach(row => 
+          const allPossiblePreReqs:Set<row> = new Set(this.rows);
+          this.rows.forEach(row => 
             CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
           );
           this._allPossiblePreReqRows = allPossiblePreReqs;
@@ -1524,12 +1481,12 @@ namespace Status {
 
     getDirectPreReqInfos() {
       return {
-        [this.valueInfo.key]: Object.keys(this.valueInfo.rowCounts).filter((row,i,arr) => arr.indexOf(row) == i).map(row => Number(row))
+        [this.text]: this.rows
       };
     }
 
     getDirectPreReqRows() {
-      return new Set<row>(Object.keys(this.valueInfo.rowCounts).map(row => Number(row)));
+      return new Set<row>(this.rows);
     }
 
     getCircularDependencies(previous:row[] = []):ReadonlySet<row> {
@@ -1540,7 +1497,7 @@ namespace Status {
       } else {
         previous.push(this.row);
         this._lockCircular = true;
-        Object.keys(this.valueInfo.rowCounts).forEach(row => {
+        this.rows.forEach(row => {
           CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
         });
         this._lockCircular = false;
@@ -1551,42 +1508,81 @@ namespace Status {
     }
 
     isDirectlyMissable():boolean {
-      if (virtualItems[this.valueInfo.key]) return false;
+      if (virtualItems[this.text]) return false;
       return super.isDirectlyMissable(); 
+    }
+
+    checkErrors() {
+      let hasError = super.checkErrors();
+      if (!this.hasValue() && this.rows.length == 0) {
+        hasError = true;
+        if (this.altColumnName) {
+          if (this.itemId) {
+            this.addError(`Could not find any Item "${this.itemId}" that also has "${this.altColumnId}" in "${this.altColumnName}" column`);
+          } else if (!this.translator.checklist.hasColumn(this.altColumnName)){
+            this.addError(`Could not find column "${this.altColumnName}"`);
+          } else {
+            this.addError(`Could not find "${this.altColumnId}" in "${this.altColumnName}" column`);
+          }
+        } else {
+          this.addError(`Could not find any of "${this.text}" ${this.isSelfReferential ? " (except itself)" : ""}`);
+        }
+      }
+      return hasError;
     }
 
   }
 
   class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
-    static create(text:string, translator:StatusFormulaTranslator,row:row) {
-      let node:FormulaValueNode<boolean> = new BooleanFormulaValueNode(text, translator, row);
-      if (node.valueInfo.isSame) {
-        node = SameFormulaNode.create(text,translator,row);
+    static create(text:string, translator:StatusFormulaTranslator,row:row):FormulaValueNode<boolean> {
+      const match = text.match(/^(SAME|COPY) +(.*?)$/);
+      if (match) {
+        return SameFormulaNode.create(match[2],translator,row);
+      } else {
+        return new BooleanFormulaValueNode(text, translator, row);
       }
-      return node;
     }
     protected readonly formulaType: FormulaHelper = GTE;
     protected readonly children: NumberFormulaValueNode[];
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
-      super(text,translator,row);
+    protected numNeeded:number;
+
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      super(text,translator,row,_implicitPrefix);
       if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
         this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
       } else {
         // CHECKED > NEEDED
-        this.availableChild = NumberFormulaValueNode.create(this.text,this.translator,this.row);
-        this.neededChild = NumberFormulaValueNode.create(this.valueInfo.numNeeded,this.translator,this.row); 
+        this.availableChild = NumberFormulaValueNode.create(this.text,this.translator,this.row,_implicitPrefix);
+        this.neededChild = NumberFormulaValueNode.create(1,this.translator,this.row,_implicitPrefix); // Default to 1 but override during finalize
       }
     }
-    get availableChild(): NumberFormulaValueNode {
+
+    finalize() {
+      super.finalize();
+      if (!this.hasValue()) {
+        if (this.isVirtual && virtualItems[this.text].numNeeded) {
+          this.numNeeded = virtualItems[this.text].numNeeded;
+        } else if (!this.numNeeded && this.numNeeded !== 0) {
+          this.numNeeded = this.numPossible; // Allow children to override numNeeded, but default to All
+        }
+        this.neededChild.updateValue(this.numNeeded);
+      }
+    }    
+    
+    protected get availableChild(): NumberFormulaValueNode {
+      this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
       return this.children[0];
     }
-    set availableChild(child: NumberFormulaValueNode) {
+    protected set availableChild(child: NumberFormulaValueNode) {
+      this.checkPhase(PHASE.BUILDING);
       this.children[0] = child;
     }
-    get neededChild():NumberFormulaValueNode {
+    protected get neededChild():NumberFormulaValueNode {
+      this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
       return this.children[1];
     }
-    set neededChild(child:NumberFormulaValueNode) {
+    protected set neededChild(child:NumberFormulaValueNode) {
+      this.checkPhase(PHASE.BUILDING);
       this.children[1] = child;
     }
     toPRUsedFormula():string {
@@ -1594,19 +1590,19 @@ namespace Status {
       return AND(
         GTE(
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toRawMissedFormula()),
-          VALUE(this.valueInfo.numNeeded)
+          VALUE(this.numNeeded)
         ),
-        Formula.LT(this.availableChild.toPRNotUsedFormula(),VALUE(this.valueInfo.numNeeded))
+        Formula.LT(this.availableChild.toPRNotUsedFormula(),VALUE(this.numNeeded))
       );
     }
     toRawMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return Formula.LT(this.availableChild.toRawNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
+      return Formula.LT(this.availableChild.toRawNotMissedFormula(),VALUE(this.numNeeded));
 
     }
     toMissedFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
-      return Formula.LT(this.availableChild.toNotMissedFormula(),VALUE(this.valueInfo.numNeeded));
+      return Formula.LT(this.availableChild.toNotMissedFormula(),VALUE(this.numNeeded));
     }
     toUnknownFormula():string {
       if (this.hasValue()) return VALUE.FALSE;
@@ -1614,27 +1610,28 @@ namespace Status {
         NOT(this.toMissedFormula()),
         Formula.LT(
           MINUS(this.availableChild.toTotalFormula(),this.availableChild.toMissedFormula(),this.availableChild.toUnknownFormula()),
-          VALUE(this.valueInfo.numNeeded)
+          VALUE(this.numNeeded)
         )
       );
     }
     checkErrors():boolean {
       if (super.checkErrors()) {
         return true;
-      } else if (this.valueInfo.numPossible < this.valueInfo.numNeeded) {
-        this.addError(`There are only ${this.valueInfo.numPossible}, not ${this.valueInfo.numNeeded}, of ${this.valueInfo.altColumnName || "Item"} "${this.valueInfo.itemId}"${this.wasSelfReferential ? " (when excluding itself)" : ""}`);
+      } else if (this.numPossible < this.numNeeded) {
+        this.addError(`There are only ${this.numPossible}, not ${this.numNeeded}, of ${this.altColumnName || "Item"} "${this.itemId}"${this.isSelfReferential ? " (when excluding itself)" : ""}`);
         return true;
       }
     }
   }
 
   class NumberFormulaValueNode extends FormulaValueNode<number> implements NumberNode {
-    static create(text: string|number, translator:StatusFormulaTranslator,row:row) {
-      return new NumberFormulaValueNode(text,translator,row);
+    protected readonly isNumber = true;
+    static create(text: string|number, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      return new NumberFormulaValueNode(text,translator,row,_implicitPrefix);
     }
     protected readonly children: FormulaValueNode<never>[]
-    protected constructor(text: string|number, translator:StatusFormulaTranslator,row:row) {
-      super(text.toString(),translator,row);
+    protected constructor(text: string|number, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      super(text.toString(),translator,row,_implicitPrefix);
       if (Number(this.text) || this.text === "0") {
         this.value = Number(this.text);
       }
@@ -1645,7 +1642,7 @@ namespace Status {
     */
     toTotalFormula(): string {
       if (this.hasValue()) return VALUE(this.value);
-      return this.valueInfo.numPossible.toString();
+      return this.numPossible.toString();
     }
 
     toFormulaByStatus(...statuses: STATUS[]) {
@@ -1734,7 +1731,7 @@ namespace Status {
     */
     getMaxValue():number {
       if (this.hasValue()) return this.value;
-      return this.valueInfo.numPossible;
+      return this.numPossible;
     }
 
     private _generateFormula(values: (string|number|boolean)|(string|number|boolean)[] = [], column:column = COLUMN.STATUS): string {
@@ -1744,7 +1741,7 @@ namespace Status {
         return VALUE.ZERO;
       } else {
         const vals: (string|number|boolean)[] = Array.isArray(values) ? values : [values];
-        const counts:string[] = Object.entries(this.translator.rowCountsToA1Counts(this.valueInfo.rowCounts, column)).reduce((counts,[range,count]) => {
+        const counts:string[] = Object.entries(this.translator.rowCountsToA1Counts(this.rowCounts, column)).reduce((counts,[range,count]) => {
           vals.forEach(value => {
             const countIf:string = COUNTIF(range, VALUE(value));
             counts.push(count == 1 ? countIf : MULT(countIf,VALUE(count)));
@@ -1757,7 +1754,7 @@ namespace Status {
 
     checkErrors() {
       let hasError = super.checkErrors();
-      if (this.valueInfo.isSame) {
+      if (this.text.match(/^SAME|COPY /)) {
         this.addError("Cannot use SAME with Numerical Equations");
         hasError = true;
       }
@@ -1767,21 +1764,23 @@ namespace Status {
 
   type useInfo = {[x:number]: number}
   type usesInfo = {[x:string]: useInfo}
-  const usesInfo:usesInfo = {}; // TODO make checklist-aware
+  const usesInfo:usesInfo = {}; // TODO make checklist-aware?
   class UsesFormulaNode extends BooleanFormulaValueNode {
     static create(text:string, translator:StatusFormulaTranslator,row:row) {
       return new UsesFormulaNode(text,translator,row);
     }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
-      super(text,translator,row);
-      this.useInfo[this.row] = this.valueInfo.numNeeded;
+      const itemInfo = getNumItemInfo(text);
+      super(itemInfo.item,translator,row,itemInfo.num >= 0);
+      this.numNeeded = itemInfo.num ?? 1;
+      this.useInfo[this.row] = this.numNeeded;
     }
 
     get useInfo():useInfo {
-      if (!usesInfo[this.valueInfo.key]) {
-        usesInfo[this.valueInfo.key] = {};
+      if (!usesInfo[this.text]) {
+        usesInfo[this.text] = {};
       }
-      return usesInfo[this.valueInfo.key];
+      return usesInfo[this.text];
     }
 
     toPRUsedFormula():string {
@@ -1791,7 +1790,7 @@ namespace Status {
             this.availableChild.toTotalFormula(),
             this._getPRUsedAmountFormula()
           ),
-          VALUE(this.valueInfo.numNeeded)
+          VALUE(this.numNeeded)
         ),
         super.toPRUsedFormula()
       );
@@ -1813,7 +1812,7 @@ namespace Status {
     }
 
     isDirectlyMissable():boolean {
-      if (Object.values(usesInfo[this.valueInfo.key]).reduce((total,needed) => total+needed,0) > this.availableChild.getMaxValue()) {
+      if (Object.values(usesInfo[this.text]).reduce((total,needed) => total+needed,0) > this.availableChild.getMaxValue()) {
       // if TOTAL_NEEDED > TOTAL_AVAILABLE
         return true;
       } else {
@@ -1821,42 +1820,37 @@ namespace Status {
       }
     }
   }
-  class OptionFormulaNode extends FormulaValueNode<boolean> {
-    static create(text:string, translator:StatusFormulaTranslator,row:row): FormulaNode<boolean> {
+  class OptionFormulaNode extends BooleanFormulaValueNode {
+    static create(text:string, translator:StatusFormulaTranslator,row:row): FormulaValueNode<boolean> {
       return new OptionFormulaNode(text,translator,row);
     }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
-      const valueInfo = this.valueInfo;
-      if (this.isVirtualChoice) {
-        if (!virtualItems[valueInfo.key]) {
-          virtualItems[valueInfo.key] = {
-            key: valueInfo.key, 
-            rowCounts: {}, 
-            numPossible: 1,
+      if (this.rows.length == 0) {
+        if (!virtualItems[this.text]) {
+          virtualItems[this.text] = {
+            rowCounts: {},
             numNeeded: 1,
           };
         }
-        virtualItems[valueInfo.key].rowCounts[this.row] = 1;
+        virtualItems[this.text].rowCounts[this.row] = 1;
+        this.isVirtual = true;
       }
+      this.numNeeded = 1;
     }
     finalize() {
       super.finalize();
       this.choiceParser?.addOption(this.row);
     }
-
-    get isVirtualChoice(): boolean {
-      return this.valueInfo.isVirtual || !Object.keys(this.valueInfo.rowCounts).length;
-    }
     get choiceRow(): row {
-      return this.isVirtualChoice ? undefined : Number(Object.keys(this.valueInfo.rowCounts)[0]);
+      return this.isVirtual ? undefined : this.rows[0];
     }
     get choiceParser(): CellFormulaParser {
-      return this.isVirtualChoice ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
+      return this.isVirtual ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
     }
     get choiceOptions(): row[] {
-      if (this.isVirtualChoice) {
-        return Object.keys(virtualItems[this.valueInfo.key].rowCounts).map(row => Number(row));
+      if (this.isVirtual) {
+        return Object.keys(virtualItems[this.text].rowCounts).map(row => Number(row));
       } else {
         return this.choiceParser.getOptions();
       }
@@ -1876,12 +1870,12 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     checkErrors():boolean {
       let hasError = false;
       if (this.choiceOptions.length < 2) {
-        this.addError(`This is the only OPTION for Choice "${this.valueInfo.key}"\n\n${OptionFormulaNode.usage}`);
+        this.addError(`This is the only OPTION for Choice "${this.text}"\n\n${OptionFormulaNode.usage}`);
         hasError = true;
       }
-      if (!this.isVirtualChoice) {
-        if (Object.keys(this.valueInfo.rowCounts).length != 1) {
-          this.addError(`"${this.valueInfo.key}" refers to ${Object.keys(this.valueInfo.rowCounts).length} Items\n\n${OptionFormulaNode.usage}`);
+      if (!this.isVirtual) {
+        if (this.rows.length != 1) {
+          this.addError(`"${this.text}" refers to ${this.rows.length} Items\n\n${OptionFormulaNode.usage}`);
           hasError = true;
         }
         hasError = super.checkErrors() || hasError;
@@ -1890,7 +1884,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     toPreReqsMetFormula() {
-      return this.isVirtualChoice 
+      return this.isVirtual
         ? NOT(this.toPRUsedFormula()) 
         : AND(
           NOT(OR(...this.translator.rowsToA1Ranges(this.choiceOptions,COLUMN.CHECK))),
@@ -1918,7 +1912,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     private _determineFormula(virtualChoiceFormula: string,...statuses: STATUS[]):string  {
-      return this.isVirtualChoice ? virtualChoiceFormula : this._getChoiceRowStatusFormula(...statuses);
+      return this.isVirtual ? virtualChoiceFormula : this._getChoiceRowStatusFormula(...statuses);
     }
 
     private _getChoiceRowStatusFormula(...statuses: STATUS[]) {
@@ -1926,7 +1920,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     getAllPossiblePreReqRows():ReadonlySet<row> {
-      if (this.isVirtualChoice) {
+      if (this.isVirtual) {
         return new Set<row>();
       } else {
         return super.getAllPossiblePreReqRows();
@@ -1934,7 +1928,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     getCircularDependencies(previous: row[]): ReadonlySet<row> {
-      if (this.isVirtualChoice) {
+      if (this.isVirtual) {
         return new Set<row>();
       } else {
         return super.getCircularDependencies(previous);
@@ -2086,13 +2080,11 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     private get sameRowParser():CellFormulaParser {return this.sameRow && CellFormulaParser.getParserForChecklistRow(this.translator,this.sameRow); }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
-      if (Object.keys(this.valueInfo.rowCounts).length != 1) {
-        this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
-      } else if ( this.valueInfo.numPossible > 1) {
-        this.addError("Cannot use SAME with Numerical Equations");
-      } else {
-        this.sameRow = Number(Object.keys(this.valueInfo.rowCounts)[0]);
-      } 
+    }
+
+    finalize() {
+      super.finalize();
+      this.sameRow = this.rows[0];
     }
     
     toPreReqsMetFormula() {
@@ -2117,6 +2109,18 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
 
     toUnknownFormula() {
       return this.sameRowParser && this.sameRowParser.toUnknownFormula();
+    }
+    checkErrors() {
+      if (super.checkErrors()) {
+        return true;
+      } else if (this.rows.length != 1) {
+        this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
+        return true;
+      } else if ( this.numPossible > 1) {
+        this.addError("Cannot use SAME with Numerical Equations");
+        return true;
+      }
+      return false;
     }
   }
   class CheckedRootNode extends RootNode {
