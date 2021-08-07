@@ -80,7 +80,6 @@ namespace Status {
   const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/, /^ *(.+?) *< *(.+?) *$/);
   const GTE = ReversibleFormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/, /^ *(.+?) *<= *(.+?) *$/);
   const X_ITEMS = ReversibleFormulaHelper(Formula.GTE, numItemsPostfixRegExp, numItemsPrefixRegExp);
-  
     
   const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) +\* +(.+?) *$/,true);
   const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) +\/ +(.+?) *$/,true);
@@ -501,14 +500,16 @@ namespace Status {
       return this.columnInfo[columnIndex];
     }
 
-    getRowCounts(column:column,id:string):{[x:number]:number} {
-      if (!this.checklist.hasColumn(column)) return;
+    getRowCounts(column:column,id:string,_implicitPrefix:boolean = false):RowCounts {
+      if (!this.checklist.hasColumn(column)) return {};
       const columnInfo:columnValues = this.getColumnValues(column);
-      let rows:{[x:number]:number};
+      const rows:{[x:number]:number} = {};
       const addRows = (valueInfos: sheetValueInfo[]) => valueInfos.forEach(valueInfo => {
-        rows || (rows = {});
         rows[valueInfo.row] = (rows[valueInfo.row] || 0) + valueInfo.num;
       });
+      if (_implicitPrefix && id.indexOf("*") < 0) {
+        id += "*";
+      }
       if (columnInfo.byValue[id]) {
         addRows(columnInfo.byValue[id]);
       } else if (id.indexOf("*") >= 0 || id.indexOf(".") >= 0) {
@@ -549,7 +550,7 @@ namespace Status {
       return this.rowsToRanges(rows,column).map(range => Formula.A1(...range));
     }
 
-    rowCountsToA1Counts(rowCounts: Readonly<{[x:number]:number}>, column: column): {[x:string]: number} {
+    rowCountsToA1Counts(rowCounts: Readonly<RowCounts>, column: column): {[x:string]: number} {
       column = this.checklist.toColumnIndex(column);
       const rangeCounts:{[x:string]:number} = {};
       const rows = Object.keys(rowCounts).map(row => Number(row)).sort((a,b)=>a-b);
@@ -593,6 +594,7 @@ namespace Status {
   const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
   const getQuotePlaeholder = ():string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
   const quoteRegExp:RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
+  const parenRegExp:RegExp = RegExp(`${parenIdentifier}_\\d+_${parenIdentifier}`);
   const quoteMapping:{[x:string]:string} = {};
   const parentheticalMapping:{[x:string]:string} = {};
 
@@ -641,14 +643,14 @@ namespace Status {
           checkedFlag = true;
           continue;
         }
-        line = line.replace(/"([^"]+)"/g, (_match,text:string) => {
+        line = line.replace(/"(([^"]|\\")*)"/g, (_match,text:string) => {
           const placeholder:string = getQuotePlaeholder();
           quoteMapping[placeholder] = text;
           return placeholder;
         });
 
         let match: RegExpMatchArray;
-        const parenMatcher:RegExp = /\(([^()]*)\)/;
+        const parenMatcher:RegExp = /\((([^()]|\\\(|\\\))*)\)/;
         // eslint-disable-next-line no-cond-assign
         while (match = line.match(parenMatcher)) {
           const placeholder:string = getParenPlaceholder();
@@ -837,13 +839,11 @@ namespace Status {
     }
   }
 
-  abstract class FormulaNode<T extends number|boolean|unknown> {
+  abstract class Node {
     protected readonly errors: Set<string> = new Set<string>();
-    protected readonly children: FormulaNode<unknown>[] = [];
+    protected readonly children: Node[] = [];
     protected readonly text: string;
     readonly row: row;
-    protected value: T;     
-    protected formulaType: FormulaHelper;
 
     readonly translator: StatusFormulaTranslator
     protected constructor(text: string, translator: StatusFormulaTranslator,row: row) {
@@ -871,11 +871,11 @@ namespace Status {
       }
     }
 
-    protected get child(): FormulaNode<unknown> {
+    protected get child():Node {
       return this.children.length == 1 ? this.children[0] : undefined;
     }
 
-    protected set child(child: FormulaNode<unknown>) {
+    protected set child(child:Node) {
       if (this.children.length > 1) throw new Error("Cannot set child for multi-child node");
       this.children[0] = child;
     }
@@ -904,44 +904,6 @@ namespace Status {
     hasErrors(): boolean {
       return this.getErrors().size > 0;
     }
-
-    hasValue(): boolean {
-      return typeof this.value !== "undefined";
-    }
-    
-    updateValue(value: T) {
-      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
-      if (!this.hasValue()) {
-        throw new Error("Cannot update value on a non-value node");
-      }
-      this.value = value;
-    }
-
-    toErrorFormula(): string {
-      return VALUE(this.hasErrors());
-    }
-
-    toPreReqsMetFormula(): string {
-      let formula: string;
-      if (this.hasValue()) {
-        return VALUE(this.value as string);
-      } else if (this.formulaType) {
-        formula = this.formulaType.generateFormula(...this.children.map(child => child.toPreReqsMetFormula()));
-      } else if (this.child) {
-        formula = this.child.toPreReqsMetFormula();
-      } else {
-        this.addError(`Could not determine formula for "${this.text}"`);
-      }
-      return formula;
-    }
-
-    abstract toPRUsedFormula(): string;
-
-    abstract toRawMissedFormula(): string;
-
-    abstract toMissedFormula(): string;
-
-    abstract toUnknownFormula(): string;
 
     isDirectlyMissable(): boolean {
       return this.children.reduce((directlyMissable,child) => directlyMissable || child.isDirectlyMissable(), false);
@@ -997,6 +959,68 @@ namespace Status {
       this._circularDependencies = circularDependencies;
       return this._circularDependencies;
     }
+
+    toString():string {
+      let unescaped = this.text;
+      let match:RegExpMatchArray;
+      while ((match = unescaped.match(parenRegExp))) {
+        unescaped = unescaped.replace(match[0],`(${parentheticalMapping[match[0]]})`);
+      }
+      while ((match = unescaped.match(quoteRegExp))) {
+        unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
+      }
+      return unescaped;
+    }
+  }
+  abstract class FormulaNode<T extends number|boolean|unknown> extends Node {
+    protected readonly children:FormulaNode<unknown>[];
+    protected formulaType: FormulaHelper;
+    protected value: T;     
+
+    hasValue(): boolean {
+      return typeof this.value !== "undefined";
+    }
+    
+    updateValue(value: T) {
+      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
+      if (!this.hasValue()) {
+        throw new Error("Cannot update value on a non-value node");
+      }
+      this.value = value;
+    }
+
+    protected get child(): FormulaNode<unknown> {
+      return super.child as FormulaNode<unknown>;
+    }
+
+    protected set child(child: FormulaNode<unknown>) {
+      super.child = child;
+    }
+    toErrorFormula(): string {
+      return VALUE(this.hasErrors());
+    }
+
+    toPreReqsMetFormula(): string {
+      let formula: string;
+      if (this.hasValue()) {
+        return VALUE(this.value as string);
+      } else if (this.formulaType) {
+        formula = this.formulaType.generateFormula(...this.children.map(child => child.toPreReqsMetFormula()));
+      } else if (this.child) {
+        formula = this.child.toPreReqsMetFormula();
+      } else {
+        this.addError(`Could not determine formula for "${this.text}"`);
+      }
+      return formula;
+    }
+
+    abstract toPRUsedFormula(): string;
+
+    abstract toRawMissedFormula(): string;
+
+    abstract toMissedFormula(): string;
+
+    abstract toUnknownFormula(): string;
   }
 
   class BooleanFormulaNode extends FormulaNode<boolean> {
@@ -1387,7 +1411,7 @@ namespace Status {
   }
 
   type virtualValueInfo = {
-    rowCounts: {[x:number]:number},
+    rowCounts: RowCounts,
     numPossible?: number,
     numNeeded?: number;
   }
@@ -1396,71 +1420,174 @@ namespace Status {
   // e.g. Virtual Choice has a numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
   const virtualItems:{[x:string]: virtualValueInfo} = {};
   
-  // Abstract intermediate class
-  const PARSE_REG_EXP:RegExp = /^(?:(.+?)!([^ ](?:.*?[^ ])?)(?:#([^ ].*))?)$/;
+  enum ValueNodeTypes {
+    WITH="WITH",
+    WITHOUT="WITHOUT",
+    VALUE="VALUE",
+  }
+  const ValueNodeTypeRegExps:{[x in ValueNodeTypes]:RegExp} = {
+    WITH: /^(?<items>.+?) +WITH +(?<filteredItems>.+?)$/,
+    WITHOUT: /^(?<items>.+?) +WITHOUT +(?<filteredItems>.+?)$/,
+    VALUE: /^(?:(?<column>.*?[^\s])[!=])?(?<id>.*)$/,
+  };
   const unescapeValue = (text:string):string => {
-    if (quoteMapping[text]) {
-      text = quoteMapping[text];
+    if (typeof quoteMapping[text] == "string") {
+      return quoteMapping[text];
     }
-    let match:RegExpMatchArray;
-    while ((match = text.match(quoteRegExp))) {
+    let match;
+    while ((match = quoteRegExp.exec(text))) {
       text = text.replace(match[0],`"${quoteMapping[match[0]]}"`);
     }
-    return text;
+    return text && text.trim();
   };
-  abstract class FormulaValueNode<T> extends FormulaNode<T> {
-    protected altColumnName:string;
-    protected altColumnId:string;
-    protected itemId:string;
-    protected readonly rowCounts: {[x:number]:number} = {};
-    protected isVirtual = false;
-    protected isSelfReferential = false;
-
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implictPrefix:boolean = false) {
-      super(unescapeValue(text),translator,row);
-      if (!this.hasValue()) {
-        const match:RegExpMatchArray = this.text.match(PARSE_REG_EXP);
-        if (match) {
-          [,this.altColumnName,this.altColumnId,this.itemId] = match;
-        } else {
-          this.itemId = this.text;
+  type RowCounts = {
+    [x:number]: number;
+  };
+  class ValueNode extends Node {
+    protected type:ValueNodeTypes
+    protected children:ValueNode[];
+    readonly column:string;
+    readonly id:string;
+    protected readonly _rowCounts:RowCounts = {};
+    protected _isVirtual:boolean;
+    protected _isSelfReferential:boolean;
+    protected get itemsChild(): ValueNode {
+      return this.children[0];
+    }
+    protected set itemsChild(child: ValueNode) {
+      this.children[0] = child;
+    }
+    protected get filterChild(): ValueNode {
+      return this.children[1];
+    }
+    protected set filterChild(child: ValueNode) {
+      this.children[1] = child;
+    }
+    get numPossible():number {
+      return (this._isVirtual && virtualItems[this.text].numPossible) || Object.values(this._rowCounts).reduce((total,count) => total + count,0);
+    }
+    get rows():number[] {
+      return Object.keys(this._rowCounts).map(row => Number(row)).sort((a,b)=>a-b);
+    }
+    get isVirtual() {
+      return this._isVirtual;
+    }
+    get isSelfReferential() {
+      return this._isSelfReferential;
+    }
+    get rowCounts():Readonly<RowCounts> {
+      return {...this._rowCounts};
+    }
+    static create(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      return new ValueNode(text,translator,row,_implicitPrefix);
+    }
+    constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      super(text,translator,row);
+      let {items,filteredItems} = ValueNodeTypeRegExps.WITH.exec(this.text)?.groups || {};
+      if (items || filteredItems) {
+        this.type = ValueNodeTypes.WITH;
+        this.itemsChild = new ValueNode(items,this.translator,this.row,_implicitPrefix);
+        this.filterChild = new ValueNode(filteredItems,this.translator,this.row);
+        [this.column, this.id, this._rowCounts] = [this.itemsChild.column,this.itemsChild.id, {...this.itemsChild._rowCounts}];
+        this.rows.forEach(row => {
+          if (!this.filterChild._rowCounts[row]) {
+            delete this._rowCounts[row];
+          }
+        });
+      } else if (({items,filteredItems} = ValueNodeTypeRegExps.WITHOUT.exec(this.text)?.groups || {}),items || filteredItems) {
+        this.type = ValueNodeTypes.WITHOUT;
+        this.itemsChild = new ValueNode(items,this.translator,this.row,_implicitPrefix);
+        this.filterChild = new ValueNode(filteredItems,this.translator,this.row);
+        [this.column, this.id, this._rowCounts] = [this.itemsChild.column,this.itemsChild.id, {...this.itemsChild._rowCounts}];
+        this.rows.forEach(row => {
+          if (this.filterChild._rowCounts[row]) {
+            delete this._rowCounts[row];
+          }
+        });
+      } else {
+        this.type = ValueNodeTypes.VALUE;
+        let {column,id} = ValueNodeTypeRegExps.VALUE.exec(this.text).groups;
+        column = column  && unescapeValue(column);
+        id = unescapeValue(id);
+        this._rowCounts = this.translator.getRowCounts(column || COLUMN.ITEM,id,_implicitPrefix && (!column || column == COLUMN.ITEM));
+        if (column && this.rows.length == 0) {
+          // Assume ! was part Item ID
+          this._rowCounts = this.translator.getRowCounts(COLUMN.ITEM,unescapeValue(this.text),_implicitPrefix);
+          if (this.rows.length) {
+            column = COLUMN.ITEM;
+            id = unescapeValue(this.text);
+          }
         }
-        if (this.itemId && _implictPrefix && this.itemId.indexOf("*") < 0) {
-          this.itemId += "*";
-        }
-        const altColumnRows:{[x:number]:number} = this.altColumnName && this.translator.getRowCounts(this.altColumnName, this.altColumnId);
-        const itemRows:{[x:number]:number} = this.itemId && (this.translator.getRowCounts(COLUMN.ITEM,this.itemId) || []);
-        if (altColumnRows && itemRows) {
-          // Intersect Column & Item
-          Object.keys(itemRows).filter(itemRow => altColumnRows[itemRow]).forEach(itemRow => this.rowCounts[itemRow] = itemRows[itemRow]);
-        } else if (altColumnRows || itemRows) {
-          // Found [column]![columnId] or [itemId]
-          const rows = altColumnRows || itemRows;
-          Object.keys(rows).forEach(row => this.rowCounts[row] = rows[row]);
-        }
-        if (this.rowCounts[this.row]) {
-          this.isSelfReferential = true;
-          delete this.rowCounts[this.row];
-        }
+        this.column = column || COLUMN.ITEM;
+        this.id = id;
       }
+      if (this._rowCounts && this._rowCounts[this.row]) {
+        delete this._rowCounts[this.row];
+        this._isSelfReferential = true;
+      }
+    }
+    finalize() {
+      if (!this.rows.length && virtualItems[this.text]) {
+        Object.keys(virtualItems[this.text].rowCounts).forEach(row => this._rowCounts[row] = virtualItems[this.text].rowCounts[row]);
+        this._isVirtual = true;
+      }
+    }
+    toString():string{
+      // Remove the outer "" if present
+      return super.toString().replace(/^"(([^"]|\\")*)"$/,"$1");
+    }
+
+    checkErrors() {
+      if (this.children.reduce((hasChildError,child) => child.checkErrors() || hasChildError, false)) {
+        return true;
+      } else if (this.rows.length == 0) {
+        switch (this.type) {
+          case ValueNodeTypes.WITH:
+            this.addError(`Could not find any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}"`);
+            break;
+          case ValueNodeTypes.WITHOUT:
+            this.addError(`Could not find any of "${this.itemsChild.toString()}" WITHOUT "${this.filterChild.toString()}"`);
+            break;
+          case ValueNodeTypes.VALUE:
+            if (this.column != COLUMN.ITEM) {
+              if (!this.translator.checklist.hasColumn(this.column)){
+                this.addError(`Could not find column "${this.column}"`);
+              } else {
+                this.addError(`Could not find "${this.id}" in "${this.column}" column`);
+              }
+            } else {
+              this.addError(`Could not find any of "${this.text}" ${this._isSelfReferential ? " (except itself)" : ""}`);
+            }
+        }
+        return true;
+      } else if (this.type == ValueNodeTypes.WITHOUT && this.rows.length == this.itemsChild.rows.length) {
+        this.addError(`There are not any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}" (WITHOUT is unnecessary)`);
+        return true;
+      }
+    }
+
+    getDirectPreReqInfos() {
+      if (this.children.length) {
+        return super.getDirectPreReqInfos();
+      } else {
+        return {
+          [this.toString()]: this.rows
+        };
+      }
+    }
+  }
+  // Abstract intermediate class
+  abstract class FormulaValueNode<T> extends FormulaNode<T> {
+    readonly valueInfo:ValueNode;
+
+    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+      super(text,translator,row);
+      this.valueInfo = ValueNode.create(text,translator,row,_implicitPrefix);
     }
 
     finalize() {
       super.finalize();
-      if (!this.hasValue()) {
-        if (virtualItems[this.text]) {
-          Object.keys(virtualItems[this.text].rowCounts).map(row => this.rowCounts[row] = virtualItems[this.text].rowCounts[row]);
-          this.isVirtual = true;
-        }
-      }
-    }
-
-    get numPossible():number {
-      return (this.isVirtual && virtualItems[this.text].numPossible) || Object.values(this.rowCounts).reduce((total,count) => total + count,0);
-    }
-
-    get rows():number[] {
-      return Object.keys(this.rowCounts).map(row => Number(row)).sort((a,b)=>a-b);
+      this.valueInfo.finalize();
     }
 
     protected _allPossiblePreReqRows:ReadonlySet<row>;
@@ -1469,8 +1596,8 @@ namespace Status {
         if (this.isInCircularDependency()) {
           this._allPossiblePreReqRows = this.getCircularDependencies();
         } else {
-          const allPossiblePreReqs:Set<row> = new Set(this.rows);
-          this.rows.forEach(row => 
+          const allPossiblePreReqs:Set<row> = new Set(this.valueInfo.rows);
+          this.valueInfo.rows.forEach(row => 
             CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
           );
           this._allPossiblePreReqRows = allPossiblePreReqs;
@@ -1479,14 +1606,8 @@ namespace Status {
       return this._allPossiblePreReqRows;
     }
 
-    getDirectPreReqInfos() {
-      return {
-        [this.text]: this.rows
-      };
-    }
-
     getDirectPreReqRows() {
-      return new Set<row>(this.rows);
+      return new Set<row>(this.valueInfo.rows);
     }
 
     getCircularDependencies(previous:row[] = []):ReadonlySet<row> {
@@ -1497,7 +1618,7 @@ namespace Status {
       } else {
         previous.push(this.row);
         this._lockCircular = true;
-        this.rows.forEach(row => {
+        this.valueInfo.rows.forEach(row => {
           CellFormulaParser.getParserForChecklistRow(this.translator,Number(row)).getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
         });
         this._lockCircular = false;
@@ -1513,24 +1634,18 @@ namespace Status {
     }
 
     checkErrors() {
-      let hasError = super.checkErrors();
-      if (!this.hasValue() && this.rows.length == 0) {
-        hasError = true;
-        if (this.altColumnName) {
-          if (this.itemId) {
-            this.addError(`Could not find any Item "${this.itemId}" that also has "${this.altColumnId}" in "${this.altColumnName}" column`);
-          } else if (!this.translator.checklist.hasColumn(this.altColumnName)){
-            this.addError(`Could not find column "${this.altColumnName}"`);
-          } else {
-            this.addError(`Could not find "${this.altColumnId}" in "${this.altColumnName}" column`);
-          }
-        } else {
-          this.addError(`Could not find any of "${this.text}" ${this.isSelfReferential ? " (except itself)" : ""}`);
-        }
-      }
-      return hasError;
+      return super.checkErrors() || (!this.hasValue() && this.valueInfo.checkErrors());
     }
-
+    getDirectPreReqInfos() {
+      return this.valueInfo.getDirectPreReqInfos();
+    }
+    getErrors() {
+      this.checkErrors();
+      if (!this.hasValue()) {
+        this.addErrors(this.valueInfo.getErrors());
+      }
+      return super.getErrors();
+    }
   }
 
   class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
@@ -1551,7 +1666,7 @@ namespace Status {
       if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
         this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
       } else {
-        // CHECKED > NEEDED
+        // CHECKED >= NEEDED
         this.availableChild = NumberFormulaValueNode.create(this.text,this.translator,this.row,_implicitPrefix);
         this.neededChild = NumberFormulaValueNode.create(1,this.translator,this.row,_implicitPrefix); // Default to 1 but override during finalize
       }
@@ -1560,10 +1675,10 @@ namespace Status {
     finalize() {
       super.finalize();
       if (!this.hasValue()) {
-        if (this.isVirtual && virtualItems[this.text].numNeeded) {
+        if (this.valueInfo.isVirtual && virtualItems[this.text].numNeeded) {
           this.numNeeded = virtualItems[this.text].numNeeded;
         } else if (!this.numNeeded && this.numNeeded !== 0) {
-          this.numNeeded = this.numPossible; // Allow children to override numNeeded, but default to All
+          this.numNeeded = this.valueInfo.numPossible; // Allow children to override numNeeded, but default to All
         }
         this.neededChild.updateValue(this.numNeeded);
       }
@@ -1617,8 +1732,8 @@ namespace Status {
     checkErrors():boolean {
       if (super.checkErrors()) {
         return true;
-      } else if (this.numPossible < this.numNeeded) {
-        this.addError(`There are only ${this.numPossible}, not ${this.numNeeded}, of ${this.altColumnName || "Item"} "${this.itemId}"${this.isSelfReferential ? " (when excluding itself)" : ""}`);
+      } else if (this.valueInfo.numPossible < this.numNeeded) {
+        this.addError(`There are only ${this.valueInfo.numPossible}, not ${this.numNeeded}, of ${this.valueInfo.column} "${this.valueInfo.id}"${this.valueInfo.isSelfReferential ? " (when excluding itself)" : ""}`);
         return true;
       }
     }
@@ -1642,7 +1757,7 @@ namespace Status {
     */
     toTotalFormula(): string {
       if (this.hasValue()) return VALUE(this.value);
-      return this.numPossible.toString();
+      return this.valueInfo.numPossible.toString();
     }
 
     toFormulaByStatus(...statuses: STATUS[]) {
@@ -1731,7 +1846,7 @@ namespace Status {
     */
     getMaxValue():number {
       if (this.hasValue()) return this.value;
-      return this.numPossible;
+      return this.valueInfo.numPossible;
     }
 
     private _generateFormula(values: (string|number|boolean)|(string|number|boolean)[] = [], column:column = COLUMN.STATUS): string {
@@ -1741,7 +1856,7 @@ namespace Status {
         return VALUE.ZERO;
       } else {
         const vals: (string|number|boolean)[] = Array.isArray(values) ? values : [values];
-        const counts:string[] = Object.entries(this.translator.rowCountsToA1Counts(this.rowCounts, column)).reduce((counts,[range,count]) => {
+        const counts:string[] = Object.entries(this.translator.rowCountsToA1Counts(this.valueInfo.rowCounts, column)).reduce((counts,[range,count]) => {
           vals.forEach(value => {
             const countIf:string = COUNTIF(range, VALUE(value));
             counts.push(count == 1 ? countIf : MULT(countIf,VALUE(count)));
@@ -1762,7 +1877,7 @@ namespace Status {
     }
   }
 
-  type useInfo = {[x:number]: number}
+  type useInfo = RowCounts
   type usesInfo = {[x:string]: useInfo}
   const usesInfo:usesInfo = {}; // TODO make checklist-aware?
   class UsesFormulaNode extends BooleanFormulaValueNode {
@@ -1826,7 +1941,7 @@ namespace Status {
     }
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
       super(text,translator,row);
-      if (this.rows.length == 0) {
+      if (this.valueInfo.rows.length == 0) {
         if (!virtualItems[this.text]) {
           virtualItems[this.text] = {
             rowCounts: {},
@@ -1834,7 +1949,6 @@ namespace Status {
           };
         }
         virtualItems[this.text].rowCounts[this.row] = 1;
-        this.isVirtual = true;
       }
       this.numNeeded = 1;
     }
@@ -1843,13 +1957,13 @@ namespace Status {
       this.choiceParser?.addOption(this.row);
     }
     get choiceRow(): row {
-      return this.isVirtual ? undefined : this.rows[0];
+      return this.valueInfo.isVirtual ? undefined : this.valueInfo.rows[0];
     }
     get choiceParser(): CellFormulaParser {
-      return this.isVirtual ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
+      return this.valueInfo.isVirtual ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator,this.choiceRow);
     }
     get choiceOptions(): row[] {
-      if (this.isVirtual) {
+      if (this.valueInfo.isVirtual) {
         return Object.keys(virtualItems[this.text].rowCounts).map(row => Number(row));
       } else {
         return this.choiceParser.getOptions();
@@ -1873,9 +1987,9 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
         this.addError(`This is the only OPTION for Choice "${this.text}"\n\n${OptionFormulaNode.usage}`);
         hasError = true;
       }
-      if (!this.isVirtual) {
-        if (this.rows.length != 1) {
-          this.addError(`"${this.text}" refers to ${this.rows.length} Items\n\n${OptionFormulaNode.usage}`);
+      if (!this.valueInfo.isVirtual) {
+        if (this.valueInfo.rows.length != 1) {
+          this.addError(`"${this.text}" refers to ${this.valueInfo.rows.length} Items\n\n${OptionFormulaNode.usage}`);
           hasError = true;
         }
         hasError = super.checkErrors() || hasError;
@@ -1884,7 +1998,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     toPreReqsMetFormula() {
-      return this.isVirtual
+      return this.valueInfo.isVirtual
         ? NOT(this.toPRUsedFormula()) 
         : AND(
           NOT(OR(...this.translator.rowsToA1Ranges(this.choiceOptions,COLUMN.CHECK))),
@@ -1912,7 +2026,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     private _determineFormula(virtualChoiceFormula: string,...statuses: STATUS[]):string  {
-      return this.isVirtual ? virtualChoiceFormula : this._getChoiceRowStatusFormula(...statuses);
+      return this.valueInfo.isVirtual ? virtualChoiceFormula : this._getChoiceRowStatusFormula(...statuses);
     }
 
     private _getChoiceRowStatusFormula(...statuses: STATUS[]) {
@@ -1920,7 +2034,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     getAllPossiblePreReqRows():ReadonlySet<row> {
-      if (this.isVirtual) {
+      if (this.valueInfo.isVirtual) {
         return new Set<row>();
       } else {
         return super.getAllPossiblePreReqRows();
@@ -1928,7 +2042,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     }
 
     getCircularDependencies(previous: row[]): ReadonlySet<row> {
-      if (this.isVirtual) {
+      if (this.valueInfo.isVirtual) {
         return new Set<row>();
       } else {
         return super.getCircularDependencies(previous);
@@ -2084,7 +2198,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
 
     finalize() {
       super.finalize();
-      this.sameRow = this.rows[0];
+      this.sameRow = this.valueInfo.rows[0];
     }
     
     toPreReqsMetFormula() {
@@ -2113,10 +2227,10 @@ NOTE: CHOICE is a deprecated alias for OPTION`;
     checkErrors() {
       if (super.checkErrors()) {
         return true;
-      } else if (this.rows.length != 1) {
+      } else if (this.valueInfo.rows.length != 1) {
         this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
         return true;
-      } else if ( this.numPossible > 1) {
+      } else if ( this.valueInfo.numPossible > 1) {
         this.addError("Cannot use SAME with Numerical Equations");
         return true;
       }
