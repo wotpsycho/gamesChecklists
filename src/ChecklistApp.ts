@@ -4,12 +4,12 @@ namespace ChecklistApp {
   export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
 
   export enum COLUMN {
-    CHECK= "CHECK",
-    TYPE= "TYPE",
-    ITEM= "ITEM",
-    NOTES= "NOTES",
-    PRE_REQS= "PRE_REQS",
-    STATUS= "STATUS",
+    CHECK= "✓",
+    TYPE= "Type",
+    ITEM= "Item",
+    NOTES= "Notes",
+    PRE_REQS= "Pre-Reqs",
+    STATUS= "Available",
   }
   export type column = number|COLUMN|string; // byHeader column is valid, so strings are valid
   
@@ -30,15 +30,6 @@ namespace ChecklistApp {
     UNKNOWN= "UNKNOWN",
     ERROR= "ERROR",
   }
-  
-  const COLUMN_HEADERS:Readonly<{[x in COLUMN]:string}> = {
-    [COLUMN.CHECK]: "✓",
-    [COLUMN.TYPE]: "Type",
-    [COLUMN.ITEM]: "Item",
-    [COLUMN.PRE_REQS]: "Pre-Reqs",
-    [COLUMN.STATUS]: "Available",
-    [COLUMN.NOTES]: "Notes",
-  };
   export const FINAL_ITEM_TYPE = "Game Complete";
 
   
@@ -104,7 +95,7 @@ namespace ChecklistApp {
   export class Checklist extends ChecklistApp.SheetBase {
     private requestId:string = Date.now().toString()
     private constructor(sheet: Sheet) {
-      super(sheet,COLUMN_HEADERS,ROW_HEADERS);
+      super(sheet,COLUMN,ROW_HEADERS);
       time("cacheRequestId");
       CacheService.getScriptCache().put("latestRequestId",this.requestId,60);
       timeEnd("cacheRequestId");
