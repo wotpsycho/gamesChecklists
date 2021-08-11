@@ -26,20 +26,20 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
     timeEnd("range.getSheet()");
 
     
-    time("sheetData");
-    time("dataRange");
+    // time("sheetData");
+    // time("dataRange");
     // const dataRange = sheet.getDataRange();
-    timeEnd("dataRange");
-    time("dataValues");
+    // timeEnd("dataRange");
+    // time("dataValues");
     // const vals = dataRange.getValues();
-    timeEnd("dataValues");
-    time("dataFormulas");
+    // timeEnd("dataValues");
+    // time("dataFormulas");
     // const forms = dataRange.getFormulas();
-    timeEnd("dataFormulas");
-    time("dataNotes");
+    // timeEnd("dataFormulas");
+    // time("dataNotes");
     // const notes = dataRange.getNotes();
-    timeEnd("dataNotes");
-    timeEnd("sheetData");
+    // timeEnd("dataNotes");
+    // timeEnd("sheetData");
 
     
     time("ChecklistApp.setActiveSheet(..)");
@@ -100,9 +100,7 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
       // const metaSheet = ChecklistMeta.getFromSheet(sheet);
       // if (metaSheet) metaSheet.handleEdit(event);
       timeEnd("metaHandleEdit");
-    }
-
-    
+    }    
   } catch(e) {
     const message = e && e.getMessage && e.getMessage() || e;
     event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);
