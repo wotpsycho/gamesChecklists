@@ -840,7 +840,7 @@ namespace ChecklistApp {
       const changedValues = this.getRowValues(ROW.QUICK_FILTER,range.getColumn(), range.getNumColumns());
       for (let column = firstChangedColumn; column <= lastChangedColumn; column++) {
         if (column == 1) continue; // First column is header
-        const changedValue = changedValues[column-firstChangedColumn];
+        const changedValue = changedValues[column-firstChangedColumn]?.toString().replace(/""/g,"^$");
         const existingCriteria = this.filter.getColumnFilterCriteria(column);
         if (changedValue) {
           let criteria: GoogleAppsScript.Spreadsheet.FilterCriteriaBuilder;
@@ -851,7 +851,7 @@ namespace ChecklistApp {
           }
           // const filterRange = checklist.getColumnDataRange(column);
           const prettyPrint = Formula.togglePrettyPrint(false);
-          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(A1(this.firstDataRow,column,null,column),VALUE("(?mis:"+ changedValue +")"))));
+          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(A1(this.firstDataRow,column,null,column),VALUE(`(?mis:${changedValue})`))));
           Formula.togglePrettyPrint(prettyPrint);
           this.filter.setColumnFilterCriteria(column, criteria);
         } else {
