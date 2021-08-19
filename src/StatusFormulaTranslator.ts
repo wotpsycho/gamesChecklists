@@ -114,6 +114,7 @@ namespace Status {
     CHECKED  = "CHECKED",
     OPTIONAL = "OPTIONAL",
     BLOCKS   = "BLOCKS",
+    BLOCKED  = "BLOCKED",
   }
 
   const USAGES = {
@@ -192,8 +193,19 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       const preReqValues:unknown[][] = preReqRange.getValues();
       const firstRow:row = preReqRange.getRow();
       const parsers:CellFormulaParser[] = new Array(firstRow + preReqValues.length);
-      
+      const rowRefRegExp = /(?:"\$(\d+)")|(?:\$(\d+))/g;
+      let itemValues:columnValues;
+      // Replace any $[row] with the actual row value
       for (let i:number = 0; i < preReqValues.length; i++) {
+        if (preReqValues[i][0].toString().match(rowRefRegExp)) {
+          itemValues = itemValues ?? this.getColumnValues(COLUMN.ITEM);
+          preReqValues[i][0] = preReqValues[i][0].toString().replace(rowRefRegExp,(rowRef,rowA,rowB) =>
+            itemValues.byRow[rowA || rowB].map((valueInfo: sheetValueInfo) => 
+              valueInfo.value.match(/[*|)(]\n/) ? `"${valueInfo.value}"` : valueInfo.value
+            ).join(" WITH ")
+          );
+          preReqRange.getCell(i+1,1).setValue(preReqValues[i][0]);
+        }
         parsers[i+firstRow] = CellFormulaParser.getParserForChecklistRow(this,i+firstRow,preReqValues[i][0].toString());
       }
       this._phase = PHASE.FINALIZING;
@@ -524,12 +536,15 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         rows[valueInfo.row] = (rows[valueInfo.row] || 0) + valueInfo.num;
       });
       const [hasStar,hasDot,hasBar] = [id.indexOf("*") >= 0, id.indexOf(".") >= 0, id.indexOf("|") >= 0];
+      const rowIdMatch = id.match(/^\$(\d+)$/);
       let looksLikeRegExp = hasStar || hasDot || hasBar;
-      if (_implicitPrefix && !hasStar && !hasBar) {
+      if (_implicitPrefix && !hasStar && !hasBar && !rowIdMatch) {
         id += "*";
         looksLikeRegExp = true;
       }
-      if (columnInfo.byValue[id]) {
+      if (rowIdMatch) {
+        addRows(columnInfo.byRow[rowIdMatch[1]]);
+      } else if (columnInfo.byValue[id]) {
         addRows(columnInfo.byValue[id]);
       } else if (looksLikeRegExp) {
         const search:RegExp = RegExp("^(" + id.replace(/\*/g,".*") + ")$");
@@ -698,6 +713,9 @@ NOTE: CHOICE is a deprecated alias for OPTION`
             case SPECIAL_PREFIXES.BLOCKS.toUpperCase():
               childFormulaNode = BlocksUntilFormulaNode.create({ text, translator: this.translator, row });
               break;
+            case SPECIAL_PREFIXES.BLOCKED.toUpperCase():
+              childFormulaNode = BlockedUntilFormulaNode.create({text, translator: this.translator, row});
+              break;
             case SPECIAL_PREFIXES.LINKED.toUpperCase():
               isLinked = true;
               childFormulaNode = BooleanFormulaNode.create({ text, translator: this.translator, row });
@@ -735,7 +753,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
     private checkPhase(...phases:PHASE[]) {
       if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
-        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}"`);
+        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}" (Row ${this.row})`);
       }
     }
 
@@ -895,8 +913,11 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       this.text = text?.toString()?.trim();
       this.row = row;
 
+      let match: RegExpMatchArray;
       if (parentheticalMapping[this.text]) {
         this.text = parentheticalMapping[this.text];
+      } else if ((match = this.text.match(/^\(([^)(]*)\)$/))) {
+        this.text = this.text.replace(match[0],match[1]);
       }
     }
     
@@ -914,7 +935,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
     protected checkPhase(...phases:PHASE[]) {
       if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
-        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}"`);
+        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}" (Row: ${this.row}, Condition: ${this.text})`);
       }
     }
 
@@ -2283,7 +2304,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
     
     toPreReqsMetFormula() {
-      return this.sameRowParser?.toPreReqsMetFormula();
+      return OR(this.translator.cellA1(this.sameRow,COLUMN.CHECK), this.sameRowParser?.toPreReqsMetFormula());
     }
 
     toErrorFormula() {
@@ -2327,18 +2348,27 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
   }
 
+  const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
+  type BlocksArgs = {
+    text?:string,
+    blocksText?: string,
+    untilText?: string,
+    translator: StatusFormulaTranslator,
+    row: row,
+  };
   class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
-    static create({ text, translator, row }: NodeArgs) {
-      return new BlocksUntilFormulaNode(text,translator,row);
+    static create({ text, blocksText, untilText, translator, row }: BlocksArgs) {
+      const match = text?.match(untilRegExp) || [];
+      console.log("match",match);
+      return new BlocksUntilFormulaNode(blocksText || match[1] || "*", untilText || match[2],translator,row);
     }
 
-    protected constructor(text:string, translator:StatusFormulaTranslator, row:row) {
-      const match = text.match(/^(?:(.*?) +)?UNTIL +(.*?)$/);
-      super(match?.[1] || "*",translator,row);
-      if (!match) {
+    protected constructor(blocksText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+      super(blocksText ?? "*",translator,row);
+      if (!untilText) {
         this.addError("Missing UNTIL clause of BLOCKS");
       } else {
-        this.child  = BooleanFormulaNode.create({ text: match[2], translator: this.translator, row: this.row });
+        this.child = BooleanFormulaNode.create({ text:untilText, translator: this.translator, row: this.row });
       }
     }
     finalize():BlocksUntilFormulaNode {
@@ -2349,7 +2379,11 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         const untilPreReqRows = this.child.getAllPossiblePreReqRows();
         this.valueInfo.rows // All rows matching the BLOCKS clause
           .filter(blockedRow => !untilPreReqRows.has(blockedRow)) // Don't block any preReq of UNTIL
-          .forEach(blockedRow => CellFormulaParser.getParserForChecklistRow(this.translator,blockedRow).addChild(BlockedUntilFormulaNode.create({ text: this.child.text, translator: this.translator, row: blockedRow, blocksRow: this.row })));
+          .forEach(blockedRow => 
+            CellFormulaParser.getParserForChecklistRow(this.translator,blockedRow).addChild(
+              GeneratedBlockedUntilFormulaNode.create({ blockedText: `$${this.row}`, untilText: this.child.text, translator: this.translator, row: blockedRow, calculated:true }).finalize()
+            )
+          );
         timeEnd("blocksFinalize");
       }
       this.finalized = true;
@@ -2380,7 +2414,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       return VALUE.FALSE;
     }
     checkErrors() {
-      if (super.checkErrors()) {
+      if (super.checkErrors() || !this.child) {
         return true;
       } else if (!this.child.getAllPossiblePreReqRows().has(this.row)){
         this.addError("UNTIL clause must depend on this Item");
@@ -2403,40 +2437,94 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
   }
 
-  class BlockedUntilFormulaNode extends BooleanFormulaNode {
-    protected blocksRow: row;
-    protected until: BooleanFormulaNode;
-    static create({ text, translator, row, blocksRow }: NodeArgs & {blocksRow: row; }) {
-      return new BlockedUntilFormulaNode(text,translator,row,blocksRow);
+  type BlockedArgs = {
+    text?: string,
+    blockedText?: string,
+    untilText?: string,
+    translator: StatusFormulaTranslator,
+    row: row,
+    calculated?:boolean,
+  };
+  class BlockedUntilFormulaNode extends FormulaNode<boolean> {
+    static create({ text, blockedText, untilText, translator, row}: BlockedArgs) {
+      const match = text?.match(untilRegExp) || [];
+      return new BlockedUntilFormulaNode(blockedText || match[1],untilText || match[2],translator,row);
     }
-    protected constructor(text:string, translator:StatusFormulaTranslator, row:row, blocksRow:row) {
-      super(text,translator,row);
-      this.blocksRow = blocksRow;
-      this.finalize();
+    constructor(blockedText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+      super(`!(${blockedText}) || (${untilText})`,translator,row);
+      this.children[0] = BooleanFormulaNode.create({text:blockedText,translator:this.translator,row:this.row});
+      this.children[1] = BooleanFormulaNode.create({text:untilText,translator:this.translator,row:this.row});
+      this.formulaType = AND;
+    }
+
+    protected get blockedChild() {
+      return this.children[0];
+    }
+    protected set blockedChild(child) {
+      this.children[0] = child;
+    }
+    protected get untilChild() {
+      return this.children[1];
+    }
+    protected set untilChild(child) {
+      this.children[1] = child;
     }
 
     toPreReqsMetFormula():string {
-      if (this.parser.isControlled()) {
-        // Since controlled isn't known until post-FINALIZED, have to do check here
-        return VALUE.TRUE;
-      }
       return OR(
-        NOT(this.translator.cellA1(this.blocksRow,COLUMN.CHECK)),
-        super.toPreReqsMetFormula()
+        NOT(this.blockedChild.toPreReqsMetFormula()),
+        this.untilChild.toPreReqsMetFormula()
       );
     }
 
     toPRUsedFormula(): string {
-      return VALUE.FALSE;
+      return AND(this.blockedChild.toPreReqsMetFormula(), this.untilChild.toPRUsedFormula());
     }
     toRawMissedFormula(): string {
-      return VALUE.FALSE;
+      return AND(this.blockedChild.toPreReqsMetFormula(), this.untilChild.toRawMissedFormula());
     }
     toMissedFormula(): string {
-      return VALUE.FALSE;
+      return AND(this.blockedChild.toPreReqsMetFormula(), this.untilChild.toMissedFormula());
     }
     toUnknownFormula(): string {
-      return VALUE.FALSE;
+      return AND(this.blockedChild.toPreReqsMetFormula(), this.untilChild.toUnknownFormula());
+    }
+  }
+  class GeneratedBlockedUntilFormulaNode extends BlockedUntilFormulaNode {
+    static create({ blockedText, untilText, translator, row}: BlockedArgs):GeneratedBlockedUntilFormulaNode {
+      return new GeneratedBlockedUntilFormulaNode(blockedText,untilText,translator,row);
+    }
+    constructor(blockedText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+      super(blockedText,untilText,translator,row);
+    }
+    finalize():GeneratedBlockedUntilFormulaNode {
+      super.finalize();
+      return this;
+    }
+
+    toPreReqsMetFormula():string {
+      // Since controlled isn't known until post-FINALIZED, have to do check here
+      return this.parser.isControlled() ? VALUE.TRUE : super.toPreReqsMetFormula();
+    }
+
+    toPRUsedFormula(): string {
+      // Since controlled isn't known until post-FINALIZED, have to do check here
+      return this.parser.isControlled() ? VALUE.FALSE : super.toPRUsedFormula();
+    }
+    toRawMissedFormula(): string {
+      // Since controlled isn't known until post-FINALIZED, have to do check here
+      return this.parser.isControlled() ? VALUE.FALSE : super.toRawMissedFormula();
+    }
+    toMissedFormula(): string {
+      // Since controlled isn't known until post-FINALIZED, have to do check here
+      return this.parser.isControlled() ? VALUE.FALSE : super.toMissedFormula();
+    }
+    toUnknownFormula(): string {
+      // Since controlled isn't known until post-FINALIZED, have to do check here
+      return this.parser.isControlled() ? VALUE.FALSE : super.toUnknownFormula();
+    }
+    getDirectPreReqRows():ReadonlySet<number> {
+      return new Set();
     }
   }
 }
