@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 namespace Status {
   type Range = GoogleAppsScript.Spreadsheet.Range;
+  type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
   type Checklist = ChecklistApp.Checklist;
   type column = ChecklistApp.column;
   type row = ChecklistApp.dataRow;
@@ -145,7 +146,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
   }
 
   export function addLinksToPreReqs(checklist:Checklist = ChecklistApp.getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
-    StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqs(startRow,endRow);
+    StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow,endRow);
   }
   
   enum PHASE {
@@ -354,12 +355,14 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       if (this.isLatest) {
         time("writeValues");
 
+        const changedRows:{[x:number]:{value:string,cell:Range}} = {};
         time("setFormulasIndividual");
         // Reduce client-side recalculations by only setting formula if changed
         statusFormulas.forEach((statusFormula,i) => {
           if (statusFormula.length > 40000) console.warn(`Long Formula Row ${i+firstRow}: ${statusFormula.length}`);
           if (statusFormula !== existingStatusFormulas[i][0]) {
-            statusDataRange.getCell(i+1,1).setFormula(statusFormula);
+            statusDataRange.getCell(i + 1, 1).setFormula(statusFormula);
+            changedRows[i+firstRow] = {value:preReqValues[i][0]?.toString(), cell: preReqRange.getCell(i+1,1)};
           }
         });
         timeEnd("setFormulasIndividual");
@@ -410,64 +413,44 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         time("debugColumnValues");
         Object.values(debugColumns).forEach(value => value.range.setFormulas(value.formulas.map(formulaArray => [FORMULA(formulaArray[0])])));
         timeEnd("debugColumnValues");
+
+        time("addLinks");
+        this.addLinksToPreReqsInRows(changedRows);
+        timeEnd("addLinks");
         timeEnd("writeValues");
       } else {
         Logger.log("Not updating statuses, other request has come in");
         return;
       }
+      this.checklist.unmarkEdited();
       timeEnd("validateAndGenerateStatusFormulas");
     }
 
     /**
      * To prevent race conditions that are unavoidable when a User is editing directly, must get-modify-update range in a single operation
      */
-    addLinksToPreReqs(startRow:row = this.checklist.firstDataRow,endRow = this.checklist.lastRow):void {
-      time("addLinksToPreReqs");
+    addLinksToPreReqsAll():void {
+      this.addLinksToPreReqsInRange(this.checklist.firstDataRow,this.checklist.lastRow);
+    }
+    addLinksToPreReqsInRange(startRow:row,endRow:row):void {
+      const label = this.addLinksToPreReqsInRange.name;
+      time(`${label}`);
       try {
         if (startRow < this.checklist.firstDataRow) startRow = this.checklist.firstDataRow;
         if (endRow > this.checklist.lastRow) endRow = this.checklist.lastRow;
         if (startRow > endRow) return;
-        const preReqRichTexts = [];
-        time("addLinks flush");
-        // this.checklist.flush();
-        timeEnd("addLinks flush");
-        time("addLinks getRange");
-        const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
-        timeEnd("addLinks getRange");
-        time("addLinks getValues");
-        const preReqValues = preReqRange.getValues();
-        timeEnd("addLinks getValues");
       
-        time("addLinks determineRichText");
-        let linkAdded = false;
-        for (let i = 0; i < preReqValues.length; i++) {
-          const parser = this.parsers[i+startRow];
-          const preReqValue = preReqValues[i][0].toString();
-          const richTextValue = SpreadsheetApp.newRichTextValue()
-            .setText(preReqValue);
-        
-          const directPreReqInfos = parser.getDirectPreReqInfos();
-          Object.entries(directPreReqInfos).forEach(([text, rows]) => {
-            const startIndex = preReqValue.indexOf(text);
-            if (text && startIndex >= 0) {
-              const rowRanges = this.rowsToRanges(rows,COLUMN.ITEM);
-              if (rowRanges.length == 1 && parser.preReqText === preReqValue) {
-              // For now, only link if it refers to single cell/range AND the value in the translator is the same as just read from flushed sheet
-              // TODO determine best way of linking multi
-                richTextValue.setLinkUrl(startIndex, startIndex+text.length,Formula.urlToSheet(this.checklist.sheetId,...rowRanges[0]));
-                linkAdded = true;
-              }
-            }
-          });
-          preReqRichTexts[i] = richTextValue.build();
-        }
-        timeEnd("addLinks determineRichText");
+        const preReqRange = this.checklist.getColumnDataRange(COLUMN.PRE_REQS, startRow, endRow-startRow+1);
+        timeEnd(`${label} getRange`);
+        time(`${label} getValues`);
+        const preReqValues = preReqRange.getValues();
+        timeEnd(`${label} getValues`);
+    
+        time(`${label} determineRichText`);
+        const preReqRichTexts:RichTextValue[] = preReqValues.map((preReqValue,i) => this.getRichTextForRow(i+startRow, preReqValue[0].toString()));
+        timeEnd(`${label} determineRichText`);
 
-        if (!linkAdded) {
-          Logger.log("No links added");
-          return;
-        }
-        time("preReqTextStyle");
+        time(`${label} preReqTextStyle`);
         preReqRange.setTextStyle(SpreadsheetApp.newTextStyle()
           .setBold(false)
           .setItalic(false)
@@ -476,15 +459,66 @@ NOTE: CHOICE is a deprecated alias for OPTION`
           .setForegroundColor("black")
           .build());
         timeEnd("preReqTextStyle");
-        time("setRichText");
+
+        time(`${label} setRichText`);
         preReqRange.setRichTextValues(preReqRichTexts.map(richText => [richText]));
         timeEnd("setRichText");
-        time("endFlush");
+        time(`${label} endFlush`);
         // this.checklist.flush();
-        timeEnd("endFlush");
+        timeEnd(`${label} endFlush`);
       } finally {
-        timeEnd("addLinksToPreReqs");
+        timeEnd(`${label}`);
       }
+      // this.addLinksToPreReqsInRows(rows,true);
+    }
+    addLinksToPreReqsInRows(rowInfos:{[x:number]:{value:string,cell:Range}}):void{
+      const label = this.addLinksToPreReqsInRows.name;
+      time(`${label}`);
+      try {
+        // if (!rows.length) return;
+        // time(`${label} flush`);
+        // this.checklist.flush();
+        // timeEnd(`${label} flush`);
+
+        time(`${label} preReqTextStyle`);
+        const textStyle = SpreadsheetApp.newTextStyle()
+          .setBold(false)
+          .setItalic(false)
+          .setUnderline(false)
+          .setStrikethrough(false)
+          .setForegroundColor("black")
+          .build();
+        timeEnd("preReqTextStyle");
+      
+        time(`${label} determineAndWriteRichText`);
+        Object.entries(rowInfos).forEach(([row,rowInfo]) => rowInfo.cell.setTextStyle(textStyle).setRichTextValue(this.getRichTextForRow(Number(row), rowInfo.value)));
+        timeEnd(`${label} determineAndWriteRichText`);
+
+        // time(`${label} endFlush`);
+        // this.checklist.flush();
+        // timeEnd(`${label} endFlush`);
+      } finally {
+        timeEnd(`${label}`);
+      }
+    }
+    
+    private getRichTextForRow(row:row, preReqValue:string = this.checklist.getValue(row,COLUMN.PRE_REQS).toString()):GoogleAppsScript.Spreadsheet.RichTextValue {
+      const parser = this.parsers[row];
+      const richTextValue = SpreadsheetApp.newRichTextValue()
+        .setText(preReqValue);
+      const directPreReqInfos = parser.getDirectPreReqInfos();
+      Object.entries(directPreReqInfos).forEach(([text, rows]) => {
+        const startIndex = preReqValue.indexOf(text);
+        if (text && startIndex >= 0) {
+          const rowRanges = this.rowsToRanges(rows,COLUMN.ITEM);
+          if (rowRanges.length == 1 && parser.preReqText === preReqValue) {
+          // For now, only link if it refers to single cell/range AND the value in the translator is the same as just read from flushed sheet
+          // TODO determine best way of linking multi
+            richTextValue.setLinkUrl(startIndex, startIndex+text.length,Formula.urlToSheet(this.checklist.sheetId,...rowRanges[0]));
+          }
+        }
+      });
+      return richTextValue.build();
     }
 
     private readonly columnInfo: {[x:number]: columnValues} = {};
@@ -1198,6 +1232,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
 
     toUnknownFormula(): string {
+      if (this.row == 200) console.log("bfn.toUF: text:%s, val:%s, ft: %s, isCircDep:%s, circDeps:%s",this.text,this.value,formulaTypeToString(this.formulaType),this.isInCircularDependency(),[...this.getCircularDependencies()]);
       if (this.hasValue()) return VALUE.FALSE;
       if (this.isInCircularDependency()) return VALUE.TRUE;
       if (!this.formulaType) return this.child.toUnknownFormula();
@@ -1310,6 +1345,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
   class ComparisonFormulaNode extends FormulaNode<boolean> {
     static create({ text, translator, row, formulaType }: NodeArgs & { formulaType: FormulaHelper; }) {
+      if (row == 200) console.log("cfn.create: text:%s, ft:%s",text,formulaTypeToString(formulaType));
       return new ComparisonFormulaNode(text,translator,row,formulaType);
     }
     protected children: NumberNode[];
@@ -1318,6 +1354,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
       this.formulaType = formulaType;
       const operands:string[] = formulaType.parseOperands(this.text);
+      if (row == 200) console.log("cfn.constr: operands:%s",operands);
       this.children.push(...operands.map(operand => NumberFormulaNode.create({ text: operand, translator: this.translator, row: this.row, _implicitPrefix: formulaType == X_ITEMS })));
     }
 
@@ -1610,6 +1647,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         delete this._rowCounts[this.row];
         this._isSelfReferential = true;
       }
+      if (row == 200) console.log("vn.con: text:%s, rowCounts:%s",text,Object.keys(this._rowCounts));
     }
     finalize():ValueNode {
       if (this.finalized) return this;
@@ -1671,19 +1709,27 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text,translator,row);
-      this.valueInfo = ValueNode.create({ text, translator, row, _implicitPrefix });
+      this.determineValue();
+      if (!this.hasValue()) {
+        this.valueInfo = ValueNode.create({ text, translator, row, _implicitPrefix });
+      }
+    }
+
+    protected determineValue():void {
+      return;
     }
 
     finalize():FormulaValueNode<T> {
       if (this.finalized) return this;
       super.finalize();
-      this.valueInfo.finalize();
+      this.valueInfo?.finalize();
       this.finalized = true;
       return this;
     }
 
     protected _allPossiblePreReqRows:ReadonlySet<row>;
     getAllPossiblePreReqRows():ReadonlySet<row> {
+      if (this.hasValue()) return new Set();
       if (!this._allPossiblePreReqRows) {
         if (this.isInCircularDependency()) {
           this._allPossiblePreReqRows = this.getCircularDependencies();
@@ -1699,10 +1745,11 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
 
     getDirectPreReqRows() {
-      return new Set<row>(this.valueInfo.rows);
+      return new Set<row>(this.valueInfo?.rows);
     }
 
     getCircularDependencies(previous:row[] = []):ReadonlySet<row> {
+      if (this.hasValue()) return new Set();
       if (this._circularDependencies) return this._circularDependencies;
       const circularDependencies: Set<row> = new Set();
       if (this._lockCircular) {
@@ -1721,7 +1768,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
 
     isDirectlyMissable():boolean {
-      if (virtualItems[this.text]) return false;
+      if (virtualItems[this.text] || this.hasValue()) return false;
       return super.isDirectlyMissable(); 
     }
 
@@ -1731,7 +1778,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     getDirectPreReqInfos() {
       return {
         ...super.getDirectPreReqInfos(),
-        ...this.valueInfo.getDirectPreReqInfos()
+        ...this.valueInfo?.getDirectPreReqInfos()
       };
     }
     getErrors() {
@@ -1758,12 +1805,15 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
     protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text,translator,row,_implicitPrefix);
-      if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
-        this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
-      } else {
+      if (!this.hasValue()) {
         // CHECKED >= NEEDED
         this.availableChild = NumberFormulaValueNode.create({ text: this.text, translator: this.translator, row: this.row, _implicitPrefix });
         this.neededChild = NumberFormulaValueNode.create({ text: "1", translator: this.translator, row: this.row, _implicitPrefix }); // Default to 1 but override during finalize
+      }
+    }
+    protected determineValue(): void {
+      if (typeof this.text == "boolean" || this.text.toString().toUpperCase() == "TRUE" || this.text.toString().toUpperCase() == "FALSE") {
+        this.value = typeof this.text == "boolean" ? this.text as boolean : this.text.toString().toUpperCase() == "TRUE";
       }
     }
 
@@ -1855,6 +1905,9 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     protected readonly children: FormulaValueNode<never>[]
     protected constructor(text: string|number, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text.toString(),translator,row,_implicitPrefix);
+    }
+
+    determineValue() {
       if (Number(this.text) || this.text === "0") {
         this.value = Number(this.text);
       }
@@ -2359,7 +2412,6 @@ NOTE: CHOICE is a deprecated alias for OPTION`
   class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
     static create({ text, blocksText, untilText, translator, row }: BlocksArgs) {
       const match = text?.match(untilRegExp) || [];
-      console.log("match",match);
       return new BlocksUntilFormulaNode(blocksText || match[1] || "*", untilText || match[2],translator,row);
     }
 

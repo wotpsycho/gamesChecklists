@@ -4,7 +4,8 @@ namespace ChecklistApp {
   export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
   export type Range = GoogleAppsScript.Spreadsheet.Range;
   export type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
-  export type Filter = GoogleAppsScript.Spreadsheet.Filter;
+  export type Filter = Omit<GoogleAppsScript.Spreadsheet.Filter,"remove"|"sort">;
+  export type ReadonlyFilter = Pick<Filter, "getRange" | "getColumnFilterCriteria">;
   export type Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
 
   type column = number|string;
@@ -14,6 +15,7 @@ namespace ChecklistApp {
   type columnMap = stringToNumberMap;
   type rowMap = stringToNumberMap;
   export type sheetValue = string|number|boolean|undefined|null;
+
   export class SheetBase {
     readonly sheet:Sheet;
     private readonly namedColumnHeaders:stringMap;
@@ -30,11 +32,59 @@ namespace ChecklistApp {
       return this.sheet.getParent();
     }
 
+    private _filter:Filter;
     get filter():Filter {
-      time("getFilter");
-      const filter = this.sheet.getFilter();
-      timeEnd("getFilter");
-      return filter;
+      if (typeof this._filter === "undefined") {
+        time("getFilter");
+        this._filter = this.sheet.getFilter() || null;
+        timeEnd("getFilter");
+      }
+      return this._filter;
+    }
+    /**
+     * 
+     * @returns Copy of the existing Filter that can still 
+     */
+    removeFilter():ReadonlyFilter {
+      time("removeFilter");
+      const existingFilter = this.filter;
+      if (existingFilter) this.sheet.getFilter().remove(); // Get a copy so the returned one can still be used for Read operations
+      this._filter = null;
+      timeEnd("removeFilter");
+      return existingFilter;
+    }
+    refreshFilter(): void {
+      time("refreshFilter");
+      try {
+        if (this.filter) {
+          const filterRange = this.filter.getRange();
+          for (let i = filterRange.getLastColumn(); i >= filterRange.getColumn(); i--) {
+            const criteria = this.filter.getColumnFilterCriteria(i);
+            if (criteria) {
+              this.filter.setColumnFilterCriteria(i,criteria);
+              return;
+            }
+          }
+        }
+      } finally {
+        timeEnd("refreshFilter");
+      }
+    }
+    createFilter(_copyFilter?: ReadonlyFilter): void {
+      time("createFilter");
+      this.removeFilter();
+      const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);
+      this._filter = filterRange.createFilter();
+      if (_copyFilter) {
+        const copyFilterRange = _copyFilter.getRange();
+        for (let column = copyFilterRange.getColumn(); column <= copyFilterRange.getLastColumn(); column++) {
+          const criteria = _copyFilter.getColumnFilterCriteria(column);
+          if (criteria) {
+            this.filter.setColumnFilterCriteria(column,criteria);
+          }
+        }
+      }
+      timeEnd("createFilter");
     }
 
     get name():string {

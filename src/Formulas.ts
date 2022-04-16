@@ -279,7 +279,7 @@ namespace Formula {
   export const VALUE = withConstants(
     (...values: (boolean|string|number)[]): string => {
       const value = values[0];
-      if (typeof value == "boolean" || value.toString().toUpperCase() == "TRUE" || value.toString().toUpperCase() == "FALSE") {
+      if (typeof value == "boolean" || value?.toString().toUpperCase() == "TRUE" || value?.toString().toUpperCase() == "FALSE") {
         return value.toString().toUpperCase();
       } else if (isNumber(value)) {
         return Number(value).toString();

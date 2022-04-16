@@ -59,6 +59,9 @@ namespace ChecklistApp {
   
   // const checklists:{[x:number]:Checklist} = {};
   // APP SECTION
+  export function getChecklistFromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
+    return Checklist.fromEvent(event);
+  }
   export function getChecklistBySheet(sheet: Sheet = ChecklistApp.getActiveSheet()): Checklist {
     return Checklist.fromSheet(sheet);
   }
@@ -94,6 +97,7 @@ namespace ChecklistApp {
   
   export class Checklist extends ChecklistApp.SheetBase {
     private requestId:string = Date.now().toString()
+
     private constructor(sheet: Sheet) {
       super(sheet,COLUMN,ROW_HEADERS);
       time("cacheRequestId");
@@ -107,6 +111,22 @@ namespace ChecklistApp {
         this.checklists[sheetId] = new Checklist(sheet);
       }
       return this.checklists[sheetId];
+    }
+    static fromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
+      return this.fromSheet(event.source.getActiveSheet());
+    }
+
+    static get triggersAttached():boolean {
+      return SpreadsheetApp.getActiveSpreadsheet().createDeveloperMetadataFinder().withKey("triggersAttached").find().length > 0;
+    }
+
+    static set triggersAttached(triggersAttached:boolean) {
+      if (triggersAttached) {
+        if (!this.triggersAttached)
+          SpreadsheetApp.getActiveSpreadsheet().addDeveloperMetadata("triggersAttached");
+      } else {
+        SpreadsheetApp.getActiveSpreadsheet().createDeveloperMetadataFinder().withKey("triggersAttached").find().forEach(metadata => metadata.remove());
+      }
     }
     
     // PROPERTIES SECTION
@@ -239,67 +259,164 @@ namespace ChecklistApp {
     // END PROPERTY SECTIONS
     
     // Handlers
-    handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
-      time("checklist handleEdit");
-      const range = event.range;
-      
-      time("quickFilterChange");
-      if (this.isRowInRange(ROW.QUICK_FILTER,range)) {
-        this.quickFilterChange(event);
-        if (range.getNumRows() == 1) {
-          timeEnd("quickFilterChange","checklist handleEdit");
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    onOpenSimple(event: GoogleAppsScript.Events.SheetsOnOpen):void {
+      this.settings.populateSettingsDropdowns();
+      this.ensureTotalFormulas();
+      const cell = this.getRange(ROW.TITLE,COLUMN.PRE_REQS);
+      this.sheet.insertImage("",cell.getColumn(),cell.getRow(),cell.getWidth()/2,0);
+      return;
+    }
+    onEditSimple(event: GoogleAppsScript.Events.SheetsOnEdit):void {
+      time("onEditSimple");
+      try {
+        const VALUE = Formula.VALUE;
+        time("itemWasCheckedShortcut");
+        const range = event.range;
+        
+        time("logEditedRange");
+        Logger.log("edit: %s", range.getA1Notation());
+        timeEnd("logEditedRange");
+
+        if (
+          event.value && 
+          event.oldValue && 
+          (VALUE(event.value) === VALUE.TRUE && VALUE(event.oldValue) === VALUE.FALSE
+            || VALUE(event.value) === VALUE.FALSE && VALUE(event.oldValue) === VALUE.TRUE) &&
+          event.range.getColumn() == 1
+        ) {
+          // Optimization for ultra-quick Item Checkbox Check; assumes a swap between True/False in column 1 is a Check and just refreshes filter
+          // Bypasses actual isChecklist check since that is primarily used for editing purposes, not Checkbox Check purposes
+          this.refreshFilter();
+          timeEnd("itemWasCheckedShortcut");
           return;
         }
+        timeEnd("itemWasCheckedShortcut");
+      
+      
+        time("quickFilterChange");
+        if (this.isRowInRange(ROW.QUICK_FILTER,range) && this.isChecklist) {
+          this.quickFilterChange(event);
+          if (range.getNumRows() == 1) {
+            timeEnd("quickFilterChange");
+            return;
+          }
+        }
+        timeEnd("quickFilterChange");
+
+        time("updateSettings");
+        if (this.isRowInRange(ROW.SETTINGS, range) && range.getColumn() <= this.toColumnIndex(COLUMN.ITEM) && this.isChecklist) {
+          this.settings.handleChange(event);
+          if (range.getNumRows() == 1) {
+            timeEnd("updateSettings");
+            return;
+          }
+        }
+        timeEnd("updateSettings");
+
+        time("markEdited");
+        if (range.getColumn() > this.toColumnIndex(COLUMN.CHECK) && range.getRow() >= this.firstDataRow) {
+          this.markEdited();
+        }
+        timeEnd("markEdited");
+      } catch (e) {
+        const message = e && e.getMessage && e.getMessage() || e;
+        event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);
+        throw e;
+      } finally {
+        timeEnd("onEditSimple");
       }
-      timeEnd("quickFilterChange");
-      
-      
-      time("updateSettings");
-      if (this.isRowInRange(ROW.SETTINGS, range)) {
-        this.settings.handleChange(event);
-        if (range.getNumRows() == 1) {
-          timeEnd("updateSettings","checklist handleEdit");
+    }
+    onEditInstallable(event: GoogleAppsScript.Events.SheetsOnEdit): void {
+      time("onEditInstallable");
+      try {
+        const range = event.range;
+  
+        time("logEditedRange");
+        Logger.log("edit: %s", range.getA1Notation());
+        timeEnd("logEditedRange");
+
+        if (range.getA1Notation() == "A1" && this.isChecklist) {
+        // Debug hacks
+          switch (event.value){
+            case "reset": 
+            case "refresh": this.reset(); break;
+            case "meta": this.syncMeta(); break;
+            case "FULL RESET": this.reset(true); break;
+            case "link": this.linkPreReqs(); break;
+            case "status":
+            default: { 
+              const filter = this.removeFilter();
+              this.calculateStatusFormulas();
+              filter && this.createFilter(filter);
+            }
+          }
+          this.isChecklist && this.ensureTotalFormulas();
           return;
         }
-      }
-      timeEnd("updateSettings");
       
-      time("populateAvailable");
-      if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
-        this.calculateStatusFormulas();
-        this.linkPreReqs(range);
-      }
-      timeEnd("populateAvailable");
+        time("updateSettings");
+        if (this.isRowInRange(ROW.SETTINGS, range) && range.getColumn() > this.toColumnIndex(COLUMN.ITEM)) {
+          this.settings.handleChange(event);
+          if (range.getNumRows() == 1) {
+            timeEnd("updateSettings");
+            return;
+          }
+        }
+        timeEnd("updateSettings");
       
-      time("reapplyFilter");
-      if (this.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
-      this.isRowInRange(ROW.QUICK_FILTER,range)) {
-        this.refreshFilter();
-      }
-      timeEnd("reapplyFilter");
+        time("populateAvailable");
+        if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
+          // this.calculateStatusFormulas();
+          // this.refreshFilter();
+        }
+        timeEnd("populateAvailable");
       
-      time("moveNotes");
-      if (this.isColumnInRange(COLUMN.NOTES,range)) {
-        this.syncNotes();
-      }
-      timeEnd("moveNotes");
+        // time("reapplyFilter");
+        // if (this.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
+        // this.isRowInRange(ROW.QUICK_FILTER,range)) {
+        //   this.refreshFilter();
+        // }
+        // timeEnd("reapplyFilter");
       
-      time("checkFilterSize");
-      if (!event.value && !event.oldValue) {
-        // was more than a cell change, 
+        time("moveNotes");
+        if (this.isColumnInRange(COLUMN.NOTES,range)) {
+          this.syncNotes();
+        }
+        timeEnd("moveNotes");
+      
+        // time("checkFilterSize");
+        // if (!event.value && !event.oldValue) {
+        //   this.ensureFilterSize();
+        // }
+        // timeEnd("checkFilterSize");
+      } catch(e) {
+        const message = e && e.getMessage && e.getMessage() || e;
+        event.range.getSheet().getParent().toast(message || "", "Error handling edit of " + event.range.getA1Notation(),60);
+        throw e;
+      } finally {
+        timeEnd("onEditInstallable");
+      }
+    }
+    onChangeSimple(event:GoogleAppsScript.Events.SheetsOnChange):void {
+      const label = this.onChangeSimple.name;
+      time(`${label}`);
+      time(`${label} checkFilterSize`);
+      if (event.changeType.match(/^INSERT/) && this.isChecklist) {
         this.ensureFilterSize();
       }
-      timeEnd("checkFilterSize");
-      
-      time("updateTotals");
-      if (this.isColumnInRange([COLUMN.CHECK,COLUMN.ITEM],range)) {
-        this.ensureTotalFormulas();
-      }
-      timeEnd("updateTotals");
-      
-      timeEnd("checklist handleEdit");
+      timeEnd(`${label} checkFilterSize`);
+      timeEnd(`${label}`);
     }
     // /Handlers
+
+    markEdited():void {
+      return; // todo
+    }
+
+    unmarkEdited(): void {
+      return; // todo
+    }
     
     // Settings section
     getSetting(setting: Settings.SETTING): string {
@@ -574,16 +691,14 @@ namespace ChecklistApp {
     
     // DATA VALIDATION UTILITIES
     removeValidations(): void {
-      const filter = this.filter;
-      if (filter) this.removeFilter();
+      const filter = this.removeFilter();
       this.getRange(1,1,this.maxRows,this.maxColumns).setDataValidation(null);
       if (filter) this.createFilter(filter);
     }
     
     resetDataValidation(_skipMeta: boolean = false): void {
       time("checklist resetDataValidation");
-      const filter = this.filter;
-      if (filter) this.removeFilter();
+      const filter = this.removeFilter();
       const checks = this.getUnboundedColumnDataRange(COLUMN.CHECK);
       checks.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
       this.resetEditingDataValidations(_skipMeta);
@@ -592,8 +707,7 @@ namespace ChecklistApp {
     }
 
     resetEditingDataValidations(_skipMeta = false): void {
-      const filter = this.filter;
-      if (filter) this.removeFilter();
+      const filter = this.removeFilter();
       const {FORMULA,COUNTIF,A1,CONCAT,VALUE,LT} = Formula;
       // Set Item validation
       const itemDataRange = this.getUnboundedColumnDataRange(COLUMN.ITEM);
@@ -771,44 +885,8 @@ namespace ChecklistApp {
     // RESET/INIT/STRUCTURE SECTION
                           
     // FILTER SECTION
-    removeFilter(): Filter {
-      const filter = this.filter;
-      if (filter) this.filter.remove();
-      return filter;
-    }
-    refreshFilter(): void {
-      time("refreshFilter");
-      try {
-        if (this.filter) {
-          const filterRange = this.filter.getRange();
-          for (let i = filterRange.getLastColumn(); i >= filterRange.getColumn(); i--) {
-            const criteria = this.filter.getColumnFilterCriteria(i);
-            if (criteria) {
-              this.filter.setColumnFilterCriteria(i,criteria);
-              return;
-            }
-          }
-        }
-      } finally {
-        timeEnd("refreshFilter");
-      }
-    }
-    createFilter(_oldFilter: Filter = undefined): void {
-      this.removeFilter();
-      const filterRange = this.getUnboundedRange(this.headerRow, 1, null, this.lastColumn);//,1,this.maxRows-this.headerRow+1,this.lastColumn);
-      filterRange.createFilter();
-      if (_oldFilter) {
-        const oldFilterRange = _oldFilter.getRange();
-        for (let column = oldFilterRange.getColumn(); column <= oldFilterRange.getLastColumn(); column++) {
-          const criteria = _oldFilter.getColumnFilterCriteria(column);
-          if (criteria) {
-            this.filter.setColumnFilterCriteria(column,criteria);
-          }
-        }
-      }
-    }
     ensureFilterSize(): void {
-      const filterRange = this.filter && this.filter.getRange();
+      const filterRange = this.filter?.getRange();
 
       if (filterRange &&  (filterRange.getRow()        != this.headerRow 
                        ||  filterRange.getColumn()     != 1 
