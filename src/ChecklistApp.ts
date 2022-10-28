@@ -54,12 +54,15 @@ namespace ChecklistApp {
     [ROW.SETTINGS]: "⚙",
     [ROW.HEADERS]: "✓",
   };
+
+  var requestPrefix = "";
   
   const MAX_EMPTY_ROWS:number = 100;
   
   // const checklists:{[x:number]:Checklist} = {};
   // APP SECTION
   export function getChecklistFromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
+    requestPrefix = event.authMode.toString();
     return Checklist.fromEvent(event);
   }
   export function getChecklistBySheet(sheet: Sheet = ChecklistApp.getActiveSheet()): Checklist {
@@ -101,7 +104,8 @@ namespace ChecklistApp {
     private constructor(sheet: Sheet) {
       super(sheet,COLUMN,ROW_HEADERS);
       time("cacheRequestId");
-      CacheService.getScriptCache().put("latestRequestId",this.requestId,60);
+      console.log(requestPrefix + "latestRequestId " + this.requestId);
+      CacheService.getScriptCache().put(requestPrefix + "latestRequestId",this.requestId);
       timeEnd("cacheRequestId");
     }
     private static readonly checklists:{[x:number]:Checklist} = {}
@@ -252,7 +256,8 @@ namespace ChecklistApp {
 
     get isLatest():boolean {
       time("getCachedRequestId");
-      const cachedRequestId = CacheService.getScriptCache().get("latestRequestId");
+      const cachedRequestId = CacheService.getScriptCache().get(requestPrefix + "latestRequestId");
+      console.log(requestPrefix + "latestRequestId " + cachedRequestId + ":" + this.requestId);
       timeEnd("getCachedRequestId");
       return cachedRequestId == this.requestId;
     }
@@ -508,7 +513,7 @@ namespace ChecklistApp {
       
       // Reset checkboxes
       if (_resetData) {
-        this.resetCheckmarks();
+        this.resetCheckmarks(true);
       }
 
       // Add settings dropdowns early in case of timeout (for retries)
@@ -681,8 +686,20 @@ namespace ChecklistApp {
     
     // END STRUCTURE UTILITIES
     
-    resetCheckmarks(): void {
-      this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(value => Formula.VALUE(value) == Formula.VALUE.TRUE ? false : value));
+    resetCheckmarks(resetPersistant = false): void {
+      const shouldPersist:boolean[] = resetPersistant ? [] : this.getColumnDataValues(COLUMN.PRE_REQS).map(value => /(^|\n)PERSIST($|\n)/i.test(value?.toString()));
+      const checkValues = this.getColumnDataValues(COLUMN.CHECK);
+      const checkFormulas = this.getColumnDataFormulas(COLUMN.CHECK);
+      
+      checkValues.forEach((value:sheetValue,i) => {
+        if (value === true) {
+          if (!checkFormulas[i] && !shouldPersist[i]) {
+            this.setValue(i+this.firstDataRow,COLUMN.CHECK,false);
+          } else if (checkFormulas[i] && shouldPersist[i]) {
+            this.setFormula(i+this.firstDataRow,COLUMN.CHECK,Formula.FORMULA(Formula.VALUE.TRUE));
+          }
+        }
+      });
     }
     
     removeNotes(): void {

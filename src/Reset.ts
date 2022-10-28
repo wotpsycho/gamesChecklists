@@ -24,7 +24,7 @@ function ResetChecklist(checklist = ChecklistApp.getActiveChecklist()) {
       if (response.getSelectedButton() != ui.Button.OK) return;
       const responseText = response.getResponseText();
       if (responseText == "FULL RESET" || responseText == "\"FULL RESET\"") {
-        const response = ui.alert("Verify Reset","Are you sure you want to reset all progress on this list?", ui.ButtonSet.YES_NO);
+        const response = ui.alert("Verify Reset","Are you sure you want to reset all progress on this list, including Persistent items?", ui.ButtonSet.YES_NO);
         if (response != ui.Button.YES) return;
         resetData = true;
         title = "Resetting Checklist";

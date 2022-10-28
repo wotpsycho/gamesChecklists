@@ -498,7 +498,8 @@ namespace Settings {
         execute() {
           const ui = SpreadsheetApp.getUi();
           const result = ui.prompt("Reset Checklist","Enter \"Reset\" to Uncheck all Items in the Checklist:", ui.ButtonSet.OK_CANCEL);
-          if (result.getSelectedButton() == ui.Button.OK && result.getResponseText().toUpperCase() == "RESET") {
+          const reset = result.getResponseText().toUpperCase() == "RESET";
+          if (result.getSelectedButton() == ui.Button.OK && reset) {
             this.settings.checklist.toast("Resetting Checklist", "Unchecking...", -1);
             this.settings.checklist.resetCheckmarks();
             this.settings.checklist.refreshFilter();

@@ -295,7 +295,6 @@ namespace ChecklistApp {
 
     getValues = (row:row, column:column, _numRows:number = 1, _numColumns:number = 1):sheetValue[][] =>
       this.getRange(row, column, _numRows, _numColumns).getValues();
-    
 
     getValue = (row:row, column:column):sheetValue => 
       this.getRange(row,column).getValue()
@@ -305,6 +304,18 @@ namespace ChecklistApp {
 
     setValue = (row:row, column:column, value:sheetValue):Range =>
       this.setValues(row,column,[[value]])
+
+    getFormulas = (row:row, column:column, _numRows:number = 1, _numColumns:number = 1):string[][] =>
+      this.getRange(row, column, _numRows, _numColumns).getFormulas();
+
+    getFormula = (row:row, column:column):string => 
+      this.getRange(row,column).getFormula()
+
+    setFormulas= (row:row, column:column, Formulas:string[][]):Range =>
+      this.getRange(row, column, Formulas.length, Formulas[0].length).setFormulas(Formulas)
+
+    setFormula = (row:row, column:column, Formula:string):Range =>
+      this.setFormulas(row,column,[[Formula]])
 
     getColumnRange = (column:column, _startRow:row = 1, _numRows:number = undefined):Range =>
       _numRows > 0 ? this.getRange(_startRow, column, _numRows, 1) : this.getUnboundedColumnRange(column,_startRow)
