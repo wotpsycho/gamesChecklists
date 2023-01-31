@@ -197,7 +197,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       const firstRow:row = preReqRange.getRow();
       const parsers:CellFormulaParser[] = new Array(firstRow + preReqValues.length);
       const rowRefRegExp = /(?:"\$(\d+)")|(?:\$(\d+))/g;
-      let itemValues:columnValues;
+      let itemValues:columnValues = undefined;
       // Replace any $[row] with the actual row value
       for (let i:number = 0; i < preReqValues.length; i++) {
         if (preReqValues[i][0].toString().match(rowRefRegExp)) {
@@ -293,8 +293,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       };
       Object.keys(debugColumns).forEach(debugColumn =>{
         if (this.checklist.columnsByHeader[debugColumn]) {
-          const range:Range = this.checklist.getColumnDataRange(this.checklist.columnsByHeader[debugColumn]);
-          debugColumns[debugColumn].range = range;
+          debugColumns[debugColumn].range = this.checklist.getColumnDataRange(this.checklist.columnsByHeader[debugColumn]);
           debugColumns[debugColumn].formulas = [];
         } else {
           delete debugColumns[debugColumn];
@@ -2072,7 +2071,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       return OR(
         Formula.LT(
           MINUS(
-            this.availableChild.toTotalFormula(),
+            this.availableChild.valueInfo.isVirtual ? virtualItems[this.availableChild.text].numNeeded.toString() : this.availableChild.toTotalFormula(),
             this._getPRUsedAmountFormula()
           ),
           VALUE(this.numNeeded)
