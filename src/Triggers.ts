@@ -1,6 +1,18 @@
 /* exported onOpen, onSelectionChange, onEdit, handleEdit, handleChange,AttachTriggers */
 function onEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
+  // const dataRange = event.source.getDataRange();
+  // time("getValues");
+  // const values = dataRange.getValues();
+  // timeEnd("getValues");
+  // time("getFormulas");
+  // const formulas = dataRange.getFormulas();
+  // timeEnd("getFormulas");
+  // time("getRTV");
+  // const rtf = dataRange.getRichTextValues();
+  // timeEnd("getRTV");
   
+  // return;
+
   console.log(event.authMode.toString());
   time();
   ChecklistApp.getChecklistFromEvent(event).onEditSimple(event);
@@ -12,6 +24,23 @@ function handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
   time();
   ChecklistApp.getChecklistFromEvent(event).onEditInstallable(event);
   timeEnd();
+}
+
+
+function debug() {
+  const ssheet = SpreadsheetApp.getActiveSpreadsheet();
+  ssheet.getSheetByName("SO4").activate()
+  
+  const debugEvent:GoogleAppsScript.Events.SheetsOnEdit = {
+    oldValue: "Foo",
+    range: ssheet.getRange("A1"),
+    source: ssheet,
+    value: "",
+    authMode: ScriptApp.AuthMode.NONE,
+    triggerUid: "",
+    user: undefined
+  };
+  handleEdit(debugEvent);
 }
 
 function AttachTriggers() {
@@ -53,5 +82,10 @@ function onOpen(event:GoogleAppsScript.Events.SheetsOnOpen) {
 }
 
 function handleChange(event:GoogleAppsScript.Events.SheetsOnChange) {
-  ChecklistApp.getActiveChecklist().onChangeSimple(event);
+  time();
+  console.log(event.changeType);
+  if (event.changeType.match(/^(INSERT|REMOVE)/)) {
+    ChecklistApp.getActiveChecklist().onChangeSimple(event);
+  }
+  timeEnd();
 }

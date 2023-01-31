@@ -508,7 +508,7 @@ namespace ChecklistApp {
       
       // Reset checkboxes
       if (_resetData) {
-        this.resetCheckmarks();
+        this.resetCheckmarks(true);
       }
 
       // Add settings dropdowns early in case of timeout (for retries)
@@ -681,8 +681,20 @@ namespace ChecklistApp {
     
     // END STRUCTURE UTILITIES
     
-    resetCheckmarks(): void {
-      this.setColumnDataValues(COLUMN.CHECK, this.getColumnDataValues(COLUMN.CHECK).map(value => Formula.VALUE(value) == Formula.VALUE.TRUE ? false : value));
+    resetCheckmarks(resetPersistant = false): void {
+      const shouldPersist:boolean[] = resetPersistant ? [] : this.getColumnDataValues(COLUMN.PRE_REQS).map(value => /(^|\n)PERSIST($|\n)/i.test(value?.toString()));
+      const checkValues = this.getColumnDataValues(COLUMN.CHECK);
+      const checkFormulas = this.getColumnDataFormulas(COLUMN.CHECK);
+      
+      checkValues.forEach((value:sheetValue,i) => {
+        if (value === true) {
+          if (!checkFormulas[i] && !shouldPersist[i]) {
+            this.setValue(i+this.firstDataRow,COLUMN.CHECK,false);
+          } else if (checkFormulas[i] && shouldPersist[i]) {
+            this.setFormula(i+this.firstDataRow,COLUMN.CHECK,Formula.FORMULA(Formula.VALUE.TRUE));
+          }
+        }
+      });
     }
     
     removeNotes(): void {

@@ -113,9 +113,11 @@ namespace Status {
     OPTION   = "OPTION",
     LINKED   = "LINKED",
     CHECKED  = "CHECKED",
+    INITIAL  = "INITIAL",
     OPTIONAL = "OPTIONAL",
     BLOCKS   = "BLOCKS",
     BLOCKED  = "BLOCKED",
+    PERSIST = "PERSIST",
   }
 
   const USAGES = {
@@ -159,7 +161,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     private requestId:string = Date.now().toString()
     private constructor(checklist: Checklist) {
       this.checklist = checklist;
-      CacheService.getScriptCache().put("latestTranslatorRequestId",this.requestId,60);
+      CacheService.getScriptCache().put("latestTranslatorRequestId",this.requestId);
     }
 
     get isLatest():boolean {
@@ -679,7 +681,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     private readonly row: row;
     private readonly rootNode: RootNode;
     readonly translator: StatusFormulaTranslator;
-    readonly preReqText: string
+    readonly preReqText: string;
     private constructor(translator: StatusFormulaTranslator, row:row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
       this.translator = translator;
       this.row = row;
@@ -698,6 +700,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       const linkedChildren: FormulaNode<boolean>[] = [];
       let linkedFlag: boolean = false;
       let checkedFlag: boolean = false;
+      let persistFlag: boolean = false;
       for (let j:number = 0; j < lines.length; j++) {
         let line:string = lines[j].trim();
         let isLinked = linkedFlag;
@@ -707,8 +710,12 @@ NOTE: CHOICE is a deprecated alias for OPTION`
           linkedFlag = true;
           continue;
         }
-        if (line.trim().toUpperCase() == SPECIAL_PREFIXES.CHECKED.toUpperCase()) {
+        if (line.trim().toUpperCase() == SPECIAL_PREFIXES.CHECKED || line.trim().toUpperCase() == SPECIAL_PREFIXES.INITIAL) {
           checkedFlag = true;
+          continue;
+        }
+        if (line.trim().toUpperCase() == SPECIAL_PREFIXES.PERSIST) {
+          persistFlag = true;
           continue;
         }
         line = line.replace(/"(([^"]|\\")*)"/g, (_match,text:string) => {
@@ -768,6 +775,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       } else {
         this.rootNode = new RootNode(children,this.translator,row);
       }
+      this.rootNode.persist = persistFlag;
     }
 
     /**
@@ -1232,7 +1240,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
 
     toUnknownFormula(): string {
-      if (this.row == 200) console.log("bfn.toUF: text:%s, val:%s, ft: %s, isCircDep:%s, circDeps:%s",this.text,this.value,formulaTypeToString(this.formulaType),this.isInCircularDependency(),[...this.getCircularDependencies()]);
+      // if (this.row == 200) console.log("bfn.toUF: text:%s, val:%s, ft: %s, isCircDep:%s, circDeps:%s",this.text,this.value,formulaTypeToString(this.formulaType),this.isInCircularDependency(),[...this.getCircularDependencies()]);
       if (this.hasValue()) return VALUE.FALSE;
       if (this.isInCircularDependency()) return VALUE.TRUE;
       if (!this.formulaType) return this.child.toUnknownFormula();
@@ -1263,6 +1271,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
   }
 
   class RootNode extends BooleanFormulaNode {
+    persist: boolean = false;
     constructor(children:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
       super("",translator,row);
       if (children.length > 0) {
@@ -1345,7 +1354,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
   class ComparisonFormulaNode extends FormulaNode<boolean> {
     static create({ text, translator, row, formulaType }: NodeArgs & { formulaType: FormulaHelper; }) {
-      if (row == 200) console.log("cfn.create: text:%s, ft:%s",text,formulaTypeToString(formulaType));
+      // if (row == 200) console.log("cfn.create: text:%s, ft:%s",text,formulaTypeToString(formulaType));
       return new ComparisonFormulaNode(text,translator,row,formulaType);
     }
     protected children: NumberNode[];
@@ -1354,7 +1363,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
       this.formulaType = formulaType;
       const operands:string[] = formulaType.parseOperands(this.text);
-      if (row == 200) console.log("cfn.constr: operands:%s",operands);
+      // if (row == 200) console.log("cfn.constr: operands:%s",operands);
       this.children.push(...operands.map(operand => NumberFormulaNode.create({ text: operand, translator: this.translator, row: this.row, _implicitPrefix: formulaType == X_ITEMS })));
     }
 
@@ -1647,7 +1656,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         delete this._rowCounts[this.row];
         this._isSelfReferential = true;
       }
-      if (row == 200) console.log("vn.con: text:%s, rowCounts:%s",text,Object.keys(this._rowCounts));
+      // if (row == 200) console.log("vn.con: text:%s, rowCounts:%s",text,Object.keys(this._rowCounts));
     }
     finalize():ValueNode {
       if (this.finalized) return this;
@@ -2357,27 +2366,27 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     }
     
     toPreReqsMetFormula() {
-      return OR(this.translator.cellA1(this.sameRow,COLUMN.CHECK), this.sameRowParser?.toPreReqsMetFormula());
+      return OR(this.translator.cellA1(this.sameRow,COLUMN.CHECK), this.sameRowParser?.toPreReqsMetFormula() || "");
     }
 
     toErrorFormula() {
-      return this.sameRowParser?.toErrorFormula();
+      return this.sameRowParser?.toErrorFormula() || VALUE.TRUE;
     }
 
     toMissedFormula() {
-      return this.sameRowParser?.toMissedFormula();
+      return this.sameRowParser?.toMissedFormula() || "";
     }
 
     toPRUsedFormula() {
-      return this.sameRowParser?.toPRUsedFormula();
+      return this.sameRowParser?.toPRUsedFormula() || "";
     }
 
     toRawMissedFormula() {
-      return this.sameRowParser?.toRawMissedFormula();
+      return this.sameRowParser?.toRawMissedFormula() || "";
     }
 
     toUnknownFormula() {
-      return this.sameRowParser?.toUnknownFormula();
+      return this.sameRowParser?.toUnknownFormula() || "";
     }
     checkErrors() {
       if (super.checkErrors()) {
@@ -2429,6 +2438,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       if (!this.hasErrors()) {
         time("blocksFinalize");
         const untilPreReqRows = this.child.getAllPossiblePreReqRows();
+        // console.log("finalizeBlock %s, '%s', child: %s, [%s]", this.row, this.text, this.child.text, [...untilPreReqRows].join(","))
         this.valueInfo.rows // All rows matching the BLOCKS clause
           .filter(blockedRow => !untilPreReqRows.has(blockedRow)) // Don't block any preReq of UNTIL
           .forEach(blockedRow => 
@@ -2574,6 +2584,9 @@ NOTE: CHOICE is a deprecated alias for OPTION`
     toUnknownFormula(): string {
       // Since controlled isn't known until post-FINALIZED, have to do check here
       return this.parser.isControlled() ? VALUE.FALSE : super.toUnknownFormula();
+    }
+    getAllPossiblePreReqRows(): ReadonlySet<number> {
+        return new Set();
     }
     getDirectPreReqRows():ReadonlySet<number> {
       return new Set();
