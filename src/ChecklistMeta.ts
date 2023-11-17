@@ -28,7 +28,16 @@ namespace ChecklistMeta {
     const defaultMetaSheetName = checklist.name + " Meta";
     const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
     if (response.getSelectedButton() != ui.Button.OK) return;
-    checklist.createMetaSheet(response.getResponseText() || defaultMetaSheetName);
+    const metaSheetName = response.getResponseText() || defaultMetaSheetName;
+    const existingSheet = checklist.spreadsheet.getSheetByName(metaSheetName);
+    if (existingSheet) {
+      const response = ui.alert(title, `Sheet already exists, set as meta sheet?`, ui.ButtonSet.YES_NO);
+      if (response == ui.Button.YES) {
+        checklist.metaSheet = existingSheet;
+      }
+    } else {
+      checklist.createMetaSheet(metaSheetName);
+    }
   }
   
   
@@ -169,6 +178,11 @@ namespace ChecklistMeta {
     
     syncWithChecklist(_toastTitle: string = "Syncing Metadata"): void {
       this.checklist.toast("Syncing Metadata...",_toastTitle,-1);
+      if (this.checklist.sheetId == this.sheetId) {
+        this.checklist.toast("Error: Metasheet set to itself");
+        console.error("checklist has meta set to itself");
+        return;
+      }
       this.updateChecklistDataValidation();
       this.updateWithMissingValues();
       this.updateChecklistConditionalFormatting();
@@ -367,9 +381,11 @@ namespace ChecklistMeta {
     setEditable(isEditable: boolean = true): void {
       if (isEditable === false) {
         this.sheet.protect().setWarningOnly(true);
+        this.sheet.hideSheet();
       } else {
         const protections = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         protections && protections[0] && protections[0].remove();
+        this.sheet.showSheet();
       }
     }
   }

@@ -173,11 +173,11 @@ namespace ChecklistApp {
         time("get metaSheet");
         let metaSheet:Sheet;
         const devMeta:DeveloperMetadata[] = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-        if (devMeta && devMeta[0]) {
+        if (devMeta && devMeta[0] && devMeta[0].getValue() != this.sheet.getName()) {
           metaSheet = this.sheet.getParent().getSheetByName(devMeta[0].getValue());
           if (!metaSheet) {
             const metaDevMeta:DeveloperMetadata[] = this.sheet.getParent().createDeveloperMetadataFinder().withKey("metaForSheet").withValue(this.sheet.getName()).withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-            if (metaDevMeta && metaDevMeta[0]) {
+            if (metaDevMeta && metaDevMeta[0] && metaDevMeta[0].getLocation().getSheet().getName() != this.sheet.getName()) {
               metaSheet = metaDevMeta[0].getLocation().getSheet();
               this.metaSheet = metaSheet; // run setter to set metadata
             }
@@ -197,6 +197,10 @@ namespace ChecklistApp {
     }
     set metaSheet(metaSheet: Sheet) {
       time("set metaSheet");
+      if (metaSheet.getSheetId() == this.sheet.getSheetId()) {
+        console.warn("trying to set itself as meta sheet");
+        return;
+      }
       this._metaSheet = metaSheet;
       const devMeta:DeveloperMetadata[] = this.sheet.createDeveloperMetadataFinder().withKey("metaSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
       if (devMeta && devMeta[0]) {
@@ -264,7 +268,7 @@ namespace ChecklistApp {
       this.settings.populateSettingsDropdowns();
       this.ensureTotalFormulas();
       const cell = this.getRange(ROW.TITLE,COLUMN.PRE_REQS);
-      this.sheet.insertImage("",cell.getColumn(),cell.getRow(),cell.getWidth()/2,0);
+      // this.sheet.insertImage("",cell.getColumn(),cell.getRow(),cell.getWidth()/2,0);
       return;
     }
     onEditSimple(event: GoogleAppsScript.Events.SheetsOnEdit):void {
