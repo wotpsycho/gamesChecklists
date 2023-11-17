@@ -279,7 +279,7 @@ namespace ChecklistMeta {
               const isTextBlack = color === "#000000";
               const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
               const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(${cellValue})`)));
+              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(\\Q${cellValue}\\E)`)));
               Formula.togglePrettyPrint(prettyPrint);
               ruleBuilder.whenFormulaSatisfied(formula);
               ruleBuilder.setRanges(formatRanges);
