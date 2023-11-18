@@ -253,7 +253,7 @@ namespace ChecklistMeta {
     
     updateChecklistConditionalFormatting(): void {
       time("meta setConditionalFormatRules");
-      const {FORMULA,REGEXMATCH,VALUE} = Formula;
+      const {FORMULA,REGEXMATCH,VALUE,COMMENT} = Formula;
       const formulaToRuleMap = {};
       const newConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Hack, using as a map with int keys for sorting
       const primaryConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Always apply to primary column, even if is a secondary column for another column
@@ -279,7 +279,7 @@ namespace ChecklistMeta {
               const isTextBlack = color === "#000000";
               const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
               const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = FORMULA(REGEXMATCH(relativeCell,VALUE(`^(\\Q${cellValue}\\E)`)));
+              const formula = FORMULA(COMMENT.BOOLEAN("META_RULE",REGEXMATCH(relativeCell,VALUE(`^(\\Q${cellValue}\\E)`))));
               Formula.togglePrettyPrint(prettyPrint);
               ruleBuilder.whenFormulaSatisfied(formula);
               ruleBuilder.setRanges(formatRanges);
@@ -310,7 +310,7 @@ namespace ChecklistMeta {
               }
             });
             if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !metadata.metaValueCells[ChecklistApp.FINAL_ITEM_TYPE]) {
-              // Default for FINAL_ITEM_TYPE 
+              // Default for FINAL_ITEM_TYPE
               // TODO extract to a "Default styles"
               newConditionalFormatRulesByColumn[metadata.metaColumn].push(SpreadsheetApp.newConditionalFormatRule()
                 .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`(^|\\n)${ChecklistApp.FINAL_ITEM_TYPE}`))))
@@ -327,6 +327,13 @@ namespace ChecklistMeta {
       
       // update conditional formatting
       const oldRules = this.checklist.sheet.getConditionalFormatRules();
+      const rulesToKeep = oldRules.filter(rule => {
+        return !rule.getBooleanCondition()
+            || rule.getBooleanCondition().getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA
+            || rule.getBooleanCondition().getCriteriaValues().every(criteria => {
+              return !criteria.toString().includes("META_RULE")
+            });
+      })
       const replacedRules = [];
       for (let i = oldRules.length-1; i >= 0; i--) {
         const oldRule = oldRules[i];
@@ -339,13 +346,12 @@ namespace ChecklistMeta {
         }
         if (formulaToRuleMap[criteriaValues[0]]) {
           replacedRules.push(oldRules.splice(i,1)[0]);
-          oldRule.getBooleanCondition().getCriteriaValues()[0];
         }
       }
       
       
       const newConditionalFormatRules = [primaryConditionalFormatRulesByColumn,newConditionalFormatRulesByColumn].map(columnRules => columnRules.filter(rules => rules && rules.length).reverse().flat()).flat();
-      this.checklist.sheet.setConditionalFormatRules(oldRules.concat(newConditionalFormatRules));
+      this.checklist.sheet.setConditionalFormatRules(rulesToKeep.concat(newConditionalFormatRules));
       timeEnd("meta setConditionalFormatRules");
     }
 
