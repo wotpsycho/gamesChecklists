@@ -334,21 +334,6 @@ namespace ChecklistMeta {
               return !criteria.toString().includes("META_RULE")
             });
       })
-      const replacedRules = [];
-      for (let i = oldRules.length-1; i >= 0; i--) {
-        const oldRule = oldRules[i];
-        if (!oldRule.getBooleanCondition() || oldRule.getBooleanCondition().getCriteriaType() !== SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) {
-          continue;
-        }
-        const criteriaValues = oldRule.getBooleanCondition().getCriteriaValues();
-        if (criteriaValues.length !== 1) {
-          continue;
-        }
-        if (formulaToRuleMap[criteriaValues[0]]) {
-          replacedRules.push(oldRules.splice(i,1)[0]);
-        }
-      }
-      
       
       const newConditionalFormatRules = [primaryConditionalFormatRulesByColumn,newConditionalFormatRulesByColumn].map(columnRules => columnRules.filter(rules => rules && rules.length).reverse().flat()).flat();
       this.checklist.sheet.setConditionalFormatRules(rulesToKeep.concat(newConditionalFormatRules));
