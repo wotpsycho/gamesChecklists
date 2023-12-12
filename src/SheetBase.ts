@@ -340,6 +340,9 @@ namespace ChecklistApp {
     getColumnDataRichTextValues = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):RichTextValue[] => 
       this.getColumnDataRange(column, _startRow, _numRows).getRichTextValues().map(row => row[0]);
 
+    getColumnDataNotes = (column:column, _startRow:row = this.firstDataRow, _numRows:number = undefined):string[] =>
+        this.getColumnDataRange(column, _startRow, _numRows).getNotes().map(row => row[0]);
+
     getColumnDataFormulas = (column:column, _startRow:row  = this.firstDataRow, _numRows:number = undefined):string[] => 
       this.getColumnDataRange(column, _startRow, _numRows).getFormulas().map(row => row[0]);
     

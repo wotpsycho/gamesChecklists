@@ -49,7 +49,8 @@ namespace ChecklistMeta {
     metaValueCells: {
       any: Range,
     };
-    metaValueLinks: {[x:string]: {[x:string]: string}}
+    metaValueLinks: {[x:string]: {[x:string]: string}};
+    metaValueNotes: {[x:string]: string};
     lastMetaRow: number;
     missingValues: {[x:string]:true};
     metaRange: Range;
@@ -97,10 +98,12 @@ namespace ChecklistMeta {
             }
             const metaValueCells = {};
             const metaValueLinks = {};
+            const metaValueNotes = {};
             const metaValueRange = this.getColumnDataRange(column);
             
             const metaValues = this.getColumnDataValues(column);
             const metaRichTexts = this.getColumnDataRichTextValues(column);
+            const metaNotes = this.getColumnDataNotes(column);
             let lastRow = this.firstDataRow;
             for (let i = 0; i < metaValues.length; i++) {
               const metaValue = metaValues[i];
@@ -115,6 +118,9 @@ namespace ChecklistMeta {
                     metaValueLinks[metaValue.toString()][richTextRun.getText()] = richTextRun.getLinkUrl();
                   }
                 });
+                if (metaNotes[i]) {
+                  metaValueNotes[metaValueString] = metaNotes[i];
+                }
               } else {
                 break; // Don't allow empty spaces
               }
@@ -122,8 +128,9 @@ namespace ChecklistMeta {
             const a = {
               metaColumn: column,
               formatHeaders: formatColumns,
-              metaValueCells: metaValueCells,
-              metaValueLinks: metaValueLinks,
+              metaValueCells,
+              metaValueLinks,
+              metaValueNotes,
               lastMetaRow: lastRow,
               missingValues: {},
               metaRange: this.getColumnDataRange(column,this.firstDataRow,lastRow-this.firstDataRow+1),
@@ -186,7 +193,7 @@ namespace ChecklistMeta {
       this.updateChecklistDataValidation();
       this.updateWithMissingValues();
       this.updateChecklistConditionalFormatting();
-      this.updateChecklistLinks();
+      this.updateChecklistLinksAndNotes();
       this.checklist.toast("Done!", _toastTitle);
     }
 
@@ -340,15 +347,17 @@ namespace ChecklistMeta {
       timeEnd("meta setConditionalFormatRules");
     }
 
-    updateChecklistLinks(): void {
+    updateChecklistLinksAndNotes(): void {
       time("meta updateChecklistLinks");
       Object.values(this.columnMetadata).forEach((metadata) => {
         metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setUnderline(false).build());
-        if (metadata.metaValueLinks && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && Object.keys(metadata.metaValueLinks).length) {
+        if (metadata.metaValueLinks && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && (Object.keys(metadata.metaValueLinks).length || Object.keys(metadata.metaValueNotes).length)) {
           const values = metadata.range.getValues().map(rowValues => rowValues[0]);
           const richTexts = new Array(values.length);
+          const notes = new Array(values.length);
           values.forEach((value,i) => {
             const richText = SpreadsheetApp.newRichTextValue().setText(value);
+            const note:string[] = [];
             
             let lineIndex:number = -1;
             value.toString().split(/(\r|\n)+/).forEach((line: string) => {
@@ -359,10 +368,15 @@ namespace ChecklistMeta {
                   richText.setLinkUrl(subTextStart, subTextStart + subText.length, link);
                 });
               }
+              if (metadata.metaValueNotes[line]) {
+                note.push(metadata.metaValueNotes[line]);
+              }
             });
             richTexts[i] = richText.build();
+            notes[i] = note.join("\n");
           });
           metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
+          metadata.range.setNotes(notes.map(note => [note]));
           metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor("black").build());
         }
       });
