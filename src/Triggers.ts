@@ -76,6 +76,8 @@ function onOpen(event:GoogleAppsScript.Events.SheetsOnOpen) {
     .addItem("Sync With Meta Sheet", "ProcessMeta")
     .addItem("Attach Triggers", "AttachTriggers")
     .addItem("Create Meta Sheet","CreateMetaSheet")
+    .addItem("Calculate Pre-Reqs", "CalculatePreReqs")
+    .addItem("Link Pre-Reqs", "LinkPreReqs")
     .addToUi();
   ChecklistApp.getChecklistBySheet(event.source.getActiveSheet()).onOpenSimple(event);
   timeEnd();
@@ -87,5 +89,17 @@ function handleChange(event:GoogleAppsScript.Events.SheetsOnChange) {
   if (event.changeType.match(/^(INSERT|REMOVE)/)) {
     ChecklistApp.getActiveChecklist().onChangeSimple(event);
   }
+  timeEnd();
+}
+
+function CalculatePreReqs() {
+  time();
+  ChecklistApp.getActiveChecklist().calculateStatusFormulas();
+  timeEnd();
+}
+
+function LinkPreReqs() {
+  time();
+  ChecklistApp.getActiveChecklist().linkPreReqs();
   timeEnd();
 }

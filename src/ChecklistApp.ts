@@ -1059,7 +1059,7 @@ namespace ChecklistApp {
     }
     // END REPORTING SECTION
     // STATUS SECTION
-    calculateStatusFormulas():void {
+    public calculateStatusFormulas():void {
       Status.validateAndGenerateStatusFormulasForChecklist(this);
     }
     linkPreReqs(range:Range = this.getColumnDataRange(COLUMN.PRE_REQS)):void {
