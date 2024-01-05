@@ -351,7 +351,7 @@ namespace ChecklistMeta {
       time("meta updateChecklistLinks");
       Object.values(this.columnMetadata).forEach((metadata) => {
         metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setUnderline(false).build());
-        if (metadata.metaValueLinks && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && (Object.keys(metadata.metaValueLinks).length || Object.keys(metadata.metaValueNotes).length)) {
+        if (metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
           const values = metadata.range.getValues().map(rowValues => rowValues[0]);
           const richTexts = new Array(values.length);
           const notes = new Array(values.length);
@@ -360,24 +360,30 @@ namespace ChecklistMeta {
             const note:string[] = [];
             
             let lineIndex:number = -1;
-            value.toString().split(/(\r|\n)+/).forEach((line: string) => {
+            value.toString().split(/([\r\n])+/).forEach((line: string) => {
               lineIndex = value.toString().indexOf(line,lineIndex+1);
-              if (metadata.metaValueLinks[line]) {
+              if (metadata?.metaValueLinks?.[line]) {
                 Object.entries(metadata.metaValueLinks[line]).forEach(([subText,link]) => {
                   const subTextStart = value.indexOf(subText,lineIndex);
                   richText.setLinkUrl(subTextStart, subTextStart + subText.length, link);
                 });
               }
-              if (metadata.metaValueNotes[line]) {
+              if (metadata?.metaValueNotes?.[line]) {
                 note.push(metadata.metaValueNotes[line]);
               }
             });
             richTexts[i] = richText.build();
             notes[i] = note.join("\n");
           });
-          metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
+          const filter = this.checklist.removeFilter();
+          if (metadata.metaValueLinks && Object.keys(metadata.metaValueLinks).length) {
+            metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
+          }
           metadata.range.setNotes(notes.map(note => [note]));
           metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor("black").build());
+          if (filter) {
+            this.checklist.createFilter(filter);
+          }
         }
       });
       timeEnd("meta updateChecklistLinks");
