@@ -268,6 +268,7 @@ namespace Formula {
   export const ISBLANK:StringFormula = PrefixFormula("ISBLANK");
   export const REGEXMATCH:StringFormula = PrefixFormula("REGEXMATCH");
   export const HYPERLINK:StringFormula = PrefixFormula("HYPERLINK");
+  export const TEXT:StringFormula = PrefixFormula("TEXT");
   
   export const CONCAT:StringFormula = PrefixFormula("CONCATENATE");
   export const CHAR = withConstants(PrefixFormula<number|string>("CHAR"),{

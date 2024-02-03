@@ -260,7 +260,7 @@ namespace ChecklistMeta {
     
     updateChecklistConditionalFormatting(): void {
       time("meta setConditionalFormatRules");
-      const {FORMULA,REGEXMATCH,VALUE,COMMENT} = Formula;
+      const {FORMULA,REGEXMATCH,VALUE,COMMENT,TEXT} = Formula;
       const formulaToRuleMap = {};
       const newConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Hack, using as a map with int keys for sorting
       const primaryConditionalFormatRulesByColumn:GoogleAppsScript.Spreadsheet.ConditionalFormatRule[][] = []; // Always apply to primary column, even if is a secondary column for another column
@@ -286,7 +286,7 @@ namespace ChecklistMeta {
               const isTextBlack = color === "#000000";
               const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
               const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = FORMULA(COMMENT.BOOLEAN("META_RULE",REGEXMATCH(relativeCell,VALUE(`^(\\Q${cellValue}\\E)`))));
+              const formula = FORMULA(COMMENT.BOOLEAN("META_RULE",REGEXMATCH(TEXT(relativeCell,VALUE("#")),VALUE(`^(\\Q${cellValue}\\E)`))));
               Formula.togglePrettyPrint(prettyPrint);
               ruleBuilder.whenFormulaSatisfied(formula);
               ruleBuilder.setRanges(formatRanges);
