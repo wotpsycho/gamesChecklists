@@ -296,7 +296,9 @@ namespace ChecklistApp {
           return;
         }
         timeEnd("itemWasCheckedShortcut");
-      
+        if (!this.isChecklist) {
+          return;
+        }
       
         time("quickFilterChange");
         if (this.isRowInRange(ROW.QUICK_FILTER,range) && this.isChecklist) {
