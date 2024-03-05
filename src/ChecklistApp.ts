@@ -926,7 +926,7 @@ namespace ChecklistApp {
     }
     quickFilterChange(event: EditEvent): void {
       time("quickFilterChange");
-      const {FORMULA,REGEXMATCH,A1,VALUE} = Formula;
+      const {FORMULA,REGEXMATCH,A1,VALUE,TEXT} = Formula;
       const range = event.range;
                             
       const firstChangedColumn = range.getColumn();
@@ -945,7 +945,7 @@ namespace ChecklistApp {
           }
           // const filterRange = checklist.getColumnDataRange(column);
           const prettyPrint = Formula.togglePrettyPrint(false);
-          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(A1(this.firstDataRow,column,null,column),VALUE(`(?mis:${changedValue})`))));
+          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(TEXT(A1(this.firstDataRow,column,null,column),VALUE("#")),VALUE(`(?mis:${changedValue})`))));
           Formula.togglePrettyPrint(prettyPrint);
           this.filter.setColumnFilterCriteria(column, criteria);
         } else {
