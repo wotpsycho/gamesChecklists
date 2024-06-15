@@ -1026,12 +1026,15 @@ NOTE: CHOICE is a deprecated alias for OPTION`
           this._allPossiblePreReqRows = this.getCircularDependencies();
         } else {
           const allPossiblePreReqs:Set<row> = new Set<row>();
-          this.children.forEach(child => 
+          this.children.forEach(child =>
             child.getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
           );
           this._allPossiblePreReqRows = allPossiblePreReqs;
         }
       }
+      /*if (this.isInCircularDependency()) {
+        console.warn("Circular Dependency:: type:%s, row:%s, text:%s, circular:[%s], this:%s", this.constructor.name, this.row, this.text, [...this.getCircularDependencies()].join(","),this);
+      }*/
       return this._allPossiblePreReqRows;
     }
 
@@ -1330,6 +1333,14 @@ NOTE: CHOICE is a deprecated alias for OPTION`
 
     toRawPreReqsMetFormula() {
       return BooleanFormulaNode.prototype.toPreReqsMetFormula.call(this);//super.toPreReqsMetFormula();
+    }
+
+    toUnknownFormula(): string {
+      let unknownFormula = super.toUnknownFormula();
+      if (unknownFormula != VALUE.FALSE) {
+        // console.log("hasUnknown, row:%s, form:%s",this.row,unknownFormula);
+      }
+      return unknownFormula;
     }
 
     toStatusFormula(): string {
@@ -2437,7 +2448,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       if (!this.hasErrors()) {
         time("blocksFinalize");
         const untilPreReqRows = this.child.getAllPossiblePreReqRows();
-        // console.log("finalizeBlock %s, '%s', child: %s, [%s]", this.row, this.text, this.child.text, [...untilPreReqRows].join(","))
+        // console.log("finalizeBlock row:%s, text:'%s', child.text: %s, untilPreReqRows:[%s], rows:[%s]", this.row, this.text, this.child.text, [...untilPreReqRows].join(","), [...this.getDirectPreReqRows()].join(","))
         this.valueInfo.rows // All rows matching the BLOCKS clause
           .filter(blockedRow => !untilPreReqRows.has(blockedRow)) // Don't block any preReq of UNTIL
           .forEach(blockedRow => 
@@ -2479,8 +2490,10 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         return true;
       } else if (!this.child.getAllPossiblePreReqRows().has(this.row)){
         this.addError("UNTIL clause must depend on this Item");
+        console.error("UNTIL Clause Depends:: row: %s, childPreReqRows: [%s], child.loop:%s", this.row, [...this.child.getAllPossiblePreReqRows()].join(","),this.child.isInCircularDependency())
         return true;
       } else {
+        // console.log("blocksUntil.checkErrors:checking missables")
         const preReqRows = this.parser.getAllPossiblePreReqRows();
         const childPreReqRows = this.child.getAllPossiblePreReqRows();
         const possiblyMissableRows = [...childPreReqRows].filter(row => !preReqRows.has(row) && CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
