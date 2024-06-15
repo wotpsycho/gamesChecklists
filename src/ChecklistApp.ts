@@ -267,7 +267,7 @@ namespace ChecklistApp {
     onOpenSimple(event: GoogleAppsScript.Events.SheetsOnOpen):void {
       this.settings.populateSettingsDropdowns();
       this.ensureTotalFormulas();
-      const cell = this.getRange(ROW.TITLE,COLUMN.PRE_REQS);
+      // const cell = this.getRange(ROW.TITLE,COLUMN.PRE_REQS);
       // this.sheet.insertImage("",cell.getColumn(),cell.getRow(),cell.getWidth()/2,0);
       return;
     }
@@ -350,6 +350,7 @@ namespace ChecklistApp {
             case "meta": this.syncMeta(); break;
             case "FULL RESET": this.reset(true); break;
             case "link": this.linkPreReqs(); break;
+            case "linkmeta": this.linkMeta(); break;
             case "status":
             default: { 
               const filter = this.removeFilter();
@@ -360,36 +361,43 @@ namespace ChecklistApp {
           this.isChecklist && this.ensureTotalFormulas();
           return;
         }
-      
-        time("updateSettings");
-        if (this.isRowInRange(ROW.SETTINGS, range) && range.getColumn() > this.toColumnIndex(COLUMN.ITEM)) {
-          this.settings.handleChange(event);
-          if (range.getNumRows() == 1) {
-            timeEnd("updateSettings");
-            return;
+        if (this.isChecklist) {
+
+          time("updateSettings");
+          if (this.isRowInRange(ROW.SETTINGS, range) && range.getColumn() > this.toColumnIndex(COLUMN.ITEM)) {
+            this.settings.handleChange(event);
+            if (range.getNumRows() == 1) {
+              timeEnd("updateSettings");
+              return;
+            }
+          }
+          timeEnd("updateSettings");
+
+          time("populateAvailable");
+          if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
+            // this.calculateStatusFormulas();
+            // this.refreshFilter();
+          }
+          timeEnd("populateAvailable");
+
+          // time("reapplyFilter");
+          // if (this.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) ||
+          // this.isRowInRange(ROW.QUICK_FILTER,range)) {
+          //   this.refreshFilter();
+          // }
+          // timeEnd("reapplyFilter");
+
+          time("moveNotes");
+          if (this.isColumnInRange(COLUMN.NOTES, range)) {
+            this.syncNotes();
+          }
+          timeEnd("moveNotes");
+        } else {
+          const checklist = getChecklistByMetaSheet(event.range.getSheet())
+          if (checklist.isChecklist && checklist.meta) {
+            checklist.meta.handleEdit(event);
           }
         }
-        timeEnd("updateSettings");
-      
-        time("populateAvailable");
-        if (this.isColumnInRange([COLUMN.PRE_REQS, COLUMN.ITEM, COLUMN.STATUS], range) && range.getLastRow() >= this.firstDataRow) {
-          // this.calculateStatusFormulas();
-          // this.refreshFilter();
-        }
-        timeEnd("populateAvailable");
-      
-        // time("reapplyFilter");
-        // if (this.isColumnInRange([COLUMN.CHECK, COLUMN.PRE_REQS],range) || 
-        // this.isRowInRange(ROW.QUICK_FILTER,range)) {
-        //   this.refreshFilter();
-        // }
-        // timeEnd("reapplyFilter");
-      
-        time("moveNotes");
-        if (this.isColumnInRange(COLUMN.NOTES,range)) {
-          this.syncNotes();
-        }
-        timeEnd("moveNotes");
       
         // time("checkFilterSize");
         // if (!event.value && !event.oldValue) {
@@ -1066,6 +1074,10 @@ namespace ChecklistApp {
     }
     linkPreReqs(range:Range = this.getColumnDataRange(COLUMN.PRE_REQS)):void {
       Status.addLinksToPreReqs(this, range.getRow(), range.getLastRow());
+    }
+
+    linkMeta() {
+      this.meta.updateChecklistLinksAndNotes();
     }
     // END STATUS SECTION
   }                                        

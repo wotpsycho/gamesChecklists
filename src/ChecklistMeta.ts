@@ -1,6 +1,9 @@
 namespace ChecklistMeta {
+  type ConditionalFormatRuleBuilder = GoogleAppsScript.Spreadsheet.ConditionalFormatRuleBuilder;
   type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
   type Range = GoogleAppsScript.Spreadsheet.Range;
+
+  const PARENT_REGEX = /^PARENT\((.*)\)$/;
   
   
   export function getFromActiveChecklist(_interactive: boolean = false): MetaSheet {
@@ -46,13 +49,15 @@ namespace ChecklistMeta {
     range: Range;
     metaColumn: number;
     formatHeaders: string[];
+    metaValues:string[];
     metaValueCells: {
-      any: Range,
+      [x:string]: Range,
     };
     metaValueLinks: {[x:string]: {[x:string]: string}};
     metaValueNotes: {[x:string]: string};
     lastMetaRow: number;
     missingValues: {[x:string]:true};
+    parents: {[x:string]:string};
     metaRange: Range;
   };
   
@@ -80,9 +85,19 @@ namespace ChecklistMeta {
         const columnMetadata = {};
         const metaHeaderValues = this.getRowValues(this.headerRow);
         for (let column = 1; column <= metaHeaderValues.length; column++) {
-          const rawMetaHeader = metaHeaderValues[column-1];
-          if (rawMetaHeader && rawMetaHeader.toString().trim()) {
-            const [, checklistColumnName,  additionalChecklistColumns] = /^(.+?)(?:\[(.+)\])?$/.exec(rawMetaHeader.toString());
+          const rawMetaHeader = metaHeaderValues[column - 1];
+          const parentMatch = PARENT_REGEX.exec(rawMetaHeader?.toString()?.trim());
+          if (parentMatch) {
+            const baseHeader = parentMatch[1];
+            const baseMetadata = columnMetadata[baseHeader];
+            if (baseMetadata) {
+              const metaValues = this.getColumnDataValues(column)
+              metaValues.forEach((metaValue,i) =>{
+                baseMetadata.parents[baseMetadata.metaValues[i]] = metaValue.toString();
+              });
+            }
+          } else if (rawMetaHeader && rawMetaHeader.toString().trim()) {
+            const [, checklistColumnName, additionalChecklistColumns] = /^(.+?)(?:\[(.+)\])?$/.exec(rawMetaHeader.toString());
             const formatColumns = [checklistColumnName];
             if (additionalChecklistColumns) {
               const additionalFormatColumns = additionalChecklistColumns.split(/ *, */);
@@ -96,7 +111,7 @@ namespace ChecklistMeta {
                 };
               });
             }
-            const metaValueCells = {};
+            const metaValueCells:{[x:string]:Range} = {};
             const metaValueLinks = {};
             const metaValueNotes = {};
             const metaValueRange = this.getColumnDataRange(column);
@@ -109,8 +124,8 @@ namespace ChecklistMeta {
               const metaValue = metaValues[i];
               if (metaValue) {
                 const metaValueString = metaValue.toString();
-                metaValueCells[metaValueString] = metaValueRange.getCell(i+1,1);
-                lastRow = i+this.firstDataRow;
+                metaValueCells[metaValueString] = metaValueRange.getCell(i + 1, 1);
+                lastRow = i + this.firstDataRow;
                 metaRichTexts[i].getRuns().forEach(richTextRun => {
                   if (richTextRun.getLinkUrl()) {
                     if (!metaValueLinks[metaValueString])
@@ -125,22 +140,24 @@ namespace ChecklistMeta {
                 break; // Don't allow empty spaces
               }
             }
-            const a = {
+            const columnMeta:columnMetadata = {
               metaColumn: column,
               formatHeaders: formatColumns,
+              metaValues:metaValues.map(sheetValue => sheetValue.toString()),
               metaValueCells,
               metaValueLinks,
               metaValueNotes,
               lastMetaRow: lastRow,
               missingValues: {},
-              metaRange: this.getColumnDataRange(column,this.firstDataRow,lastRow-this.firstDataRow+1),
+              parents: {},
+              metaRange: this.getColumnDataRange(column, this.firstDataRow, lastRow - this.firstDataRow + 1),
               ...(this.checklist.columnsByHeader[checklistColumnName] && {
                 column: this.checklist.columnsByHeader[checklistColumnName],
                 range: this.checklist.getColumnDataRange(this.checklist.columnsByHeader[checklistColumnName]),
               })
             };
-            
-            columnMetadata[checklistColumnName] = a;
+
+            columnMetadata[checklistColumnName] = columnMeta;
           }
         }
         this._columnMetadata = columnMetadata;
@@ -148,7 +165,7 @@ namespace ChecklistMeta {
       }
       return this._columnMetadata;
     }
-    
+
     private _missingValues
     private get missingValues() {
       if (!this._missingValues) {
@@ -179,7 +196,13 @@ namespace ChecklistMeta {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     handleEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
       time("meta handleEdit");
+      // this.toast("Editing meta...",-1);
+      const parentMatch = PARENT_REGEX.exec(event.value);
+      if (event.range.getRow() == 1 && parentMatch) {
+        this.setParentDataValidations();
+      }
       // TODO possibly do things here to reduce need for syncing
+      // this.toast("Done!");
       timeEnd("meta handleEdit");
     }
     
@@ -190,11 +213,17 @@ namespace ChecklistMeta {
         console.error("checklist has meta set to itself");
         return;
       }
-      this.updateChecklistDataValidation();
-      this.updateWithMissingValues();
-      this.updateChecklistConditionalFormatting();
-      this.updateChecklistLinksAndNotes();
-      this.checklist.toast("Done!", _toastTitle);
+      const filter = this.checklist.removeFilter();
+      try {
+        this.updateChecklistDataValidation();
+        this.updateWithMissingValues();
+        this.updateChecklistConditionalFormatting();
+        this.updateChecklistLinksAndNotes();
+        this.setParentDataValidations();
+        this.checklist.toast("Done!", _toastTitle);
+      } finally {
+        this.checklist.createFilter(filter);
+      }
     }
 
     getColumnDataValidations(): {[x:string]: GoogleAppsScript.Spreadsheet.DataValidation} {
@@ -277,45 +306,62 @@ namespace ChecklistMeta {
           if (formatRanges.length > 0) {
             const relativeCell = Formula.A1(metadata.range.getCell(1,1),true);//.getA1Notation();
             // This can be made into rules based on cells.
-            Object.entries(metadata.metaValueCells).sort(([cellValue1],[cellValue2]) => cellValue2.length - cellValue1.length).forEach(([cellValue, cell]) => {
-              const [background, color] = [cell.getBackground(), cell.getFontColor()];
-              const isBold = cell.getFontWeight() == "bold";
-              const isItalic = cell.getFontStyle() == "italic";
-              const isStrikethrough = cell.getFontLine() == "line-through";
-              const isBackgroundWhite = background === "#ffffff";
-              const isTextBlack = color === "#000000";
-              const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
-              const prettyPrint = Formula.togglePrettyPrint(false);
-              const formula = FORMULA(COMMENT.BOOLEAN("META_RULE",REGEXMATCH(TEXT(relativeCell,VALUE("#")),VALUE(`^(\\Q${cellValue}\\E)`))));
-              Formula.togglePrettyPrint(prettyPrint);
-              ruleBuilder.whenFormulaSatisfied(formula);
-              ruleBuilder.setRanges(formatRanges);
-              if (!isBackgroundWhite) {
-                ruleBuilder.setBackground(background);
-              }
-              if (!isTextBlack) {
-                ruleBuilder.setFontColor(color);
-              }
-              if (isBold){
-                ruleBuilder.setBold(true);
-              }
-              if (isItalic) {
-                ruleBuilder.setItalic(true);
-              }
-              if (isStrikethrough) {
-                ruleBuilder.setStrikethrough(true);
-              }
-              formulaToRuleMap[formula] = ruleBuilder.build();
-              if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isStrikethrough) {
-                // Don't add the rule if there is no change. Keep in formula to remove old settings.
-                if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) {
-                  newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
-                  primaryConditionalFormatRulesByColumn[metadata.metaColumn] = [];
-                }
-                newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
-                primaryConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.setRanges([metadata.range]).build());
-              }
-            });
+            Object.entries(metadata.metaValueCells)
+                .sort(([cellValue1],[cellValue2]) => cellValue2.length - cellValue1.length)
+                .forEach(([cellValue, cell]) => {
+                  const getRuleBuilder = (currentCell:Range):ConditionalFormatRuleBuilder => {
+                    const [background, color] = [currentCell.getBackground(), currentCell.getFontColor()];
+                    const isBold = currentCell.getFontWeight() == "bold";
+                    const isItalic = currentCell.getFontStyle() == "italic";
+                    const isStrikethrough = currentCell.getFontLine() == "line-through";
+                    const isBackgroundWhite = background === "#ffffff";
+                    const isTextBlack = color === "#000000";
+                    const ruleBuilder = SpreadsheetApp.newConditionalFormatRule();
+                    const prettyPrint = Formula.togglePrettyPrint(false);
+                    const formula = FORMULA(COMMENT.BOOLEAN("META_RULE", REGEXMATCH(TEXT(relativeCell, VALUE("#")), VALUE(`^(\\Q${cellValue}\\E)`))));
+                    Formula.togglePrettyPrint(prettyPrint);
+                    ruleBuilder.whenFormulaSatisfied(formula);
+                    ruleBuilder.setRanges(formatRanges);
+                    if (!isBackgroundWhite) {
+                      ruleBuilder.setBackground(background);
+                    }
+                    if (!isTextBlack) {
+                      ruleBuilder.setFontColor(color);
+                    }
+                    if (isBold) {
+                      ruleBuilder.setBold(true);
+                    }
+                    if (isItalic) {
+                      ruleBuilder.setItalic(true);
+                    }
+                    if (isStrikethrough) {
+                      ruleBuilder.setStrikethrough(true);
+                    }
+                    formulaToRuleMap[formula] = ruleBuilder.build();
+
+                    if (!isTextBlack || !isBackgroundWhite || isBold || isItalic || isStrikethrough) {
+                      return ruleBuilder;
+                    }
+                  };
+                  let ruleBuilder:ConditionalFormatRuleBuilder,
+                      currentCellValue = cellValue,
+                      currentCell = cell;
+                  do {
+                    ruleBuilder = getRuleBuilder(currentCell);
+                    currentCellValue = metadata.parents[currentCellValue];
+                    currentCell = metadata.metaValueCells[currentCellValue]
+                  } while (!ruleBuilder && currentCellValue && currentCell);
+
+                  if (ruleBuilder) {
+                    // Don't add the rule if there is no change. Keep in formula to remove old settings.
+                    if (!newConditionalFormatRulesByColumn[metadata.metaColumn]) {
+                      newConditionalFormatRulesByColumn[metadata.metaColumn] = [];
+                      primaryConditionalFormatRulesByColumn[metadata.metaColumn] = [];
+                    }
+                    newConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.build());
+                    primaryConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.setRanges([metadata.range]).build());
+                  }
+                });
             if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !metadata.metaValueCells[ChecklistApp.FINAL_ITEM_TYPE]) {
               // Default for FINAL_ITEM_TYPE
               // TODO extract to a "Default styles"
@@ -331,7 +377,7 @@ namespace ChecklistMeta {
           }
         }
       });
-      
+
       // update conditional formatting
       const oldRules = this.checklist.sheet.getConditionalFormatRules();
       const rulesToKeep = oldRules.filter(rule => {
@@ -341,7 +387,7 @@ namespace ChecklistMeta {
               return !criteria.toString().includes("META_RULE")
             });
       })
-      
+
       const newConditionalFormatRules = [primaryConditionalFormatRulesByColumn,newConditionalFormatRulesByColumn].map(columnRules => columnRules.filter(rules => rules && rules.length).reverse().flat()).flat();
       this.checklist.sheet.setConditionalFormatRules(rulesToKeep.concat(newConditionalFormatRules));
       timeEnd("meta setConditionalFormatRules");
@@ -349,43 +395,65 @@ namespace ChecklistMeta {
 
     updateChecklistLinksAndNotes(): void {
       time("meta updateChecklistLinks");
+      const postProcess:(()=>void)[] = [];
       Object.values(this.columnMetadata).forEach((metadata) => {
         metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setUnderline(false).build());
         if (metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
           const values = metadata.range.getValues().map(rowValues => rowValues[0]);
           const richTexts = new Array(values.length);
-          const notes = new Array(values.length);
+          const rangeNotes = new Array(values.length);
           values.forEach((value,i) => {
             const richText = SpreadsheetApp.newRichTextValue().setText(value);
-            const note:string[] = [];
+            const cellNotes:string[] = [];
             
             let lineIndex:number = -1;
             value.toString().split(/([\r\n])+/).forEach((line: string) => {
               lineIndex = value.toString().indexOf(line,lineIndex+1);
+              const lineNotes = [];
               if (metadata?.metaValueLinks?.[line]) {
                 Object.entries(metadata.metaValueLinks[line]).forEach(([subText,link]) => {
                   const subTextStart = value.indexOf(subText,lineIndex);
                   richText.setLinkUrl(subTextStart, subTextStart + subText.length, link);
                 });
               }
+              if (metadata?.parents?.[line]) {
+                const parentChain = [];
+                for (let currentLine = line; currentLine; currentLine = metadata.parents[currentLine]) {
+                  parentChain.push(currentLine);
+                  if (parentChain.indexOf(currentLine) != parentChain.lastIndexOf(currentLine)) break; // circular loop
+                }
+                const parentString = parentChain.reverse().map((current,i,list)=> {
+                  // remove prefixes, e.g. "Dungeon A > Dungeon A - B1" to "Dungeon A > B1"
+                  return RegExp(`^(?:(?:${list.slice(0,i).join("|")}) *[\-–—:,;>]{1,3} *)?(.*?)$`).exec(current)[1];
+                }).join(" > ");
+                lineNotes.push(parentString);
+              }
               if (metadata?.metaValueNotes?.[line]) {
-                note.push(metadata.metaValueNotes[line]);
+                lineNotes.push(metadata.metaValueNotes[line]);
+              }
+              if (lineNotes.length > 0) {
+                cellNotes.push(lineNotes.join("\n"));
               }
             });
             richTexts[i] = richText.build();
-            notes[i] = note.join("\n");
+            rangeNotes[i] = cellNotes.join("\n----------\n");
           });
-          const filter = this.checklist.removeFilter();
-          if (metadata.metaValueLinks && Object.keys(metadata.metaValueLinks).length) {
-            metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
-          }
-          metadata.range.setNotes(notes.map(note => [note]));
-          metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor("black").build());
-          if (filter) {
-            this.checklist.createFilter(filter);
-          }
+          postProcess.push(() => {
+            if (metadata.metaValueLinks && Object.keys(metadata.metaValueLinks).length) {
+              metadata.range.setRichTextValues(richTexts.map(richText => [richText]));
+            }
+            metadata.range.setNotes(rangeNotes.map(note => [note]));
+            metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setForegroundColor("black").build());
+          });
         }
       });
+      if (postProcess.length > 0) {
+        const filter = this.checklist.removeFilter();
+        postProcess.forEach((process) => process())
+        if (filter) {
+          this.checklist.createFilter(filter);
+        }
+      }
       timeEnd("meta updateChecklistLinks");
     }
     
@@ -397,6 +465,41 @@ namespace ChecklistMeta {
         const protections = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         protections && protections[0] && protections[0].remove();
         this.sheet.showSheet();
+      }
+    }
+
+    private setParentDataValidations() {
+      const {FORMULA,LT,COUNTIF,A1,CONCAT,VALUE} = Formula;
+      for (let column = 1; column <= this.lastColumn; column++) {
+        const match = PARENT_REGEX.exec(this.getValue(1, column)?.toString());
+        if (match) {
+          const baseColumn = this.columnMetadata[match[1]];
+          if (baseColumn) {
+            const parentDataRange = this.getColumnDataRange(column);
+            const baseDataRange = this.getColumnDataRange(baseColumn.metaColumn);
+            const parentRule = SpreadsheetApp.newDataValidation()
+                .setAllowInvalid(true)
+                .requireValueInRange(baseDataRange)
+                .build();
+            const baseFormula = FORMULA(
+                LT(
+                    COUNTIF(
+                        A1(baseDataRange),
+                        CONCAT(
+                            VALUE("="),
+                            A1(this.firstDataRow,baseColumn.metaColumn,true)
+                        )
+                    ),
+                    VALUE(2)
+                )
+            );
+            const baseRule = SpreadsheetApp.newDataValidation()
+                .setAllowInvalid(true)
+                .requireFormulaSatisfied(baseFormula)
+            parentDataRange.setDataValidation(parentRule)
+            baseDataRange.setDataValidation(baseRule)
+          }
+        }
       }
     }
   }
