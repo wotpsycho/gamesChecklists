@@ -503,6 +503,7 @@ namespace Settings {
             this.settings.checklist.toast("Resetting Checklist", "Unchecking...", -1);
             this.settings.checklist.resetCheckmarks();
             this.settings.checklist.refreshFilter();
+            this.settings.checklist.createFilter(this.settings.checklist.removeFilter())
             this.settings.checklist.toast("Resetting Checklist", "Done!");
           }
         }
