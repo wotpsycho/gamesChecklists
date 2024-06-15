@@ -78,7 +78,7 @@ namespace Status {
   const NOT = FormulaHelper(Formula.NOT, /^ *! *(.+?) *$/);
   const EQ  = FormulaHelper(Formula.EQ , /^ *(.+?) *== *(.+?) *$/);
   const NE  = FormulaHelper(Formula.NE , /^ *(.+?) *!= *(.+?) *$/);
-  const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) *> *(.+?) *$/, /^ *(.+?) *< *(.+?) *$/);
+  const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) +> +(.+?) *$/, /^ *(.+?) +< +(.+?) *$/);
   const GTE = ReversibleFormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/, /^ *(.+?) *<= *(.+?) *$/);
   const X_ITEMS = ReversibleFormulaHelper(Formula.GTE, numItemsPostfixRegExp, numItemsPrefixRegExp);
     
