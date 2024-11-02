@@ -23,6 +23,7 @@ namespace Settings {
   const SETTING_OPTIONS = {
     [SETTING.STATUS]      : {
       ALL      : "All",
+      CONDENSED: "Condensed",
       AVAILABLE: "Available",
       REMAINING: "Remaining",
       CHECKED  : "Completed",
@@ -79,6 +80,7 @@ namespace Settings {
       [SETTING_OPTIONS[SETTING.STATUS].ALL] : "All Items",
       [SETTING_OPTIONS[SETTING.STATUS].CHECKED] : "Completed Items",
       [SETTING_OPTIONS[SETTING.STATUS].AVAILABLE] : "Items with Pre-Reqs Completed",
+      [SETTING_OPTIONS[SETTING.STATUS].CONDENSED] : "Items with Pre-Reqs Completed, only directly clickable",
       [SETTING_OPTIONS[SETTING.STATUS].REMAINING] : "Items with Pre-Reqs Completed, or with Pre-Reqs that may yet be Completed",
       [SETTING_OPTIONS[SETTING.STATUS].MISSED] : "Missed Items [Red], Not Chosen Items [Purple], and Unknown due to circular Pre-Reqs Items [Orange Pre-Reqs] (and their dependents)",
     },
@@ -409,17 +411,33 @@ namespace Settings {
 
   class StatusColumnFilterSetting extends ColumnFilterSetting {
     constructor(settings: ChecklistSettings,_initialValue: string = undefined) {
-      const {AVAILABLE,ALL,REMAINING,CHECKED,MISSED} = SETTING_OPTIONS[SETTING.STATUS];
+      const {CONDENSED,AVAILABLE,ALL,REMAINING,CHECKED,MISSED} = SETTING_OPTIONS[SETTING.STATUS];
       const optionToHiddenValues = {
         [ALL]      : [],
+        [CONDENSED]: [STATUS.CHECKED,STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN],
         [AVAILABLE]: [STATUS.CHECKED,STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN],
         [REMAINING]: [STATUS.CHECKED,STATUS.MISSED,                  STATUS.PR_USED],
         [CHECKED]  : [               STATUS.MISSED,STATUS.PR_NOT_MET,STATUS.PR_USED,STATUS.UNKNOWN,STATUS.AVAILABLE],
         [MISSED]   : [STATUS.CHECKED,              STATUS.PR_NOT_MET,                              STATUS.AVAILABLE],
       };
-
       super(settings,SETTING.STATUS,COLUMN.STATUS,optionToHiddenValues,_initialValue);
       this._options[ALL].addAction(new SetSettingAction(settings,SETTING.PRE_REQS,SETTING_OPTIONS[SETTING.PRE_REQS].SHOW));
+      this.options.forEach(option => {
+        if (option == CONDENSED) {
+          this._options[option].addAction(new AddNotFormulaFilterAction(settings,COLUMN.CHECK))
+        } else {
+          this._options[option].addAction(new RemoveFilterAction(settings,COLUMN.CHECK))
+        }
+      })
+    }
+    _determineValue(): string {
+      const option = super._determineValue();
+      const {CONDENSED, AVAILABLE} = SETTING_OPTIONS[SETTING.STATUS];
+      if (option == CONDENSED || option == AVAILABLE) {
+        const columnFilterCriteria = this.settings.checklist.filter.getColumnFilterCriteria(this.settings.checklist.toColumnIndex(COLUMN.CHECK));
+        return (columnFilterCriteria && columnFilterCriteria.getCriteriaType() == SpreadsheetApp.BooleanCriteria.CUSTOM_FORMULA) ? CONDENSED : AVAILABLE;
+      }
+      return option;
     }
   }
 
@@ -578,7 +596,42 @@ namespace Settings {
       }
       timeEnd(`updateFilterVisibility ${this.column}`);
     }
-  }      
+  }
+
+  class RemoveFilterAction extends SettingAction {
+    readonly column: column
+    constructor(settings:ChecklistSettings, column:column) {
+      super(settings);
+      this.column = column;
+    }
+    execute() {
+      if (!this.settings.checklist.filter) {
+        this.settings.checklist.createFilter();
+      }
+      const columnIndex = this.settings.checklist.toColumnIndex(this.column);
+      const currentCriteria = this.settings.checklist.filter.getColumnFilterCriteria(columnIndex);
+      if (currentCriteria) {
+        this.settings.checklist.filter.removeColumnFilterCriteria(columnIndex)
+      }
+    }
+  }
+
+  class AddNotFormulaFilterAction extends SettingAction {
+    readonly column: column
+    constructor(settings:ChecklistSettings, column:column) {
+      super(settings);
+      this.column = column;
+    }
+    execute() {
+      if (!this.settings.checklist.filter) {
+        this.settings.checklist.createFilter();
+      }
+      const {FORMULA, NOT, ISFORMULA,A1} = Formula;
+      const columnIndex = this.settings.checklist.toColumnIndex(this.column);
+      const filterCriteria = SpreadsheetApp.newFilterCriteria().whenFormulaSatisfied(FORMULA(NOT(ISFORMULA(A1(this.settings.checklist.firstDataRow, columnIndex, true)))))
+      this.settings.checklist.filter.setColumnFilterCriteria(columnIndex,filterCriteria)
+    }
+  }
 
   class ChangeColumnVisibilityAction extends SettingAction {
     readonly column: column
