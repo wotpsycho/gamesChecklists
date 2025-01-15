@@ -502,6 +502,25 @@ namespace ChecklistMeta {
         }
       }
     }
+
+    getChildValues(baseSheetColumn:number, value:string):string[] {
+      const column = Object.values(this.columnMetadata).find((columnMeta) => columnMeta.column == baseSheetColumn)
+      const children = new Set<string>([value])
+      if (column && Object.keys(column.parents).length > 0) {
+        let initialSize:number
+        do {
+          initialSize = children.size
+          children.forEach(value => {
+            Object.entries(column.parents)
+              .forEach(([child, parent]) => {
+                if (parent === value)
+                  children.add(child);
+              })
+          })
+        } while (initialSize != children.size)
+      }
+      return [...children]
+    }
   }
 }
 

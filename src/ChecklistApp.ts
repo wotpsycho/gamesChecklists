@@ -942,6 +942,7 @@ namespace ChecklistApp {
       const firstChangedColumn = range.getColumn();
       const lastChangedColumn = range.getLastColumn();
       const changedValues = this.getRowValues(ROW.QUICK_FILTER,range.getColumn(), range.getNumColumns());
+
       for (let column = firstChangedColumn; column <= lastChangedColumn; column++) {
         if (column == 1) continue; // First column is header
         const changedValue = changedValues[column-firstChangedColumn]?.toString().replace(/""/g,"^$");
@@ -953,9 +954,16 @@ namespace ChecklistApp {
           } else {
             criteria = SpreadsheetApp.newFilterCriteria();
           }
+          let regExp = `(?mis:${changedValue})`;
+          const cell = this.getRange(ROW.QUICK_FILTER, column)
+          const dataValidation = cell.getDataValidation();
+          if (dataValidation && dataValidation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST && dataValidation.getCriteriaValues()[0].includes(changedValue)) {
+            const childValues = this.meta.getChildValues(column, changedValue);
+            regExp = `(^|\\n)(${childValues.join("|")})(\\n|$)`
+          }
           // const filterRange = checklist.getColumnDataRange(column);
           const prettyPrint = Formula.togglePrettyPrint(false);
-          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(TEXT(A1(this.firstDataRow,column,null,column),VALUE("#")),VALUE(`(?mis:${changedValue})`))));
+          criteria.whenFormulaSatisfied(FORMULA(REGEXMATCH(TEXT(A1(this.firstDataRow, column, null, column), VALUE("#")), VALUE(regExp))));
           Formula.togglePrettyPrint(prettyPrint);
           this.filter.setColumnFilterCriteria(column, criteria);
         } else {
