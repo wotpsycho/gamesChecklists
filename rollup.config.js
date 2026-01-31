@@ -2,6 +2,7 @@ import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
 import cleanup from 'rollup-plugin-cleanup';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { execSync } from 'child_process';
 
 // Copy appsscript.json to build directory
 function copyAppsScriptJson() {
@@ -55,6 +56,25 @@ function CreateMetaSheet() { return Bundle.CreateMetaSheet(); }
   };
 }
 
+// Push to clasp after build
+function claspPush() {
+  return {
+    name: 'clasp-push',
+    writeBundle() {
+      console.log('Pushing to clasp...');
+      try {
+        execSync('clasp push', { stdio: 'inherit' });
+        console.log('Successfully pushed to clasp');
+      } catch (error) {
+        console.error('Failed to push to clasp:', error.message);
+      }
+    }
+  };
+}
+
+// Check if --push or -p flag is present
+const shouldPush = process.argv.includes('--push') || process.argv.includes('-p');
+
 export default {
   input: 'src/index.ts',
   output: {
@@ -75,5 +95,6 @@ export default {
     }),
     copyAppsScriptJson(),
     addTopLevelFunctions(),
+    ...(shouldPush ? [claspPush()] : []),
   ],
 };

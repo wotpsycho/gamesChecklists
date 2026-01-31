@@ -6,7 +6,8 @@
   "scripts": {
     "build": "rollup -c",
     "push": "npm run build && clasp push",
-    "watch": "rollup -c -w"
+    "watch": "rollup -c -w",
+    "watch:push": "rollup -c -w --push"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.3",
