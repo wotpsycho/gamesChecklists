@@ -2,136 +2,62 @@ import { time, timeEnd } from './util';
 import * as Formula from './Formulas';
 import type { Checklist } from './ChecklistApp';
 import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from './ChecklistApp';
+import {
+  type Range,
+  type RichTextValue,
+  type column,
+  type row,
+  type FormulaHelper,
+  type IStatusFormulaTranslator,
+  type RowCounts,
+  type sheetValueInfo,
+  type columnValues,
+  SPECIAL_PREFIXES,
+  PHASE,
+  USAGES,
+  OR,
+  AND,
+  NOT,
+  EQ,
+  NE,
+  GT,
+  GTE,
+  X_ITEMS,
+  MULT,
+  DIV,
+  MINUS,
+  ADD,
+  FORMULA,
+  VALUE,
+  IFS,
+  IF,
+  COUNTIF,
+  formulaTypeToString,
+  getParenPlaceholder,
+  getQuotePlaeholder,
+  quoteRegExp,
+  parenRegExp,
+  quoteMapping,
+  parentheticalMapping,
+  PREFIX_REG_EXP,
+  Node,
+  FormulaNode,
+} from './availability';
 
-type Range = GoogleAppsScript.Spreadsheet.Range;
-type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
-type column = number | string;
-type row = number;
-type FormulaHelper = Formula.StringFormula & {
-  identify: (text:string) => boolean;
-  parseOperands: (text:string) => string[];
-  generateFormula: (...value: string[]) => string;
-};
-
-  const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
-  const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
-  const getNumItemInfo = (text:string,_defaultNum:number = undefined):{num?:number,item:string} => {
-    let match = text.match(numItemsPrefixRegExp);
-    if (match) {
-      return {num: Number(match[1]), item: match[2]};
-    } else if ((match = text.match(numItemsPostfixRegExp))) {
-      return {num: Number(match[2]), item: match[1]};
-    } else if (_defaultNum || _defaultNum === 0){
-      return {num: _defaultNum, item:text};
-    } else {
-      return {item:text};
-    }
-  };
-
-  const FormulaHelper = (formula:Formula.StringFormula, regExp:RegExp, isFlexible:boolean = false):FormulaHelper => {
-    const parseOperands = (text:string):string[] => {
-      const match:RegExpMatchArray = text?.match(regExp);
-      if (!match) return;
-      if (!isFlexible) return match.slice(1);
-
-      const results = [];
-      const lMatch = match[1];
-      const lResult = parseOperands(lMatch);
-      if (lResult) results.push(...lResult);
-      else results.push(lMatch);
-      
-      const rMatch = match[2];
-      const rResult = parseOperands(rMatch);
-      if (rResult) results.push(...rResult);
-      else results.push(rMatch);
-      
-      return results;
-    };
-    return Object.assign(
-      (...args:string[]) => formula(...args), 
-      formula, {
-        generateFormula: formula,
-        identify: (text:string):boolean => !!(text?.match(regExp)),
-        parseOperands,
-      });
-  };
-  const ReversibleFormulaHelper = (formula:Formula.StringFormula, regExp:RegExp, reversibleRegExp:RegExp):FormulaHelper => {
-    const parseOperands = (text:string):string[] => {
-      if (!text) return;
-      let match = text.match(regExp);
-      if (match) return match.slice(1);
-      match = text.match(reversibleRegExp);
-      if (match) return match.slice(1).reverse();
-    };
-    return Object.assign(
-      (...args:string[]) => formula(...args), 
-      formula, {
-        generateFormula: formula,
-        identify: (text:string):boolean => !!(text?.match(regExp) || text?.match(reversibleRegExp)),
-        parseOperands,
-      });
-  };
-  const OR  = FormulaHelper(Formula.OR , /^ *(.+?) *\|\| *(.+?) *$/,true);
-  const AND = FormulaHelper(Formula.AND, /^ *(.+?) *&& *(.+?) *$/,true);
-  const NOT = FormulaHelper(Formula.NOT, /^ *! *(.+?) *$/);
-  const EQ  = FormulaHelper(Formula.EQ , /^ *(.+?) *== *(.+?) *$/);
-  const NE  = FormulaHelper(Formula.NE , /^ *(.+?) *!= *(.+?) *$/);
-  const GT  = ReversibleFormulaHelper(Formula.GT , /^ *(.+?) +> +(.+?) *$/, /^ *(.+?) +< +(.+?) *$/);
-  const GTE = ReversibleFormulaHelper(Formula.GTE, /^ *(.+?) *>= *(.+?) *$/, /^ *(.+?) *<= *(.+?) *$/);
-  const X_ITEMS = ReversibleFormulaHelper(Formula.GTE, numItemsPostfixRegExp, numItemsPrefixRegExp);
-    
-  const MULT  = FormulaHelper(Formula.MULT , /^ *(.+?) +\* +(.+?) *$/,true);
-  const DIV   = FormulaHelper(Formula.DIV  , /^ *(.+?) +\/ +(.+?) *$/,true);
-  const MINUS = FormulaHelper(Formula.MINUS, /^ *(.+?) +- +(.+?) *$/,true);
-  const ADD   = FormulaHelper(Formula.ADD  , /^ *(.+?) +\+ +(.+?) *$/,true);
-  
-  const {FORMULA,VALUE,IFS,IF,COUNTIF} = Formula;
-
-  const formulaTypeToString = (formulaType:FormulaHelper) => {
-    switch(formulaType) {
-      case OR: return "||";
-      case AND: return "&&";
-      case NOT: return "!";
-      case EQ: return "==";
-      case NE: return "!=";
-      case GT: return ">";
-      case X_ITEMS:
-      case GTE: return ">=";
-      case MULT: return "*";
-      case DIV: return "/";
-      case MINUS: return "-";
-      case ADD: return "+";
-    }
-  };
-
-  enum SPECIAL_PREFIXES  {
-    USES     = "USES",
-    MISSED   = "MISSED",
-    CHOICE   = "CHOICE", // DEPRECATED, alias for OPTION
-    OPTION   = "OPTION",
-    LINKED   = "LINKED",
-    CHECKED  = "CHECKED",
-    INITIAL  = "INITIAL",
-    OPTIONAL = "OPTIONAL",
-    BLOCKS   = "BLOCKS",
-    BLOCKED  = "BLOCKED",
-    PERSIST = "PERSIST",
+const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
+const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
+const getNumItemInfo = (text: string, _defaultNum: number = undefined): { num?: number; item: string } => {
+  let match = text.match(numItemsPrefixRegExp);
+  if (match) {
+    return { num: Number(match[1]), item: match[2] };
+  } else if ((match = text.match(numItemsPostfixRegExp))) {
+    return { num: Number(match[2]), item: match[1] };
+  } else if (_defaultNum || _defaultNum === 0) {
+    return { num: _defaultNum, item: text };
+  } else {
+    return { item: text };
   }
-
-  const USAGES = {
-    [SPECIAL_PREFIXES.OPTION]: `OPTION Usage:
-OPTION [ChoiceID]
-
--[ChoiceID] is either an Item in the List, or a Unique Identifier for the Choice.
-
-Each ChoiceID must have at least 2 Items that are OPTIONs associated with it, and only 1 can be Checked.
-If ChoiceID refers to an Item in the List, Checking an OPTION will Check that Item.
-OPTIONs can have additional Pre-Reqs in addition to what are inherited from the Choice's Item.
-
-Example: Item "Yes" and Item "No" both have Pre-Req "OPTION Yes or No?"
-
-NOTE: CHOICE is a deprecated alias for OPTION`
-  };
+};
 
 export function getActiveChecklistTranslator(): StatusFormulaTranslator {
   return getTranslatorForChecklist(getActiveChecklist());
@@ -149,12 +75,7 @@ export function addLinksToPreReqs(checklist:Checklist = getActiveChecklist(), st
   StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow,endRow);
 }
 
-enum PHASE {
-    BUILDING = "BUILDING",
-    FINALIZING = "FINALIZING",
-    FINALIZED = "FINALIZED",
-  }
-  export class StatusFormulaTranslator {
+export class StatusFormulaTranslator implements IStatusFormulaTranslator {
     readonly checklist: Checklist;
     private requestId:string = Date.now().toString()
     private constructor(checklist: Checklist) {
@@ -639,39 +560,12 @@ enum PHASE {
     }
   }
 
-  type sheetValueInfo = {
-    num: number;
-    value: string;
-    row: row;
-    column: column;
-  };
-  type columnValues = {
-    byRow: {
-      [x:number]: sheetValueInfo[];
-    };
-    byValue: {
-      [x:string]: sheetValueInfo[];
-    };
-  };
-
-  // static imports
-  // Essentially static defs
-  let UID_Counter:number = 0;
-  const [parenIdentifier,quoteIdentifier] = ["PPH","QPH"];
-  const getParenPlaceholder = ():string =>  `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
-  const getQuotePlaeholder = ():string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
-  const quoteRegExp:RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
-  const parenRegExp:RegExp = RegExp(`${parenIdentifier}_\\d+_${parenIdentifier}`);
-  const quoteMapping:{[x:string]:string} = {};
-  const parentheticalMapping:{[x:string]:string} = {};
-
-  const PREFIX_REG_EXP:RegExp = new RegExp(`^(${Object.values(SPECIAL_PREFIXES).join("|")}) (.+)$`, "i");
   class CellFormulaParser {
     private static readonly parsers: {[x:number]: CellFormulaParser} = {};
-    static getParserForChecklistRow(translator: StatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
+    static getParserForChecklistRow(translator: IStatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
       const key:string = `${translator.checklist.id}:${row}`;
       if (!this.parsers[key]) {
-        this.parsers[key] = new CellFormulaParser(translator,row,_defaultValue);
+        this.parsers[key] = new CellFormulaParser(translator as StatusFormulaTranslator,row,_defaultValue);
       }
       return this.parsers[key];
     }
@@ -935,208 +829,9 @@ enum PHASE {
     }
   }
 
-  abstract class Node {
-    protected readonly errors: Set<string> = new Set<string>();
-    protected readonly children: Node[] = [];
-    readonly text: string;
-    readonly row: row;
-
-    protected get parser():CellFormulaParser {
-      return CellFormulaParser.getParserForChecklistRow(this.translator,this.row);
-    }
-
-    readonly translator: StatusFormulaTranslator  
-    protected constructor(text: string, translator: StatusFormulaTranslator,row: row) {
-      this.translator = translator;
-      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
-      this.text = text?.toString()?.trim();
-      this.row = row;
-
-      let match: RegExpMatchArray;
-      if (parentheticalMapping[this.text]) {
-        this.text = parentheticalMapping[this.text];
-      } else if ((match = this.text.match(/^\(([^)(]*)\)$/))) {
-        this.text = this.text.replace(match[0],match[1]);
-      }
-    }
-    
-    protected finalized = false;
-    finalize():Node {
-      if (this.finalized) return this;
-      this.checkPhase(PHASE.FINALIZING);
-      this.children.forEach(child => child.finalize());
-      this.finalized = true;
-      return this;
-    }
-
-    protected isPhase(phase:PHASE) {
-      return this.translator.phase == phase;
-    }
-    protected checkPhase(...phases:PHASE[]) {
-      if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
-        throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}" (Row: ${this.row}, Condition: ${this.text})`);
-      }
-    }
-
-    protected get child():Node {
-      return this.children.length == 1 ? this.children[0] : undefined;
-    }
-
-    protected set child(child:Node) {
-      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
-      if (this.children.length > 1) throw new Error("Cannot set child for multi-child node");
-      this.children[0] = child;
-    }
-
-    addError(message: string): void {
-      this.errors.add(message);
-    }
-
-    addErrors(errors: Iterable<string>): void {
-      for (const message of errors) {
-        this.addError(message);
-      }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    checkErrors(): boolean {
-      return false;
-    }
-
-    getErrors(): Set<string> {
-      this.checkErrors();
-      this.children.forEach(child => this.addErrors(child.getErrors()));
-      return this.errors;
-    }
-
-    hasErrors(): boolean {
-      return this.getErrors().size > 0;
-    }
-
-    isDirectlyMissable(): boolean {
-      return this.children.reduce((directlyMissable,child) => directlyMissable || child.isDirectlyMissable(), false);
-    }
-
-    protected _allPossiblePreReqRows: ReadonlySet<row>;
-    getAllPossiblePreReqRows():ReadonlySet<row> {
-      if (!this._allPossiblePreReqRows) {
-        if (this.isInCircularDependency()) {
-          this._allPossiblePreReqRows = this.getCircularDependencies();
-        } else {
-          const allPossiblePreReqs:Set<row> = new Set<row>();
-          this.children.forEach(child =>
-            child.getAllPossiblePreReqRows().forEach(allPossiblePreReqs.add,allPossiblePreReqs)
-          );
-          this._allPossiblePreReqRows = allPossiblePreReqs;
-        }
-      }
-      /*if (this.isInCircularDependency()) {
-        console.warn("Circular Dependency:: type:%s, row:%s, text:%s, circular:[%s], this:%s", this.constructor.name, this.row, this.text, [...this.getCircularDependencies()].join(","),this);
-      }*/
-      return this._allPossiblePreReqRows;
-    }
-
-    getDirectPreReqInfos():{[x:string]:row[]} {
-      return this.children.reduce((preReqInfos, child) => Object.assign(child.getDirectPreReqInfos(),preReqInfos), {});
-    }
-
-    getDirectPreReqRows():ReadonlySet<row> {
-      const preReqRows = new Set<row>();
-      this.children.forEach(child => child.getDirectPreReqRows().forEach(preReqRows.add,preReqRows));
-      return preReqRows;
-    }
-
-    isInCircularDependency(): boolean {
-      return this.getCircularDependencies().has(this.row);
-    }
-
-    protected _circularDependencies: ReadonlySet<row>;
-    protected _lockCircular: boolean;
-    protected _isCircular: boolean;
-    getCircularDependencies(previous: ReadonlyArray<row> = []): ReadonlySet<row> {
-      if (this._circularDependencies) return this._circularDependencies;
-      const circularDependencies: Set<row> = new Set();
-      if (this._lockCircular) {
-        previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
-      } else {
-        const newChain:row[] = [...previous,this.row];
-        this._lockCircular = true;
-        this.children.forEach(child => {
-          child.getCircularDependencies(newChain).forEach(circularDependencies.add, circularDependencies);
-        });
-        this._lockCircular = false;
-      }
-      if (circularDependencies.has(this.row)) this._isCircular = true;
-      this._circularDependencies = circularDependencies;
-      return this._circularDependencies;
-    }
-
-    toString():string {
-      let unescaped = this.text;
-      let match:RegExpMatchArray;
-      while ((match = unescaped.match(parenRegExp))) {
-        unescaped = unescaped.replace(match[0],`(${parentheticalMapping[match[0]]})`);
-      }
-      while ((match = unescaped.match(quoteRegExp))) {
-        unescaped = unescaped.replace(match[0],`"${quoteMapping[match[0]]}"`);
-      }
-      return unescaped;
-    }
-  }
-  abstract class FormulaNode<T extends number|boolean|unknown> extends Node {
-    protected readonly children:FormulaNode<unknown>[];
-    protected formulaType: FormulaHelper;
-    protected value: T;     
-
-    hasValue(): boolean {
-      return typeof this.value !== "undefined";
-    }
-    
-    updateValue(value: T) {
-      this.checkPhase(PHASE.BUILDING,PHASE.FINALIZING);
-      if (!this.hasValue()) {
-        throw new Error("Cannot update value on a non-value node");
-      }
-      this.value = value;
-    }
-
-    protected get child(): FormulaNode<unknown> {
-      return super.child as FormulaNode<unknown>;
-    }
-
-    protected set child(child: FormulaNode<unknown>) {
-      super.child = child;
-    }
-    toErrorFormula(): string {
-      return VALUE(this.hasErrors());
-    }
-
-    toPreReqsMetFormula(): string {
-      let formula: string;
-      if (this.hasValue()) {
-        return VALUE(this.value as string);
-      } else if (this.formulaType) {
-        formula = this.formulaType.generateFormula(...this.children.map(child => child.toPreReqsMetFormula()));
-      } else if (this.child) {
-        formula = this.child.toPreReqsMetFormula();
-      } else {
-        this.addError(`Could not determine formula for "${this.text}"`);
-      }
-      return formula;
-    }
-
-    abstract toPRUsedFormula(): string;
-
-    abstract toRawMissedFormula(): string;
-
-    abstract toMissedFormula(): string;
-
-    abstract toUnknownFormula(): string;
-  }
-
   type NodeArgs = {
     text: string;
-    translator: StatusFormulaTranslator;
+    translator: IStatusFormulaTranslator;
     row: row;
   };
 
@@ -1145,7 +840,7 @@ enum PHASE {
       return new BooleanFormulaNode(text,translator,row);
     }
     protected readonly children: FormulaNode<boolean>[]
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       super(text,translator,row);
       if (this.text) {
         for (const booleanFormulaTranslationHelper of [
@@ -1272,7 +967,7 @@ enum PHASE {
 
   class RootNode extends BooleanFormulaNode {
     persist: boolean = false;
-    constructor(children:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
+    constructor(children:FormulaNode<boolean>[], translator:IStatusFormulaTranslator,row:row) {
       super("",translator,row);
       if (children.length > 0) {
         this.children.push(...children);
@@ -1366,7 +1061,7 @@ enum PHASE {
       return new ComparisonFormulaNode(text,translator,row,formulaType);
     }
     protected children: NumberNode[];
-    protected constructor(text: string, translator:StatusFormulaTranslator,row:row,formulaType: FormulaHelper) {
+    protected constructor(text: string, translator:IStatusFormulaTranslator,row:row,formulaType: FormulaHelper) {
       super(text,translator,row);
 
       this.formulaType = formulaType;
@@ -1463,7 +1158,7 @@ enum PHASE {
       return new NumberFormulaNode(text,translator,row,_implicitPrefix);
     }
     protected readonly children: NumberNode[]
-    protected constructor(text: string, translator:StatusFormulaTranslator,row:row,_implicitPrefix) {
+    protected constructor(text: string, translator:IStatusFormulaTranslator,row:row,_implicitPrefix) {
       super(text,translator,row);
 
       for (const arithmeticFormulaTranslationHelper of [
@@ -1577,9 +1272,7 @@ enum PHASE {
     }
     return text?.trim();
   };
-  type RowCounts = {
-    [x:number]: number;
-  };
+
   class ValueNode extends Node {
     protected type:ValueNodeTypes
     protected children:ValueNode[];
@@ -1620,7 +1313,7 @@ enum PHASE {
     static create({ text, translator, row, _implicitPrefix = false }: NodeArgs & { _implicitPrefix?: boolean; }) {
       return new ValueNode(text,translator,row,_implicitPrefix);
     }
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text,translator,row);
       let {items,filteredItems} = ValueNodeTypeRegExps.WITH.exec(this.text)?.groups || {};
       if (items || filteredItems) {
@@ -1724,7 +1417,7 @@ enum PHASE {
   abstract class FormulaValueNode<T> extends FormulaNode<T> {
     readonly valueInfo:ValueNode;
 
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text,translator,row);
       this.determineValue();
       if (!this.hasValue()) {
@@ -1820,7 +1513,7 @@ enum PHASE {
     protected readonly children: NumberFormulaValueNode[];
     protected numNeeded:number;
 
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text,translator,row,_implicitPrefix);
       if (!this.hasValue()) {
         // CHECKED >= NEEDED
@@ -1920,7 +1613,7 @@ enum PHASE {
       return new NumberFormulaValueNode(text,translator,row,_implicitPrefix);
     }
     protected readonly children: FormulaValueNode<never>[]
-    protected constructor(text: string|number, translator:StatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
+    protected constructor(text: string|number, translator:IStatusFormulaTranslator,row:row,_implicitPrefix:boolean = false) {
       super(text.toString(),translator,row,_implicitPrefix);
     }
 
@@ -2062,7 +1755,7 @@ enum PHASE {
     static create({ text, translator, row }: NodeArgs) {
       return new UsesFormulaNode(text,translator,row);
     }
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       const itemInfo = getNumItemInfo(text);
       super(itemInfo.item,translator,row,itemInfo.num >= 0);
       this.numNeeded = itemInfo.num ?? 1;
@@ -2117,7 +1810,7 @@ enum PHASE {
     static create({ text, translator, row }: NodeArgs): FormulaValueNode<boolean> {
       return new OptionFormulaNode(text,translator,row);
     }
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       super(text,translator,row);
       if (this.valueInfo.rows.length == 0) {
         if (!virtualItems[this.text]) {
@@ -2227,7 +1920,7 @@ enum PHASE {
     static create({ text, translator, row }:NodeArgs) {
       return new MissedFormulaNode(text,translator,row);
     }
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       super(text,translator,row);
       this.formulaType = NOT;
       this.child = BooleanFormulaNode.create({ text: this.text, translator: this.translator, row: this.row });
@@ -2254,7 +1947,7 @@ enum PHASE {
     static create({ text, translator, row }: NodeArgs) {
       return new OptionalFormulaNode(text,translator,row);
     } 
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       super(text,translator,row);
       this.formulaType = NOT;
       this.child = BooleanFormulaNode.create({ text: this.text, translator: this.translator, row: this.row });
@@ -2279,7 +1972,7 @@ enum PHASE {
   class LinkedFormulaNode extends RootNode {
     private readonly linkedChildren: FormulaNode<boolean>[];
     private readonly unlinkedChildren: FormulaNode<boolean>[];
-    constructor(unlinkedChildren:FormulaNode<boolean>[], linkedChildren:FormulaNode<boolean>[], translator:StatusFormulaTranslator,row:row) {
+    constructor(unlinkedChildren:FormulaNode<boolean>[], linkedChildren:FormulaNode<boolean>[], translator:IStatusFormulaTranslator,row:row) {
       super([...unlinkedChildren,...linkedChildren],translator,row);
       this.unlinkedChildren = unlinkedChildren;
       this.linkedChildren = linkedChildren;
@@ -2361,7 +2054,7 @@ enum PHASE {
     }
     private sameRow:row
     private get sameRowParser():CellFormulaParser {return this.sameRow && CellFormulaParser.getParserForChecklistRow(this.translator,this.sameRow); }
-    protected constructor(text:string, translator:StatusFormulaTranslator,row:row) {
+    protected constructor(text:string, translator:IStatusFormulaTranslator,row:row) {
       super(text,translator,row);
     }
 
@@ -2423,7 +2116,7 @@ enum PHASE {
     text?:string,
     blocksText?: string,
     untilText?: string,
-    translator: StatusFormulaTranslator,
+    translator: IStatusFormulaTranslator;
     row: row,
   };
   class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
@@ -2432,7 +2125,11 @@ enum PHASE {
       return new BlocksUntilFormulaNode(blocksText || match[1] || "*", untilText || match[2],translator,row);
     }
 
-    protected constructor(blocksText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+    protected get parser(): CellFormulaParser {
+      return CellFormulaParser.getParserForChecklistRow(this.translator, this.row);
+    }
+
+    protected constructor(blocksText:string, untilText:string, translator:IStatusFormulaTranslator, row:row) {
       super(blocksText ?? "*",translator,row);
       if (!untilText) {
         this.addError("Missing UNTIL clause of BLOCKS");
@@ -2513,7 +2210,7 @@ enum PHASE {
     text?: string,
     blockedText?: string,
     untilText?: string,
-    translator: StatusFormulaTranslator,
+    translator: IStatusFormulaTranslator;
     row: row,
     calculated?:boolean,
   };
@@ -2522,7 +2219,7 @@ enum PHASE {
       const match = text?.match(untilRegExp) || [];
       return new BlockedUntilFormulaNode(blockedText || match[1],untilText || match[2],translator,row);
     }
-    constructor(blockedText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+    constructor(blockedText:string, untilText:string, translator:IStatusFormulaTranslator, row:row) {
       super(`!(${blockedText}) || (${untilText})`,translator,row);
       this.children[0] = BooleanFormulaNode.create({text:blockedText,translator:this.translator,row:this.row});
       this.children[1] = BooleanFormulaNode.create({text:untilText,translator:this.translator,row:this.row});
@@ -2566,7 +2263,12 @@ enum PHASE {
     static create({ blockedText, untilText, translator, row}: BlockedArgs):GeneratedBlockedUntilFormulaNode {
       return new GeneratedBlockedUntilFormulaNode(blockedText,untilText,translator,row);
     }
-    constructor(blockedText:string, untilText:string, translator:StatusFormulaTranslator, row:row) {
+
+    protected get parser(): CellFormulaParser {
+      return CellFormulaParser.getParserForChecklistRow(this.translator, this.row);
+    }
+
+    constructor(blockedText:string, untilText:string, translator:IStatusFormulaTranslator, row:row) {
       super(blockedText,untilText,translator,row);
     }
     finalize():GeneratedBlockedUntilFormulaNode {
