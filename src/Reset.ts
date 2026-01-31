@@ -1,5 +1,8 @@
-/* exported ResetChecklist */
-function ResetChecklist(checklist = ChecklistApp.getActiveChecklist()) {
+import { time, timeEnd } from './util';
+import { getActiveChecklist } from './ChecklistApp';
+import * as ChecklistMeta from './ChecklistMeta';
+
+export function ResetChecklist(checklist = getActiveChecklist()) {
   let title = "Refreshing Checklist";
   try{
     time();

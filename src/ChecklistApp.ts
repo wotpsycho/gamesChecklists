@@ -1,39 +1,45 @@
-/* exported ChecklistApp */
-namespace ChecklistApp {
-  export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
-  export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
+import { time, timeEnd } from './util';
+import * as Formula from './Formulas';
+import { SheetBase, type Sheet, type Range, type RichTextValue, type sheetValue } from './SheetBase';
+import * as ChecklistMeta from './ChecklistMeta';
+import { ChecklistSettings, SETTING } from './ChecklistSettings';
+import { validateAndGenerateStatusFormulasForChecklist, addLinksToPreReqs } from './StatusFormulaTranslator';
+import { getActiveSheet as _getActiveSheet, setActiveSheet as _setActiveSheet } from './SheetHelpers';
 
-  export enum COLUMN {
-    CHECK= "✓",
-    TYPE= "Type",
-    ITEM= "Item",
-    NOTES= "Notes",
-    PRE_REQS= "Pre-Reqs",
-    STATUS= "Available",
-  }
-  export type column = number|COLUMN|string; // byHeader column is valid, so strings are valid
-  
-  export enum ROW {
-    TITLE= "TITLE", 
-    SETTINGS= "SETTINGS",
-    QUICK_FILTER= "QUICK_FILTER",
-    HEADERS= "HEADERS",
-  }
-  export type row = ROW | number;
-  export type dataRow = number;
-  export enum STATUS {
-    CHECKED= "CHECKED",
-    AVAILABLE= "TRUE",
-    MISSED= "MISSED",
-    PR_USED= "PR_USED",
-    PR_NOT_MET= "FALSE",
-    UNKNOWN= "UNKNOWN",
-    ERROR= "ERROR",
-  }
-  export const FINAL_ITEM_TYPE = "Game Complete";
+export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
+export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
 
-  
-  const COLOR = {
+export enum COLUMN {
+  CHECK= "✓",
+  TYPE= "Type",
+  ITEM= "Item",
+  NOTES= "Notes",
+  PRE_REQS= "Pre-Reqs",
+  STATUS= "Available",
+}
+export type column = number|COLUMN|string; // byHeader column is valid, so strings are valid
+
+export enum ROW {
+  TITLE= "TITLE",
+  SETTINGS= "SETTINGS",
+  QUICK_FILTER= "QUICK_FILTER",
+  HEADERS= "HEADERS",
+}
+export type row = ROW | number;
+export type dataRow = number;
+export enum STATUS {
+  CHECKED= "CHECKED",
+  AVAILABLE= "TRUE",
+  MISSED= "MISSED",
+  PR_USED= "PR_USED",
+  PR_NOT_MET= "FALSE",
+  UNKNOWN= "UNKNOWN",
+  ERROR= "ERROR",
+}
+export const FINAL_ITEM_TYPE = "Game Complete";
+
+
+const COLOR = {
     ERROR: "#ff0000",
     UNAVAILABLE: "#fce5cd",
     MISSED: "#f4cccc",
@@ -57,45 +63,42 @@ namespace ChecklistApp {
   
   const MAX_EMPTY_ROWS:number = 100;
   
-  // const checklists:{[x:number]:Checklist} = {};
-  // APP SECTION
-  export function getChecklistFromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
-    return Checklist.fromEvent(event);
-  }
-  export function getChecklistBySheet(sheet: Sheet = ChecklistApp.getActiveSheet()): Checklist {
-    return Checklist.fromSheet(sheet);
-  }
-  
-  export function getChecklistByMetaSheet(metaSheet: Sheet): Checklist {
-    const metaDevMeta:DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-    if (metaDevMeta && metaDevMeta[0]) {
-      const sheet:Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
-      if (sheet) {
-        const checklist:Checklist = ChecklistApp.getChecklistBySheet(sheet);
-        checklist.metaSheet = metaSheet;
-        return checklist;
-      }
+// const checklists:{[x:number]:Checklist} = {};
+// APP SECTION
+export function getChecklistFromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
+  return Checklist.fromEvent(event);
+}
+export function getChecklistBySheet(sheet: Sheet = getActiveSheet()): Checklist {
+  return Checklist.fromSheet(sheet);
+}
+
+export function getChecklistByMetaSheet(metaSheet: Sheet): Checklist {
+  const metaDevMeta:DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+  if (metaDevMeta && metaDevMeta[0]) {
+    const sheet:Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
+    if (sheet) {
+      const checklist:Checklist = getChecklistBySheet(sheet);
+      checklist.metaSheet = metaSheet;
+      return checklist;
     }
   }
-  
-  export function getActiveChecklist(): Checklist {
-    return ChecklistApp.getChecklistBySheet(ChecklistApp.getActiveSheet());
-  }
-  
-  export function getActiveSheet():Sheet {
-    return SpreadsheetApp.getActiveSheet();
-  }
-  
-  export function setActiveSheet(sheet: Sheet): void {
-    if (ChecklistApp.getActiveSheet().getSheetId() !== sheet.getSheetId()) {
-      sheet.activate();
-      SpreadsheetApp.setActiveSheet(sheet);
-      sheet.getParent().setActiveSheet(sheet);
-    }
-  }
-  // END APP SECTION
-  
-  export class Checklist extends ChecklistApp.SheetBase {
+}
+
+export function getActiveChecklist(): Checklist {
+  return getChecklistBySheet(getActiveSheet());
+}
+
+// Re-export from SheetHelpers to avoid circular dependency
+export function getActiveSheet(): Sheet {
+  return _getActiveSheet();
+}
+
+export function setActiveSheet(sheet: Sheet): void {
+  return _setActiveSheet(sheet);
+}
+// END APP SECTION
+
+export class Checklist extends SheetBase {
     private requestId:string = Date.now().toString()
 
     private constructor(sheet: Sheet) {
@@ -235,13 +238,13 @@ namespace ChecklistApp {
       if (!isEditable) {
         const editableRanges:Range[] = [];
         if (this.hasRow(ROW.QUICK_FILTER)) {
-          editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.QUICK_FILTER));
+          editableRanges.push(this.getUnboundedRowRange(ROW.QUICK_FILTER));
         }
         if (this.hasRow(ROW.SETTINGS)) {
-          editableRanges.push(this.getUnboundedRowRange(ChecklistApp.ROW.SETTINGS));
+          editableRanges.push(this.getUnboundedRowRange(ROW.SETTINGS));
         }
-        if (this.hasColumn(ChecklistApp.COLUMN.CHECK)) {
-          editableRanges.push(this.getUnboundedColumnDataRange(ChecklistApp.COLUMN.CHECK));
+        if (this.hasColumn(COLUMN.CHECK)) {
+          editableRanges.push(this.getUnboundedColumnDataRange(COLUMN.CHECK));
         }
         const protection = this.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
         protection.setUnprotectedRanges(editableRanges);
@@ -250,8 +253,8 @@ namespace ChecklistApp {
       if (changed) this.resetEditingDataValidations();
     }
     
-    get settings(): Settings.ChecklistSettings {
-      return Settings.ChecklistSettings.getSettingsForChecklist(this);
+    get settings(): ChecklistSettings {
+      return ChecklistSettings.getSettingsForChecklist(this);
     }
 
     get isLatest():boolean {
@@ -433,23 +436,23 @@ namespace ChecklistApp {
     }
     
     // Settings section
-    getSetting(setting: Settings.SETTING): string {
+    getSetting(setting: SETTING): string {
       return this.settings.getSetting(setting);
     }
 
-    getSettings(): {[x in Settings.SETTING]: string} {
+    getSettings(): {[x in SETTING]: string} {
       return this.settings.getSettings();
     }
     
-    setSetting(setting: Settings.SETTING, value: string): void {
+    setSetting(setting: SETTING, value: string): void {
       this.settings.setSetting(setting, value);
     }
 
-    setSettings(settings: {[x in Settings.SETTING]: string}):void {
+    setSettings(settings: {[x in SETTING]: string}):void {
       this.settings.setSettings(settings);
     }
     
-    resetSettings(oldSettings:{[x in Settings.SETTING]: string}): void {
+    resetSettings(oldSettings:{[x in SETTING]: string}): void {
       this.setSettings(oldSettings);
     }
     
@@ -543,8 +546,8 @@ namespace ChecklistApp {
       this.resetDataValidation(true);
       timeEnd("dataValidation");
       
-      Status.validateAndGenerateStatusFormulasForChecklist(this);
-      Status.addLinksToPreReqs(this);
+      validateAndGenerateStatusFormulasForChecklist(this);
+      addLinksToPreReqs(this);
 
       time("available rules");
       //Add conditional formatting rules
@@ -1079,15 +1082,14 @@ namespace ChecklistApp {
     // END REPORTING SECTION
     // STATUS SECTION
     public calculateStatusFormulas():void {
-      Status.validateAndGenerateStatusFormulasForChecklist(this);
+      validateAndGenerateStatusFormulasForChecklist(this);
     }
     linkPreReqs(range:Range = this.getColumnDataRange(COLUMN.PRE_REQS)):void {
-      Status.addLinksToPreReqs(this, range.getRow(), range.getLastRow());
+      addLinksToPreReqs(this, range.getRow(), range.getLastRow());
     }
 
     linkMeta() {
       this.meta.updateChecklistLinksAndNotes();
     }
     // END STATUS SECTION
-  }                                        
-}                            
+  }                            
