@@ -16,4 +16,7 @@ export * from './parser-utilities';
 // Re-export nodes
 export * from './nodes';
 
-// Note: Additional exports (parsers, translator) will be added as they are extracted
+// Re-export cell formula parser
+export * from './cell-formula-parser';
+
+// Note: Additional exports (translator) will be added as they are extracted

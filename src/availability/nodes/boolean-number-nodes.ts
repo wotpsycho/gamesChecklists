@@ -21,8 +21,8 @@ import {
 } from '../formula-helpers';
 import * as Formula from '../../Formulas';
 import { STATUS, COLUMN } from '../../ChecklistApp';
-// Imports for dependencies that remain in StatusFormulaTranslator for now
-import { CellFormulaParser } from '../../StatusFormulaTranslator';
+// Import CellFormulaParser from local module (circular dependency resolved at runtime)
+import { CellFormulaParser } from '../cell-formula-parser';
 
 /**
  * Arguments for creating node instances
