@@ -521,6 +521,15 @@ namespace ChecklistMeta {
       }
       return [...children]
     }
+
+    getParentValues(baseSheetColumn:number, value:string):string[] {
+      const column = Object.values(this.columnMetadata).find((columnMeta) => columnMeta.column == baseSheetColumn)
+      const parents = new Set<string>()
+      for (let parent = column.parents[value]; parent; parent = column.parents[parent]) {
+        parents.add(parent)
+      }
+      return [...parents]
+    }
   }
 }
 

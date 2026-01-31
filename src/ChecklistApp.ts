@@ -959,7 +959,8 @@ namespace ChecklistApp {
           const dataValidation = cell.getDataValidation();
           if (dataValidation && dataValidation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST && dataValidation.getCriteriaValues()[0].includes(changedValue)) {
             const childValues = this.meta.getChildValues(column, changedValue);
-            regExp = `(^|\\n)(${childValues.join("|")})(\\n|$)`
+            const parentValues = this.meta.getParentValues(column, changedValue);
+            regExp = `(^|\\n)(${[...childValues,...parentValues].join("|")})(\\n|$)`
           }
           // const filterRange = checklist.getColumnDataRange(column);
           const prettyPrint = Formula.togglePrettyPrint(false);
