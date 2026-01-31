@@ -2,3 +2,4 @@
 .idea
 .clasp*
 node_modules
+build

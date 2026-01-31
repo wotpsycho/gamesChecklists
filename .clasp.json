@@ -1,10 +1,5 @@
 {
     "scriptId":"1nlKR_iBo3Kdk3IdP-QMXtuVb1TRPkzzbn1LD5Xk3P6ajR4jgFnme5oCp",
     "projectId":"wotpsychos-checklists",
-    "rootDir": "./src",
-    "filePushOrder": [
-        "src/util.ts",
-        "src/Formula.ts",
-        "src/SheetBase.ts"
-    ]
+    "rootDir": "./build"
 }
