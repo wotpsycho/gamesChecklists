@@ -56,15 +56,13 @@ function CreateMetaSheet() { return Bundle.CreateMetaSheet(); }
   };
 }
 
-// Push to clasp after build
+// Push to clasp after build (assumes .clasp.json is already configured)
 function claspPush() {
   return {
     name: 'clasp-push',
     writeBundle() {
-      console.log('Pushing to clasp...');
       try {
         execSync('clasp push', { stdio: 'inherit' });
-        console.log('Successfully pushed to clasp');
       } catch (error) {
         console.error('Failed to push to clasp:', error.message);
       }
@@ -72,8 +70,9 @@ function claspPush() {
   };
 }
 
-// Check if --push or -p flag is present
-const shouldPush = process.argv.includes('--push') || process.argv.includes('-p');
+// Check if CLASP_PUSH environment variable is set
+// Note: Using env var instead of CLI flag because rollup rejects unknown flags
+const shouldPush = process.env.CLASP_PUSH === 'true';
 
 export default {
   input: 'src/index.ts',

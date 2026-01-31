@@ -1,13 +1,18 @@
 {
   "name": "games-checklists",
   "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "description": "Google Apps Script checklist with prerequisites",
   "scripts": {
     "build": "rollup -c",
-    "push": "npm run build && clasp push",
+    "push": "npm run build && node scripts/clasp-deploy.js push",
+    "push:all": "npm run build && node scripts/clasp-deploy.js --all",
+    "push:add": "node scripts/clasp-deploy.js add",
+    "push:list": "node scripts/clasp-deploy.js list",
     "watch": "rollup -c -w",
-    "watch:push": "rollup -c -w --push"
+    "watch:push": "node scripts/watch-push.js"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.3",
