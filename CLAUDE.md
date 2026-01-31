@@ -11,8 +11,10 @@
 - **Language**: TypeScript (compiled to Google Apps Script)
 - **Runtime**: Google Apps Script (JavaScript V8)
 - **Platform**: Google Sheets
-- **Build Tool**: clasp (Command Line Apps Script Projects)
-- **Package Manager**: npm/yarn
+- **Module System**: ES6 modules (bundled with Rollup)
+- **Bundler**: Rollup with TypeScript plugin
+- **Deployment**: clasp (Command Line Apps Script Projects) with custom multi-target deployment
+- **Package Manager**: npm
 
 ## Core Concepts
 
@@ -41,7 +43,7 @@ Each checklist is a Google Sheet with the following row types:
 - **AVAILABLE** - Item ready to complete (all pre-reqs met)
 - **PR_NOT_MET** - Prerequisites not yet completed
 - **MISSED** - Item permanently unavailable due to conflicting choice
-- **PR_USED** - Item skipped/not chosen when alternative was selected
+- **PR_USED** - Item skipped/not chosen when alternative was selected, or too many prerequisites have been used by other items
 - **UNKNOWN** - Circular dependency, availability uncertain
 - **ERROR** - Formula calculation error
 
@@ -72,15 +74,17 @@ The status formulas are automatically generated and dynamically update as items 
 
 ## Architecture
 
-### Namespace Organization
+### Module Organization
 
-The codebase uses TypeScript namespaces for organization:
+The codebase uses ES6 modules bundled via Rollup into a single IIFE for Google Apps Script:
 
 - **ChecklistApp** - Core checklist logic and Checklist class
 - **ChecklistMeta** - Metadata sheet management
 - **Settings** - Settings system and UI controls
 - **Status** - Status formula generation and validation
 - **Formula** - Formula building utilities with pretty-printing
+
+Modules are imported in `src/index.ts` and bundled to `build/Code.js` with top-level function declarations for Apps Script compatibility.
 
 ### Key Classes
 
@@ -148,17 +152,30 @@ Settings manager:
 ## File Structure
 
 ```
-/src
-├── appsscript.json          # Apps Script manifest
-├── util.ts                  # Timing utilities
-├── Formulas.ts              # Formula builder with pretty-print
-├── SheetBase.ts             # Base class for sheet operations
-├── ChecklistApp.ts          # Main checklist logic
-├── ChecklistMeta.ts         # Metadata system
-├── ChecklistSettings.ts     # Settings system
-├── StatusFormulaTranslator.ts  # Pre-req formula generation
-├── Triggers.ts              # Event trigger management
-└── Reset.ts                 # Global reset functions
+/
+├── src/
+│   ├── index.ts                    # Entry point, exports all modules
+│   ├── appsscript.json             # Apps Script manifest
+│   ├── util.ts                     # Timing utilities
+│   ├── Formulas.ts                 # Formula builder with pretty-print
+│   ├── SheetBase.ts                # Base class for sheet operations
+│   ├── ChecklistApp.ts             # Main checklist logic
+│   ├── ChecklistMeta.ts            # Metadata system
+│   ├── ChecklistSettings.ts        # Settings system
+│   ├── StatusFormulaTranslator.ts  # Pre-req formula generation
+│   ├── Triggers.ts                 # Event trigger management
+│   └── Reset.ts                    # Global reset functions
+├── scripts/
+│   ├── clasp-deploy.js             # Multi-target deployment tool
+│   └── watch-push.js               # Watch mode with auto-push
+├── build/                          # Generated output (git-ignored)
+│   ├── Code.js                     # Bundled output
+│   └── appsscript.json             # Copied manifest
+├── rollup.config.js                # Rollup bundler configuration
+├── tsconfig.json                   # TypeScript configuration
+├── package.json                    # npm dependencies and scripts
+├── DEPLOYMENT.md                   # Deployment system documentation
+└── CLAUDE.md                       # This file
 ```
 
 ## Key Features
@@ -231,18 +248,48 @@ Unknown: 1
 ## Development Workflow
 
 ### Setup
-1. Install clasp: `npm install -g @google/clasp`
-2. Login: `clasp login`
-3. Clone project: `clasp clone <scriptId>`
-4. Install dependencies: `npm install`
+1. Install dependencies: `npm install`
+2. Install clasp globally: `npm install -g @google/clasp`
+3. Login to clasp: `clasp login`
+4. Configure deployment targets (see Deployment section below)
 
-### Push Changes
+### Build
 ```bash
-clasp push
+npm run build          # Build TypeScript → bundled output
 ```
 
+### Development
+```bash
+npm run watch          # Watch mode, auto-rebuild on changes
+npm run watch:push     # Watch + auto-push to selected target
+```
+
+### Deployment
+
+The project uses a custom multi-target deployment system that allows pushing to multiple Google Sheets from a single codebase.
+
+**Quick start:**
+```bash
+npm run push           # Interactive: select target and push
+npm run push:add       # Add a new deployment target
+npm run push:list      # List all configured targets
+npm run push:all       # Push to all targets
+```
+
+**Configuration:**
+Deployment targets are stored in `.clasp.local.json` (git-ignored). Each target represents a different Google Sheet using this Apps Script code.
+
+**See DEPLOYMENT.md for comprehensive documentation** including:
+- Setting up deployment targets
+- Managing multiple sheets
+- Watch mode with auto-push
+- Troubleshooting
+
 ### Local Development
-Edit TypeScript files in `/src`, then push to update the live script.
+1. Edit TypeScript files in `/src`
+2. Run `npm run build` or `npm run watch` to compile
+3. Use `npm run push` to deploy to your target sheet
+4. Changes appear immediately in the live Google Sheet
 
 ## Common Operations
 
@@ -290,12 +337,11 @@ Event handlers propagate changes through the system (edit -> validation -> forma
 
 ## Known Limitations
 
-- **No ES6 module support** - Apps Script doesn't support import/export statements. This codebase uses TypeScript namespaces as a workaround instead of proper modules. Bundlers like webpack/rollup can be used if module syntax is needed.
-- Google Apps Script execution time limits (6 minutes for triggers)
-- Large checklists (1000+ rows) may be slow to initialize
-- Formula recalculation happens on Google's servers (can lag)
-- Must grant script permissions for full functionality
-- Currently personal project, not production-ready for public use
+- **Apps Script Runtime Constraints** - Google Apps Script has execution time limits (6 minutes for triggers) and doesn't natively support ES6 modules. This project uses Rollup to bundle ES6 modules into an IIFE that Apps Script can execute.
+- **Large Checklists** - Checklists with 1000+ rows may be slow to initialize due to formula generation and conditional formatting
+- **Formula Recalculation** - Formula recalculation happens on Google's servers and can lag for complex dependencies
+- **Permissions** - Users must grant script permissions for full functionality (sheet access, triggers)
+- **Private Project** - Currently a personal project, not production-ready for public use
 
 ## Future Considerations
 
@@ -328,5 +374,5 @@ Event handlers propagate changes through the system (edit -> validation -> forma
 ---
 
 **Status**: Personal project, actively maintained
-**License**: Not specified
+**License**: Currently UNLICENSED (private/proprietary). May be released publicly in the future with an open-source license.
 **Contact**: Via GitHub issues
