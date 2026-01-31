@@ -1,26 +1,29 @@
-/* exported ChecklistApp */
-namespace ChecklistApp {
-  
-  export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
-  export type Range = GoogleAppsScript.Spreadsheet.Range;
-  export type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
-  export type Filter = Omit<GoogleAppsScript.Spreadsheet.Filter,"remove"|"sort">;
-  export type ReadonlyFilter = Pick<Filter, "getRange" | "getColumnFilterCriteria">;
-  export type Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
+import { time, timeEnd } from './util';
+import * as Formula from './Formulas';
+import { setActiveSheet } from './SheetHelpers';
 
-  type column = number|string;
-  type row = number|string;
-  type stringMap = {[x:string]:string};
-  type stringToNumberMap = {[x:string]:number}
-  type columnMap = stringToNumberMap;
-  type rowMap = stringToNumberMap;
-  export type sheetValue = string|number|boolean|undefined|null;
+export type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
+export type Range = GoogleAppsScript.Spreadsheet.Range;
+export type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
+export type Filter = Omit<GoogleAppsScript.Spreadsheet.Filter,"remove"|"sort">;
+export type ReadonlyFilter = Pick<Filter, "getRange" | "getColumnFilterCriteria">;
+export type Spreadsheet = GoogleAppsScript.Spreadsheet.Spreadsheet;
 
-  export class SheetBase {
+type column = number|string;
+type row = number|string;
+type stringMap = {[x:string]:string};
+type stringToNumberMap = {[x:string]:number}
+type columnMap = stringToNumberMap;
+type rowMap = stringToNumberMap;
+export type sheetValue = string|number|boolean|undefined|null;
+
+export class ChecklistSheetError extends Error {}
+
+export class SheetBase {
     readonly sheet:Sheet;
     private readonly namedColumnHeaders:stringMap;
     private readonly namedRowHeaders:stringMap;
-    static readonly ChecklistSheetError = class ChecklistSheetError extends Error{}
+    static readonly ChecklistSheetError = ChecklistSheetError;
 
     constructor(sheet:Sheet,_namedColumnHeaders:stringMap = undefined, _namedRowHeaders:stringMap = undefined) {
       this.sheet = sheet;
@@ -202,7 +205,7 @@ namespace ChecklistApp {
     }
     // UI Section
     activate():void {
-      ChecklistApp.setActiveSheet(this.sheet);
+      setActiveSheet(this.sheet);
     }
 
     toast(message:string, _titleOrSeconds:string|number = undefined, _seconds:number = undefined):void {
@@ -503,4 +506,3 @@ namespace ChecklistApp {
       SpreadsheetApp.flush();
     }
   }
-}

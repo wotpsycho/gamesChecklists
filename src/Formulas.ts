@@ -1,11 +1,8 @@
-/* exported Formula */
-namespace Formula {
-  type Formula<T> = (...value:T[]) => string
-  export type StringFormula = Formula<string>
-  type Range = GoogleAppsScript.Spreadsheet.Range;
-  
-  // Helpers
-  const isNumber = (value: unknown): boolean => {
+type Formula<T> = (...value: T[]) => string;
+export type StringFormula = Formula<string>;
+type Range = GoogleAppsScript.Spreadsheet.Range;
+// Helpers
+const isNumber = (value: unknown): boolean => {
     return typeof value == "number" || Number(value) > 0 || Number(value) < 0 || value === "0";
   };
   const removeDuplicates = <T>(arr:T[]):T[] => arr.filter((val,i) => !arr.includes(val,i+1));
@@ -134,13 +131,13 @@ namespace Formula {
     withArgsShortCircuit(
       PrefixFormula("AND"),
       (...values:string[]):string => {
-        if (values.includes(Formula.VALUE.FALSE)) return Formula.VALUE.FALSE;
+        if (values.includes(VALUE.FALSE)) return VALUE.FALSE;
         if (values.length == 1 && !values[0].match(rangeRegExp)) return values[0];
       }
     ),
     (...args:string[]):string[] => {
-      const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.TRUE);
-      if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.TRUE];
+      const newArgs = removeDuplicates(args).filter(arg => arg != VALUE.TRUE);
+      if (newArgs.length == 0 && args.length > 0) return [VALUE.TRUE];
       return newArgs;
     }
   );
@@ -148,45 +145,45 @@ namespace Formula {
     withArgsShortCircuit(
       PrefixFormula("OR"),
       (...values:string[]):string => {
-        if (values.includes(Formula.VALUE.TRUE)) return Formula.VALUE.TRUE;
+        if (values.includes(VALUE.TRUE)) return VALUE.TRUE;
         if (values.length == 1 && !values[0].match(rangeRegExp)) return values[0];
       }
     ),
     (...args:string[]):string[] => {
-      const newArgs = removeDuplicates(args).filter(arg => arg != Formula.VALUE.FALSE);
-      if (newArgs.length == 0 && args.length > 0) return [Formula.VALUE.FALSE];
+      const newArgs = removeDuplicates(args).filter(arg => arg != VALUE.FALSE);
+      if (newArgs.length == 0 && args.length > 0) return [VALUE.FALSE];
       return newArgs;
     }
   );
   export const NOT:StringFormula = withArgsShortCircuit(
     PrefixFormula("NOT"),
     (value:string):string => {
-      if (value == Formula.VALUE.TRUE) return Formula.VALUE.FALSE;
-      if (value == Formula.VALUE.FALSE) return Formula.VALUE.TRUE;
+      if (value == VALUE.TRUE) return VALUE.FALSE;
+      if (value == VALUE.FALSE) return VALUE.TRUE;
       if (value && value.toString().match(/^NOT\(/)) return value.toString().substring(3); // NOT("NOT(...)") => "(...)"
     }
   );
   export const IF:StringFormula = withArgsShortCircuit(
     PrefixFormula("IF"), 
     (...args:string[]):string => {
-      if (args[0] == Formula.VALUE.TRUE) return args[1];
-      else if (args[0] == Formula.VALUE.FALSE) return args[2];
+      if (args[0] == VALUE.TRUE) return args[1];
+      else if (args[0] == VALUE.FALSE) return args[2];
     }
   );
   export const IFS:StringFormula = withArgsTransform(
     withArgsShortCircuit(
       PrefixFormula("IFS"),
       (...args:string[]):string => {
-        if (args[0] == Formula.VALUE.TRUE) return args[1];
+        if (args[0] == VALUE.TRUE) return args[1];
       }
     ),
     (...args:string[]):string[] => {
       const newArgs = [];
       for (let i = 0; i < args.length; i+=2) {
-        if (args[i] != Formula.VALUE.FALSE) { // Take out any FALSE arguments
+        if (args[i] != VALUE.FALSE) { // Take out any FALSE arguments
           newArgs.push(args[i],args[i+1]);
         }
-        if (args[i] == Formula.VALUE.TRUE)
+        if (args[i] == VALUE.TRUE)
           break; // Short circuit if you reach a TRUE since all further can't be reached
       }
       return newArgs;
@@ -197,66 +194,66 @@ namespace Formula {
   export const EQ:StringFormula = withArgsShortCircuit(
     PrefixFormula("EQ"),
     (...args:string[]):string => {
-      if (args[0] == args[1]) return Formula.VALUE.TRUE;
+      if (args[0] == args[1]) return VALUE.TRUE;
     }
   );
   export const NE:StringFormula = withArgsShortCircuit(
     PrefixFormula("NE"),
     (...args:string[]):string => {
-      if (args[0] == args[1]) return Formula.VALUE.FALSE;
+      if (args[0] == args[1]) return VALUE.FALSE;
     }
   );
   export const GT:StringFormula = withArgsShortCircuit(
     InlineFormula(">"),
     (...args:string[]):string => {
-      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) > Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) > Number(args[1]) ? VALUE.TRUE : VALUE.FALSE;
     }
   );
   export const GTE:StringFormula = withArgsShortCircuit(
     InlineFormula(">="),
     (...args:string[]):string => {
-      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) >= Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) >= Number(args[1]) ? VALUE.TRUE : VALUE.FALSE;
     }
   );
   export const LT:StringFormula = withArgsShortCircuit(
     InlineFormula("<"),
     (...args:string[]):string => {
-      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) < Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) < Number(args[1]) ? VALUE.TRUE : VALUE.FALSE;
     }
   );
   export const LTE:StringFormula = withArgsShortCircuit(
     InlineFormula("<="),
     (...args:string[]):string => {
-      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) <= Number(args[1]) ? Formula.VALUE.TRUE : Formula.VALUE.FALSE;
+      if (isNumber(args[0]) && isNumber(args[1])) return Number(args[0]) <= Number(args[1]) ? VALUE.TRUE : VALUE.FALSE;
     }
   );
   
   export const MULT:StringFormula = withArgsTransform(
     InlineFormula("*"),
     (...args:string[]):string[] => {
-      const newArgs = args.filter(arg => arg != Formula.VALUE.ONE); // Remove 1s
-      if (args.length > 0 && newArgs.length == 0) return [Formula.VALUE.ONE]; // If all 1s, return 1
-      if (newArgs.includes(Formula.VALUE.ZERO)) return [Formula.VALUE.ZERO]; // If has 0, is 0
+      const newArgs = args.filter(arg => arg != VALUE.ONE); // Remove 1s
+      if (args.length > 0 && newArgs.length == 0) return [VALUE.ONE]; // If all 1s, return 1
+      if (newArgs.includes(VALUE.ZERO)) return [VALUE.ZERO]; // If has 0, is 0
       return newArgs;
     }
   );
   export const DIV:StringFormula = withArgsTransform(
     InlineFormula("/"),
     (...args:string[]):string[] => {
-      if (args.length > 0 && args[0] == Formula.VALUE.ZERO) return [Formula.VALUE.ZERO]; // "0 /..."  == 0
-      return args.filter((arg,i) => i == 0 || arg != Formula.VALUE.ONE); // Remove ..."/ 1"
+      if (args.length > 0 && args[0] == VALUE.ZERO) return [VALUE.ZERO]; // "0 /..."  == 0
+      return args.filter((arg,i) => i == 0 || arg != VALUE.ONE); // Remove ..."/ 1"
     }
   );
   export const MINUS:StringFormula = withArgsTransform(
     InlineFormula("-"),
     (...args:string[]):string[] =>
-      args.filter((arg,i) => i == 0 || arg != Formula.VALUE.ZERO) // remove ..."- 0"
+      args.filter((arg,i) => i == 0 || arg != VALUE.ZERO) // remove ..."- 0"
   );
   export const ADD:StringFormula = withArgsTransform(
     InlineFormula("+"),
     (...args:string[]):string[] => {
-      const newArgs = args.filter(arg => arg != Formula.VALUE.ZERO); // Remove 0s
-      if (args.length > 0 && newArgs.length == 0) return [Formula.VALUE.ZERO]; // If all 0s, return 0
+      const newArgs = args.filter(arg => arg != VALUE.ZERO); // Remove 0s
+      if (args.length > 0 && newArgs.length == 0) return [VALUE.ZERO]; // If all 0s, return 0
       return newArgs;
     }
   );
@@ -300,26 +297,27 @@ namespace Formula {
   export const N = PrefixFormula("N");
   export const ROUND = PrefixFormula("ROUND");
   export const ISFORMULA = PrefixFormula("ISFORMULA");
-  export const COMMENT:{
-    BOOLEAN: StringFormula,
-    NUMBER: StringFormula,
-    STRING: StringFormula,
-  } = {
-    BOOLEAN:  (comment:string,...values):string => Formula.AND(Formula.T(Formula.VALUE(comment)),...values),
-    NUMBER:   (comment:string,...values):string => Formula.ADD(Formula.N(Formula.VALUE(comment)),...values),
-    STRING:   (comment:string,...values):string => Formula.CONCAT(Formula.T(Formula.N(Formula.VALUE(comment))),...values),
-  };
+export const COMMENT: {
+  BOOLEAN: StringFormula;
+  NUMBER: StringFormula;
+  STRING: StringFormula;
+} = {
+  BOOLEAN: (comment: string, ...values): string => AND(T(VALUE(comment)), ...values),
+  NUMBER: (comment: string, ...values): string => ADD(N(VALUE(comment)), ...values),
+  STRING: (comment: string, ...values): string => CONCAT(T(N(VALUE(comment))), ...values),
+};
   
-  export const urlToSheet:(sheetId:number, rowOrRange?:Range|number,...a1RestArgs:(number|boolean)[]) => string = (sheetId:number, a1FirstArg?:(Range|number),...a1RestArgs:(number|boolean)[]) => {
-    let link = `#gid=${sheetId}`;
-    if (a1FirstArg || a1RestArgs.length) {
-      link += `&range=${Formula.A1(a1FirstArg,...a1RestArgs).replace(/\$/g,"")}`;
-    }
-    return link;
-  };
-  // HYPERLINK_TO_SHEET_A1([text],[sheetId],[argsForA1]...)
-  export const HYPERLINK_TO_SHEET:(sheetId:number,text:string,rowOrRange?:Range|number,...a1RestArgs:(number|boolean)[]) => string = (sheetId:number, text:string, a1FirstArg?:(Range|number),...a1RestArgs:(number|boolean)[]) => {
-    return Formula.HYPERLINK(Formula.VALUE(Formula.urlToSheet(sheetId,a1FirstArg,...a1RestArgs)),Formula.VALUE(text));
-  };
-  export const FORMULA:StringFormula = (value:string) => "=" + value;
-}
+export const urlToSheet: (sheetId: number, rowOrRange?: Range | number, ...a1RestArgs: (number | boolean)[]) => string = (sheetId: number, a1FirstArg?: (Range | number), ...a1RestArgs: (number | boolean)[]) => {
+  let link = `#gid=${sheetId}`;
+  if (a1FirstArg || a1RestArgs.length) {
+    link += `&range=${A1(a1FirstArg, ...a1RestArgs).replace(/\$/g, "")}`;
+  }
+  return link;
+};
+
+// HYPERLINK_TO_SHEET_A1([text],[sheetId],[argsForA1]...)
+export const HYPERLINK_TO_SHEET: (sheetId: number, text: string, rowOrRange?: Range | number, ...a1RestArgs: (number | boolean)[]) => string = (sheetId: number, text: string, a1FirstArg?: (Range | number), ...a1RestArgs: (number | boolean)[]) => {
+  return HYPERLINK(VALUE(urlToSheet(sheetId, a1FirstArg, ...a1RestArgs)), VALUE(text));
+};
+
+export const FORMULA: StringFormula = (value: string) => "=" + value;

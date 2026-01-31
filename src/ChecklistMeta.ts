@@ -1,32 +1,37 @@
-namespace ChecklistMeta {
-  type ConditionalFormatRuleBuilder = GoogleAppsScript.Spreadsheet.ConditionalFormatRuleBuilder;
-  type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
-  type Range = GoogleAppsScript.Spreadsheet.Range;
+import { time, timeEnd } from './util';
+import * as Formula from './Formulas';
+import { SheetBase } from './SheetBase';
+import type { Checklist } from './ChecklistApp';
+import { getActiveChecklist, getChecklistByMetaSheet, COLUMN, ROW, FINAL_ITEM_TYPE } from './ChecklistApp';
 
-  const PARENT_REGEX = /^PARENT\((.*)\)$/;
-  
-  
-  export function getFromActiveChecklist(_interactive: boolean = false): MetaSheet {
-    return ChecklistMeta.getFromChecklist(ChecklistApp.getActiveChecklist(),_interactive);
+type ConditionalFormatRuleBuilder = GoogleAppsScript.Spreadsheet.ConditionalFormatRuleBuilder;
+type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
+type Range = GoogleAppsScript.Spreadsheet.Range;
+
+const PARENT_REGEX = /^PARENT\((.*)\)$/;
+
+
+export function getFromActiveChecklist(_interactive: boolean = false): MetaSheet {
+  return getFromChecklist(getActiveChecklist(),_interactive);
+}
+
+export function getFromChecklist(checklist: Checklist = getActiveChecklist(), _interactive: boolean = false): MetaSheet {
+  if (!checklist.isChecklist || !checklist.metaSheet) {
+    const checklistFromMeta = getChecklistByMetaSheet(checklist.sheet);
+    if (checklistFromMeta) checklist = checklistFromMeta;
   }
-  
-  export function getFromChecklist(checklist: ChecklistApp.Checklist = ChecklistApp.getActiveChecklist(), _interactive: boolean = false): MetaSheet {
-    if (!checklist.isChecklist || !checklist.metaSheet) {
-      const checklistFromMeta = ChecklistApp.getChecklistByMetaSheet(checklist.sheet);
-      if (checklistFromMeta) checklist = checklistFromMeta;
-    } 
-    if (!checklist.metaSheet && _interactive) {
-      ChecklistMeta.promptMetaSheetCreate(checklist);
-    }
-    return MetaSheet.fromChecklist(checklist);
+  if (!checklist.metaSheet && _interactive) {
+    promptMetaSheetCreate(checklist);
   }
-  
-  export function getFromSheet(sheet: Sheet): MetaSheet {
-    const checklist = ChecklistApp.getChecklistByMetaSheet(sheet);
-    return checklist && checklist.meta;
-  }
-  
-  export function promptMetaSheetCreate(checklist: ChecklistApp.Checklist, title: string = "Meta Sheet Create"): void {
+  return MetaSheet.fromChecklist(checklist);
+}
+
+export function getFromSheet(sheet: Sheet): MetaSheet {
+  const checklist = getChecklistByMetaSheet(sheet);
+  return checklist && checklist.meta;
+}
+
+export function promptMetaSheetCreate(checklist: Checklist, title: string = "Meta Sheet Create"): void {
     const ui = SpreadsheetApp.getUi();
     const defaultMetaSheetName = checklist.name + " Meta";
     const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
@@ -42,33 +47,33 @@ namespace ChecklistMeta {
       checklist.createMetaSheet(metaSheetName);
     }
   }
-  
-  
-  type columnMetadata = {
-    column: number;
-    range: Range;
-    metaColumn: number;
-    formatHeaders: string[];
-    metaValues:string[];
-    metaValueCells: {
-      [x:string]: Range,
-    };
-    metaValueLinks: {[x:string]: {[x:string]: string}};
-    metaValueNotes: {[x:string]: string};
-    lastMetaRow: number;
-    missingValues: {[x:string]:true};
-    parents: {[x:string]:string};
-    metaRange: Range;
+
+
+type columnMetadata = {
+  column: number;
+  range: Range;
+  metaColumn: number;
+  formatHeaders: string[];
+  metaValues:string[];
+  metaValueCells: {
+    [x:string]: Range,
   };
-  
-  export class MetaSheet extends ChecklistApp.SheetBase {
-    readonly checklist: ChecklistApp.Checklist
-    private constructor(checklist: ChecklistApp.Checklist) {
+  metaValueLinks: {[x:string]: {[x:string]: string}};
+  metaValueNotes: {[x:string]: string};
+  lastMetaRow: number;
+  missingValues: {[x:string]:true};
+  parents: {[x:string]:string};
+  metaRange: Range;
+};
+
+export class MetaSheet extends SheetBase {
+  readonly checklist: Checklist
+  private constructor(checklist: Checklist) {
       super(checklist.metaSheet);
       this.checklist = checklist;
     }
     private static readonly metaSheets: {[x:string]: MetaSheet} = {}
-    static fromChecklist(checklist: ChecklistApp.Checklist): MetaSheet {
+    static fromChecklist(checklist: Checklist): MetaSheet {
       if (checklist && checklist.isChecklist && checklist.metaSheet) {
         const key = `${checklist.id}:${checklist.metaSheet.getSheetId}`;
         if (!this.metaSheets[key]) {
@@ -173,7 +178,7 @@ namespace ChecklistMeta {
         const missingValues = {};
         Object.entries(this.checklist.columnsByHeader).filter(([checklistColumnName,checklistColumn]) => {
           const metadata = this.columnMetadata[checklistColumnName]; 
-          return checklistColumn != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM) && metadata && metadata.metaColumn && metadata.metaValueCells;
+          return checklistColumn != this.checklist.toColumnIndex(COLUMN.ITEM) && metadata && metadata.metaColumn && metadata.metaValueCells;
         }).forEach(([checklistColumnName, checklistColumn]) => {
           const columnMissingValues: {[x:string]:true} = {};
           const metadata = this.columnMetadata[checklistColumnName];
@@ -229,10 +234,10 @@ namespace ChecklistMeta {
     getColumnDataValidations(): {[x:string]: GoogleAppsScript.Spreadsheet.DataValidation} {
       const validations = {};
       Object.entries(this.columnMetadata).forEach( ([columnName,metadata]) => {
-        if (metadata.metaValueCells && metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
+        if (metadata.metaValueCells && metadata.range && metadata.column != this.checklist.toColumnIndex(COLUMN.ITEM)) {
           const valueChoices = Object.keys(metadata.metaValueCells);
-          if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !valueChoices.includes(ChecklistApp.FINAL_ITEM_TYPE)) {
-            valueChoices.push(ChecklistApp.FINAL_ITEM_TYPE);
+          if (metadata.column == this.checklist.toColumnIndex(COLUMN.TYPE) && !valueChoices.includes(FINAL_ITEM_TYPE)) {
+            valueChoices.push(FINAL_ITEM_TYPE);
           }
           const rangeValidation = SpreadsheetApp
             .newDataValidation()
@@ -252,7 +257,7 @@ namespace ChecklistMeta {
       const filter = this.checklist.filter;
       if (filter) this.checklist.removeFilter();
       
-      const quickFilterRange = this.checklist.hasRow(ChecklistApp.ROW.QUICK_FILTER) && this.checklist.getRowRange(ChecklistApp.ROW.QUICK_FILTER);
+      const quickFilterRange = this.checklist.hasRow(ROW.QUICK_FILTER) && this.checklist.getRowRange(ROW.QUICK_FILTER);
       Object.entries(this.columnMetadata).forEach(([columnName,metadata]) => {
         if (columnValidations[columnName]){
           const rangeValidation = columnValidations[columnName];
@@ -362,11 +367,11 @@ namespace ChecklistMeta {
                     primaryConditionalFormatRulesByColumn[metadata.metaColumn].push(ruleBuilder.setRanges([metadata.range]).build());
                   }
                 });
-            if (metadata.column == this.checklist.toColumnIndex(ChecklistApp.COLUMN.TYPE) && !metadata.metaValueCells[ChecklistApp.FINAL_ITEM_TYPE]) {
+            if (metadata.column == this.checklist.toColumnIndex(COLUMN.TYPE) && !metadata.metaValueCells[FINAL_ITEM_TYPE]) {
               // Default for FINAL_ITEM_TYPE
               // TODO extract to a "Default styles"
               newConditionalFormatRulesByColumn[metadata.metaColumn].push(SpreadsheetApp.newConditionalFormatRule()
-                .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`(^|\\n)${ChecklistApp.FINAL_ITEM_TYPE}`))))
+                .whenFormulaSatisfied(FORMULA(REGEXMATCH(relativeCell,VALUE(`(^|\\n)${FINAL_ITEM_TYPE}`))))
                 .setBackground("#0000FF")
                 .setFontColor("#FFFFFF")
                 .setBold(true)
@@ -398,7 +403,7 @@ namespace ChecklistMeta {
       const postProcess:(()=>void)[] = [];
       Object.values(this.columnMetadata).forEach((metadata) => {
         metadata.range.setTextStyle(SpreadsheetApp.newTextStyle().setUnderline(false).build());
-        if (metadata.range && metadata.column != this.checklist.toColumnIndex(ChecklistApp.COLUMN.ITEM)) {
+        if (metadata.range && metadata.column != this.checklist.toColumnIndex(COLUMN.ITEM)) {
           const values = metadata.range.getValues().map(rowValues => rowValues[0]);
           const richTexts = new Array(values.length);
           const rangeNotes = new Array(values.length);
@@ -531,15 +536,12 @@ namespace ChecklistMeta {
       return [...parents]
     }
   }
-}
 
-/* exported ProcessMeta */
-function ProcessMeta(): void {
-  const meta = ChecklistMeta.getFromActiveChecklist(true);
+export function ProcessMeta(): void {
+  const meta = getFromActiveChecklist(true);
   meta && meta.syncWithChecklist();
 }
 
-/* exported CreateMetaSheet */
-function CreateMetaSheet(): void {
-  ChecklistMeta.promptMetaSheetCreate(ChecklistApp.getActiveChecklist());
+export function CreateMetaSheet(): void {
+  promptMetaSheetCreate(getActiveChecklist());
 }

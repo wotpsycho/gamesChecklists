@@ -1,24 +1,18 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const {time,timeEnd} = (function(){
-  
-  function _timeHelper(callerName : string, timeFunction: (label:string)=>void, labels: unknown[]): void {
-    callerName || (callerName = "[unknown]");
-    const timeLabels = [];
-    if (labels.length == 0 || labels[labels.length-1] === true) {
-      labels.pop();
-      timeLabels.push(callerName);
-    }
-    timeLabels.push(...labels.map(label => `${callerName} ${label}`));
-    timeLabels.forEach(label => timeFunction.call(console, label));
+function _timeHelper(timeFunction: (label: string) => void, labels: unknown[]): void {
+  const timeLabels = [];
+  // If last argument is true, it was used as a flag in old code - just remove it
+  if (labels.length > 0 && labels[labels.length - 1] === true) {
+    labels.pop();
   }
-  function time(...labels: unknown[]): void {
-    const callerName = time.caller && time.caller.name;
-    return _timeHelper(callerName, console.time, labels.flat());
-  }
+  // Flatten and use labels directly (no caller name since .caller doesn't work in strict mode)
+  const flatLabels = labels.flat().filter(label => label !== undefined && label !== null);
+  flatLabels.forEach(label => timeFunction.call(console, String(label)));
+}
 
-  function timeEnd(...labels: unknown[]): void {
-    const callerName = timeEnd.caller && timeEnd.caller.name;
-    return _timeHelper(callerName, console.timeEnd, labels.flat());
-  }
-  return {time,timeEnd};
-})();
+export function time(...labels: unknown[]): void {
+  return _timeHelper(console.time, labels);
+}
+
+export function timeEnd(...labels: unknown[]): void {
+  return _timeHelper(console.timeEnd, labels);
+}

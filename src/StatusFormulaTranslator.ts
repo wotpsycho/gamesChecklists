@@ -1,19 +1,17 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-namespace Status {
-  type Range = GoogleAppsScript.Spreadsheet.Range;
-  type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
-  type Checklist = ChecklistApp.Checklist;
-  type column = ChecklistApp.column;
-  type row = ChecklistApp.dataRow;
-  type FormulaHelper = Formula.StringFormula & {
-    identify: (text:string) => boolean;
-    parseOperands: (text:string) => string[];
-    generateFormula: (...value: string[]) => string;
-  };
-  type STATUS = ChecklistApp.STATUS;
+import { time, timeEnd } from './util';
+import * as Formula from './Formulas';
+import type { Checklist } from './ChecklistApp';
+import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from './ChecklistApp';
 
-  const STATUS = ChecklistApp.STATUS;
-  const COLUMN = ChecklistApp.COLUMN;
+type Range = GoogleAppsScript.Spreadsheet.Range;
+type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;
+type column = number | string;
+type row = number;
+type FormulaHelper = Formula.StringFormula & {
+  identify: (text:string) => boolean;
+  parseOperands: (text:string) => string[];
+  generateFormula: (...value: string[]) => string;
+};
 
   const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
   const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
@@ -135,23 +133,23 @@ Example: Item "Yes" and Item "No" both have Pre-Req "OPTION Yes or No?"
 NOTE: CHOICE is a deprecated alias for OPTION`
   };
 
-  export function getActiveChecklistTranslator(): StatusFormulaTranslator {
-    return getTranslatorForChecklist(ChecklistApp.getActiveChecklist());
-  }
+export function getActiveChecklistTranslator(): StatusFormulaTranslator {
+  return getTranslatorForChecklist(getActiveChecklist());
+}
 
-  export function getTranslatorForChecklist(checklist: Checklist = ChecklistApp.getActiveChecklist()): StatusFormulaTranslator {
-    return StatusFormulaTranslator.fromChecklist(checklist);
-  }
+export function getTranslatorForChecklist(checklist: Checklist = getActiveChecklist()): StatusFormulaTranslator {
+  return StatusFormulaTranslator.fromChecklist(checklist);
+}
 
-  export function validateAndGenerateStatusFormulasForChecklist(checklist:Checklist = ChecklistApp.getActiveChecklist()): void {
-    StatusFormulaTranslator.fromChecklist(checklist).validateAndGenerateStatusFormulas();
-  }
+export function validateAndGenerateStatusFormulasForChecklist(checklist:Checklist = getActiveChecklist()): void {
+  StatusFormulaTranslator.fromChecklist(checklist).validateAndGenerateStatusFormulas();
+}
 
-  export function addLinksToPreReqs(checklist:Checklist = ChecklistApp.getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
-    StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow,endRow);
-  }
-  
-  enum PHASE {
+export function addLinksToPreReqs(checklist:Checklist = getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
+  StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow,endRow);
+}
+
+enum PHASE {
     BUILDING = "BUILDING",
     FINALIZING = "FINALIZING",
     FINALIZED = "FINALIZED",
@@ -369,7 +367,7 @@ NOTE: CHOICE is a deprecated alias for OPTION`
         timeEnd("setFormulasIndividual");
 
         time("determineUnderlineRows");
-        const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[ChecklistApp.FINAL_ITEM_TYPE];
+        const finalItems = this.getColumnValues(COLUMN.TYPE).byValue[FINAL_ITEM_TYPE];
         if (finalItems) {
           const dependendentRows = new Set<number>();
           finalItems.forEach(finalItem => {
@@ -2604,4 +2602,3 @@ NOTE: CHOICE is a deprecated alias for OPTION`
       return new Set();
     }
   }
-}

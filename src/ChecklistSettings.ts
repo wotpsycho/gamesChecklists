@@ -1,8 +1,13 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-namespace Settings {
-  type row = ChecklistApp.row;
-  type column = ChecklistApp.column;
-  export enum SETTING  {
+import { time, timeEnd } from './util';
+import * as Formula from './Formulas';
+import type { Checklist } from './ChecklistApp';
+import { STATUS, ROW, COLUMN, getActiveChecklist } from './ChecklistApp';
+import * as ChecklistMeta from './ChecklistMeta';
+
+type row = number | string;
+type column = number | string;
+
+export enum SETTING  {
     // MODE        = "Mode",
     STATUS      = "View",
     NOTES       = "Notes",
@@ -130,19 +135,19 @@ namespace Settings {
 
   const SETTING_REGEX = /^ *(.+) *: *(.+?)(\*)? *$/;
 
-  class ChecklistSettingsError extends Error {}
+class ChecklistSettingsError extends Error {}
 
-  // const checklistSettings: {[x:number]:ChecklistSettings} = {};
+// const checklistSettings: {[x:number]:ChecklistSettings} = {};
 
-  export class ChecklistSettings {
-    readonly checklist: ChecklistApp.Checklist;
-    private constructor(checklist: ChecklistApp.Checklist) {
+export class ChecklistSettings {
+  readonly checklist: Checklist;
+    private constructor(checklist: Checklist) {
       this.checklist = checklist;
     }
 
     private static readonly checklistSettings: {[x:number]:ChecklistSettings} = {}
 
-    static getSettingsForChecklist(checklist = ChecklistApp.getActiveChecklist()): ChecklistSettings {
+    static getSettingsForChecklist(checklist = getActiveChecklist()): ChecklistSettings {
       if (!this.checklistSettings[checklist.id]) {
         this.checklistSettings[checklist.id] = new ChecklistSettings(checklist);
       }
@@ -150,10 +155,10 @@ namespace Settings {
     }
 
     static getSettingsForActiveChecklist(): ChecklistSettings {
-      return ChecklistSettings.getSettingsForChecklist(ChecklistApp.getActiveChecklist());
+      return ChecklistSettings.getSettingsForChecklist(getActiveChecklist());
     }
 
-    static handleChange(checklist: ChecklistApp.Checklist,event: GoogleAppsScript.Events.SheetsOnEdit): void {
+    static handleChange(checklist: Checklist,event: GoogleAppsScript.Events.SheetsOnEdit): void {
       const settings = this.getSettingsForChecklist(checklist);
       settings.handleChange(event);
     }
@@ -215,9 +220,9 @@ namespace Settings {
         const settings = {
           // [SETTING.MODE]        : new ModeSetting(this),
           [SETTING.STATUS]      : new StatusColumnFilterSetting(this),
-          [SETTING.NOTES]       : new ColumnVisibilitySetting(this,SETTING.NOTES,ChecklistApp.COLUMN.NOTES,SETTING_OPTIONS[SETTING.NOTES].SHOW,SETTING_OPTIONS[SETTING.NOTES].HIDE),
+          [SETTING.NOTES]       : new ColumnVisibilitySetting(this,SETTING.NOTES,COLUMN.NOTES,SETTING_OPTIONS[SETTING.NOTES].SHOW,SETTING_OPTIONS[SETTING.NOTES].HIDE),
           [SETTING.PRE_REQS]    : new PreReqsVisibilitySetting(this,),
-          [SETTING.BLANKS]      : new ColumnFilterSetting(this,SETTING.BLANKS,ChecklistApp.COLUMN.ITEM,{
+          [SETTING.BLANKS]      : new ColumnFilterSetting(this,SETTING.BLANKS,COLUMN.ITEM,{
             [SETTING_OPTIONS[SETTING.BLANKS].SHOW]: [],
             [SETTING_OPTIONS[SETTING.BLANKS].HIDE]: [""],
           }),
@@ -231,7 +236,7 @@ namespace Settings {
     }
 
     private get row(): row {
-      return ChecklistApp.ROW.SETTINGS;
+      return ROW.SETTINGS;
     }
 
     private _getChecklistSetting(setting:SETTING) {
@@ -302,9 +307,9 @@ namespace Settings {
       return this.__rowSettings;
     }
   }
-  const {STATUS,ROW,COLUMN} = ChecklistApp;
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-  class ChecklistSetting {
+
+// eslint-disable-next-line @typescript-eslint/no-this-alias
+class ChecklistSetting {
     readonly setting: SETTING;
     protected readonly _options: {[x:string]: SettingOption};
     private readonly _initialValue: string;
@@ -712,5 +717,3 @@ namespace Settings {
       timeEnd("toggleQuickFilter");
     }
   }
-        
-}
