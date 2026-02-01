@@ -11,6 +11,15 @@ export type RowCounts = {
 };
 
 /**
+ * Arguments for creating formula nodes
+ */
+export type NodeArgs = {
+  text: string;
+  translator: IStatusFormulaTranslator;
+  row: row;
+};
+
+/**
  * Interface for StatusFormulaTranslator that nodes depend on.
  * This interface breaks circular dependencies by allowing nodes to depend
  * on this interface rather than the concrete StatusFormulaTranslator class.

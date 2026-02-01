@@ -1,5 +1,5 @@
 import type { row, column, FormulaHelper } from '../types';
-import type { IStatusFormulaTranslator, RowCounts } from '../interfaces';
+import type { IStatusFormulaTranslator, RowCounts, NodeArgs } from '../interfaces';
 import { Node, FormulaNode } from './base-nodes';
 import { PHASE, USAGES, SPECIAL_PREFIXES } from '../constants';
 import {
@@ -23,15 +23,6 @@ import * as Formula from '../../Formulas';
 import { STATUS, COLUMN } from '../../ChecklistApp';
 // Import CellFormulaParser from local module (circular dependency resolved at runtime)
 import { CellFormulaParser } from '../cell-formula-parser';
-
-/**
- * Arguments for creating node instances
- */
-export type NodeArgs = {
-  text: string;
-  translator: IStatusFormulaTranslator;
-  row: row;
-};
 
 /**
  * Interface for number nodes with min/max value computation

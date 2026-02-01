@@ -18,19 +18,20 @@ import {
 } from './nodes';
 import { OR, AND, VALUE, IFS, IF } from './formula-helpers';
 
-// Import StatusFormulaTranslator type and specialized node classes
-// Note: These imports create a circular dependency that will be resolved when these classes are extracted
+// Import StatusFormulaTranslator type
 import type { StatusFormulaTranslator } from '../StatusFormulaTranslator';
+
+// Import specialized node classes from nodes module
 import {
   RootNode,
+  CheckedRootNode,
+  LinkedFormulaNode,
   UsesFormulaNode,
   MissedFormulaNode,
   OptionalFormulaNode,
   BlocksUntilFormulaNode,
   BlockedUntilFormulaNode,
-  CheckedRootNode,
-  LinkedFormulaNode,
-} from '../StatusFormulaTranslator';
+} from './nodes';
 
 /**
  * CellFormulaParser parses prerequisite text and creates formula node trees
