@@ -5,16 +5,16 @@ import { OR, AND, NOT, IF, VALUE, MINUS, ADD, getNumItemInfo } from '../formula-
 import * as Formula from '../../Formulas';
 import { time, timeEnd } from '../../util';
 import { FormulaNode } from './base-nodes';
-import { BooleanFormulaNode, BooleanFormulaValueNode, FormulaValueNode, virtualItems } from './boolean-number-nodes';
+import { BooleanFormulaNode, BooleanFormulaValueNode, FormulaValueNode } from './boolean-number-nodes';
 import { CellFormulaParser } from '../cell-formula-parser';
+// Import shared types and registries
+import type { BlocksArgs, BlockedArgs, useInfo } from './shared';
+import { virtualItems, usesInfo } from './shared';
 
 /**
  * UsesFormulaNode - Tracks consumable items that can be used multiple times
  * Example: "USES 3x Potion" - requires 3 potions, tracking total usage across rows
  */
-type useInfo = RowCounts
-type usesInfo = {[x:string]: useInfo}
-const usesInfo:usesInfo = {}; // TODO make checklist-aware?
 export class UsesFormulaNode extends BooleanFormulaValueNode {
   static create({ text, translator, row }: NodeArgs) {
     return new UsesFormulaNode(text,translator,row);
@@ -133,13 +133,6 @@ export class OptionalFormulaNode extends FormulaNode<boolean> {
 }
 
 const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
-export type BlocksArgs = {
-  text?:string,
-  blocksText?: string,
-  untilText?: string,
-  translator: IStatusFormulaTranslator;
-  row: row,
-};
 
 /**
  * BlocksUntilFormulaNode - Blocks other items from becoming available until a condition is met
@@ -231,15 +224,6 @@ export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
     }
   }
 }
-
-export type BlockedArgs = {
-  text?: string,
-  blockedText?: string,
-  untilText?: string,
-  translator: IStatusFormulaTranslator;
-  row: row,
-  calculated?:boolean,
-};
 
 /**
  * BlockedUntilFormulaNode - Item is blocked until a condition is met

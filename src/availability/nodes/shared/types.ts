@@ -1,14 +1,15 @@
 import type { row, column } from '../../types';
-import type { RowCounts } from '../../interfaces';
+import type { RowCounts, IStatusFormulaTranslator } from '../../interfaces';
 
 /**
  * Information about a virtual item created by special node types
+ * Virtual items require rowCounts and can override numNeeded and numPossible
+ * e.g., Virtual Choice has a numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
  */
 export type virtualValueInfo = {
-  column: column;
-  item: string;
-  count: number;
-  num?: number;
+  rowCounts: RowCounts;
+  numPossible?: number;
+  numNeeded?: number;
 };
 
 /**
@@ -25,18 +26,21 @@ export type UsesInfoRegistry = { [x: string]: useInfo };
  * Arguments for BLOCKS_UNTIL node creation
  */
 export type BlocksArgs = {
-  text: string;
-  item: string;
+  text?: string;
+  blocksText?: string;
+  untilText?: string;
+  translator: IStatusFormulaTranslator;
   row: row;
-  isBlocking: boolean;
 };
 
 /**
  * Arguments for BLOCKED_UNTIL node creation
  */
 export type BlockedArgs = {
-  text: string;
-  item: string;
+  text?: string;
+  blockedText?: string;
+  untilText?: string;
+  translator: IStatusFormulaTranslator;
   row: row;
-  isBlocked: boolean;
+  calculated?: boolean;
 };

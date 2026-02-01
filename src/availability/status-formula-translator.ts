@@ -45,7 +45,7 @@ import {
 } from './parser-utilities';
 
 // Import node classes
-import { Node, FormulaNode } from './nodes/base-nodes';
+import { Node, FormulaNode, virtualItems } from './nodes';
 import {
   BooleanFormulaNode,
   ComparisonFormulaNode,
@@ -56,7 +56,6 @@ import {
   ValueNode,
   OptionFormulaNode,
   SameFormulaNode,
-  virtualItems,
 } from './nodes/boolean-number-nodes';
 import {
   RootNode,

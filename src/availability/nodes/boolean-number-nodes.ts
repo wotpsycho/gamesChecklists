@@ -23,16 +23,9 @@ import * as Formula from '../../Formulas';
 import { STATUS, COLUMN } from '../../ChecklistApp';
 // Import CellFormulaParser from local module (circular dependency resolved at runtime)
 import { CellFormulaParser } from '../cell-formula-parser';
-
-/**
- * Interface for number nodes with min/max value computation
- */
-export interface NumberNode extends FormulaNode<number> {
-  getMinValue: () => number;
-  getMaxValue: () => number;
-  toFormulaByStatus: (...status: string[]) => string;
-  toFormulaByNotStatus: (...status: string[]) => string;
-}
+// Import shared types and interfaces
+import type { NumberNode, virtualValueInfo } from './shared';
+import { virtualItems, ValueNodeTypes } from './shared';
 
 /**
  * Boolean formula node handling boolean operators (AND, OR, NOT)
@@ -777,32 +770,6 @@ export class NumberFormulaValueNode extends FormulaValueNode<number> implements 
     }
     return hasError;
   }
-}
-
-/**
- * Virtual value information for items that don't exist in the sheet
- * (e.g., OPTION items for virtual choices)
- */
-export type virtualValueInfo = {
-  rowCounts: RowCounts;
-  numPossible?: number;
-  numNeeded?: number;
-};
-
-/**
- * Global registry of virtual items
- * Virtual items require rowCounts and can override numNeeded and numPossible
- * e.g., Virtual Choice has a numNeeded of 1, and rowCounts of {[optionRow]:1} for each OPTION
- */
-export const virtualItems: { [x: string]: virtualValueInfo } = {};
-
-/**
- * Types of value node syntax
- */
-enum ValueNodeTypes {
-  WITH = 'WITH',
-  WITHOUT = 'WITHOUT',
-  VALUE = 'VALUE',
 }
 
 /**

@@ -1,4 +1,8 @@
+// Re-export shared types, interfaces, and registries
+export * from './shared';
+
 // Re-export base node classes
+export * from './base';
 export * from './base-nodes';
 
 // Re-export boolean, number, and value formula nodes
