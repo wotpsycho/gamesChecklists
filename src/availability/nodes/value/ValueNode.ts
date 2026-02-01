@@ -2,6 +2,7 @@ import type { IStatusFormulaTranslator, NodeArgs, RowCounts } from "../../interf
 import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
 import { PHASE } from "../../constants";
+import { parenRegExp, parentheticalMapping, quoteMapping, quoteRegExp } from "../../utilities";
 import { Node } from "../base";
 import { ValueNodeTypes, virtualItems } from "../shared";
 
@@ -18,7 +19,18 @@ const ValueNodeTypeRegExps: { [x in ValueNodeTypes]: RegExp } = {
  * Unescapes column/id values by removing quotes
  */
 const unescapeValue = (text: string): string => {
-  return text?.replace(/^'(.*)'$/, "$1");
+  if (typeof quoteMapping[text] == "string") {
+    return quoteMapping[text];
+  }
+  let match: RegExpExecArray;
+  while ((match = parenRegExp.exec(text))) {
+    text = text.replace(match[0], `(${parentheticalMapping[match[0]]})`);
+  }
+  while ((match = quoteRegExp.exec(text))) {
+    const content = quoteMapping[match[0]];
+    text = text.replace(match[0], content === "" ? content : `"${content}"`);
+  }
+  return text?.trim();
 };
 
 /**
@@ -187,6 +199,16 @@ export class ValueNode extends Node {
         `There are not any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}" (WITHOUT is unnecessary)`,
       );
       return true;
+    }
+  }
+
+  getDirectPreReqInfos() {
+    if (this.children.length) {
+      return super.getDirectPreReqInfos();
+    } else {
+      return {
+        [this.toString()]: this.rows,
+      };
     }
   }
 }
