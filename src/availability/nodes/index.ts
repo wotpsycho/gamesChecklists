@@ -24,9 +24,3 @@ export * from './root';
 
 // Re-export blocking nodes
 export * from './blocking';
-
-// Keep these for backward compatibility - they now re-export from the new structure
-export * from './base-nodes';
-export * from './boolean-number-nodes';
-export * from './root-nodes';
-export * from './specialized-nodes';

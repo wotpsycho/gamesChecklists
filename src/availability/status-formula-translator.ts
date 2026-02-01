@@ -44,9 +44,11 @@ import {
   PREFIX_REG_EXP,
 } from './parser-utilities';
 
-// Import node classes
-import { Node, FormulaNode, virtualItems } from './nodes';
+// Import node classes - all from the organized nodes module
 import {
+  Node,
+  FormulaNode,
+  virtualItems,
   BooleanFormulaNode,
   ComparisonFormulaNode,
   NumberFormulaNode,
@@ -56,20 +58,16 @@ import {
   ValueNode,
   OptionFormulaNode,
   SameFormulaNode,
-} from './nodes/boolean-number-nodes';
-import {
   RootNode,
   CheckedRootNode,
   LinkedFormulaNode,
-} from './nodes/root-nodes';
-import {
   UsesFormulaNode,
   MissedFormulaNode,
   OptionalFormulaNode,
   BlocksUntilFormulaNode,
   BlockedUntilFormulaNode,
   GeneratedBlockedUntilFormulaNode,
-} from './nodes/specialized-nodes';
+} from './nodes';
 
 // Import cell formula parser
 import { CellFormulaParser } from './cell-formula-parser';
