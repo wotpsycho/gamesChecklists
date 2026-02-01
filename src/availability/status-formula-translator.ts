@@ -1,7 +1,7 @@
-import { time, timeEnd } from './util';
-import * as Formula from './Formulas';
-import type { Checklist } from './ChecklistApp';
-import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from './ChecklistApp';
+import { time, timeEnd } from '../util';
+import * as Formula from '../Formulas';
+import type { Checklist } from '../ChecklistApp';
+import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from '../ChecklistApp';
 import {
   type Range,
   type RichTextValue,
@@ -67,19 +67,15 @@ import {
   type BlocksArgs,
   type BlockedArgs,
   getNumItemInfo,
-  getActiveChecklistTranslator,
-  getTranslatorForChecklist,
-  validateAndGenerateStatusFormulasForChecklist,
-  addLinksToPreReqs,
-} from './availability';
+} from './index';
 
-// Re-export for backwards compatibility
+// Re-export translator helpers for backwards compatibility
 export {
   getActiveChecklistTranslator,
   getTranslatorForChecklist,
   validateAndGenerateStatusFormulasForChecklist,
   addLinksToPreReqs,
-};
+} from './translator-helpers';
 
 export class StatusFormulaTranslator implements IStatusFormulaTranslator {
     readonly checklist: Checklist;
