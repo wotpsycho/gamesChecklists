@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import fs from 'fs/promises';
-import { exportChecklist, importChecklist, validateChecklist } from './checklist.js';
-import { addSpreadsheet, listSpreadsheets, removeSpreadsheet, resolveSpreadsheet } from './config.js';
+import { exportChecklist, importChecklist, validateChecklist, createChecklist } from './checklist.js';
+import { addSpreadsheet, listSpreadsheets, removeSpreadsheet, resolveSpreadsheet, getSpreadsheet } from './config.js';
+import { getSheetMetadata } from './sheets.js';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -245,6 +246,76 @@ async function removeSheetCommand(options) {
   }
 }
 
+async function createChecklistCommand(options) {
+  const { spreadsheet, name, template } = options;
+
+  if (!spreadsheet) {
+    console.error('Error: --spreadsheet name is required');
+    process.exit(1);
+  }
+
+  if (!name) {
+    console.error('Error: --name is required (name for the new checklist)');
+    process.exit(1);
+  }
+
+  try {
+    // Get spreadsheet config
+    const entry = await getSpreadsheet(spreadsheet, true);
+
+    if (entry.sheets.length === 0) {
+      console.error(`❌ No checklist sheets found in spreadsheet "${spreadsheet}"`);
+      console.error('   Make sure the spreadsheet has at least one checklist with a ✓ column');
+      process.exit(1);
+    }
+
+    // Determine template to use
+    let templateSheet;
+    if (template) {
+      templateSheet = entry.sheets.find(s => s.name === template);
+      if (!templateSheet) {
+        console.error(`❌ Template sheet "${template}" not found`);
+        console.error(`   Available sheets: ${entry.sheets.map(s => s.name).join(', ')}`);
+        process.exit(1);
+      }
+    } else {
+      // Use first sheet as template
+      templateSheet = entry.sheets[0];
+      console.log(`ℹ️  No template specified, using "${templateSheet.name}"`);
+    }
+
+    if (!templateSheet.metaSheet) {
+      console.error(`❌ Template sheet "${templateSheet.name}" does not have an associated meta sheet`);
+      console.error('   Create a meta sheet for the template first');
+      process.exit(1);
+    }
+
+    // Get full spreadsheet metadata to find meta sheet ID and current index
+    const metadata = await getSheetMetadata(entry.id);
+    const metaSheetInfo = metadata.sheets.find(s => s.properties.title === templateSheet.metaSheet);
+
+    if (!metaSheetInfo) {
+      console.error(`❌ Meta sheet "${templateSheet.metaSheet}" not found in spreadsheet`);
+      process.exit(1);
+    }
+
+    // Create the checklist - use the meta sheet's ACTUAL current index
+    await createChecklist(entry.id, name, templateSheet, {
+      sheetId: metaSheetInfo.properties.sheetId,
+      index: metaSheetInfo.properties.index,
+    });
+
+    console.log(`\n🎉 New checklist ready to use!`);
+    console.log(`   Open: https://docs.google.com/spreadsheets/d/${entry.id}`);
+  } catch (error) {
+    console.error('❌ Failed to create checklist:', error.message);
+    if (error.stack) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
+}
+
 function printHelp() {
   console.log(`
 Games Checklists - Sheets CLI Tool
@@ -253,12 +324,13 @@ Usage:
   node cli.js <command> [options]
 
 Commands:
-  export       Export checklist data from a Google Sheet
-  import       Import checklist data into a Google Sheet
-  validate     Validate a checklist JSON file
-  add-sheet    Add a spreadsheet to config (with short name)
-  list-sheets  List all configured spreadsheets
-  remove-sheet Remove a spreadsheet from config
+  export            Export checklist data from a Google Sheet
+  import            Import checklist data into a Google Sheet
+  validate          Validate a checklist JSON file
+  create-checklist  Create a new checklist by copying a template
+  add-sheet         Add a spreadsheet to config (with short name)
+  list-sheets       List all configured spreadsheets
+  remove-sheet      Remove a spreadsheet from config
 
 Export Options:
   --spreadsheet <name>  Short name from config (recommended)
@@ -276,6 +348,11 @@ Import Options:
 Validate Options:
   --input <file>        Input JSON file to validate (required)
 
+Create Checklist Options:
+  --spreadsheet <name>  Short name from config (required)
+  --name <name>         Name for the new checklist (required)
+  --template <name>     Template checklist to copy from (optional, uses first sheet)
+
 Config Options:
   add-sheet:
     --name <name>       Short name for the spreadsheet
@@ -286,19 +363,25 @@ Config Options:
 
 Examples:
   # Add a spreadsheet to config
-  node cli.js add-sheet --name ni-no-kuni --sheet-id 1AbC...XyZ
+  node cli.js add-sheet --name ct --sheet-id 1AbC...XyZ
 
   # List configured spreadsheets
   node cli.js list-sheets
 
+  # Create a new checklist (uses first sheet as template)
+  node cli.js create-checklist --spreadsheet ct --name "FF15:RE"
+
+  # Create a new checklist from specific template
+  node cli.js create-checklist --spreadsheet ct --name "FF15:RE" --template "Ni No Kuni"
+
   # Export using short name (recommended)
-  node cli.js export --spreadsheet ni-no-kuni --output data.json
+  node cli.js export --spreadsheet ct --output data.json
 
   # Export specific sheet
-  node cli.js export --spreadsheet ni-no-kuni --sheet "Main Quests" --output main.json
+  node cli.js export --spreadsheet ct --sheet "Main Quests" --output main.json
 
   # Import data
-  node cli.js import --spreadsheet ni-no-kuni --input new-data.json
+  node cli.js import --spreadsheet ct --input new-data.json
 
   # Or use sheet ID directly (no config needed)
   node cli.js export --sheet-id 1AbC...XyZ --output data.json
@@ -330,6 +413,9 @@ async function main() {
       break;
     case 'remove-sheet':
       await removeSheetCommand(options);
+      break;
+    case 'create-checklist':
+      await createChecklistCommand(options);
       break;
     case 'help':
     case '--help':

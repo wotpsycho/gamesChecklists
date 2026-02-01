@@ -1,38 +1,38 @@
-import { readSheet, writeSheet, appendSheet, batchUpdate } from './sheets.js';
+import { appendSheet, batchUpdateSpreadsheet, clearSheet, duplicateSheet, readSheet, writeSheet } from "./sheets.js";
 
 // Standard checklist column headers
 const COLUMNS = {
-  CHECK: '✓',
-  TYPE: 'Type',
-  ITEM: 'Item',
-  PRE_REQS: 'Pre-Reqs',
-  NOTES: 'Notes',
-  STATUS: 'Available', // Hidden formula column
+  CHECK: "✓",
+  TYPE: "Type",
+  ITEM: "Item",
+  PRE_REQS: "Pre-Reqs",
+  NOTES: "Notes",
+  STATUS: "Available", // Hidden formula column
 };
 
 // Default custom columns (appear between Item and Pre-Reqs)
-const DEFAULT_CUSTOM_COLUMNS = ['Area', 'Location'];
+const DEFAULT_CUSTOM_COLUMNS = ["Area", "Location"];
 
 // Special row types
 const ROW_TYPES = {
-  TITLE: 'TITLE',
-  SETTINGS: 'SETTINGS',
-  QUICK_FILTER: 'QUICK_FILTER',
-  HEADERS: 'HEADERS',
+  TITLE: "TITLE",
+  SETTINGS: "SETTINGS",
+  QUICK_FILTER: "QUICK_FILTER",
+  HEADERS: "HEADERS",
 };
 
 /**
  * Parse checklist data from sheet rows
  * @param {Array} rows - Raw 2D array from sheet
- * @returns {Object} Parsed checklist data
+ * @returns {object} Parsed checklist data
  */
 export function parseChecklist(rows) {
   if (!rows || rows.length === 0) {
-    throw new Error('No data found in sheet');
+    throw new Error("No data found in sheet");
   }
 
   const checklist = {
-    title: '',
+    title: "",
     items: [],
     customColumns: [], // Store custom column names
     metadata: {
@@ -45,20 +45,21 @@ export function parseChecklist(rows) {
   };
 
   let headerRowIndex = -1;
-  let columnIndices = {};
-  let customColumnIndices = []; // Track custom columns between Item and Pre-Reqs
+  const columnIndices = {};
+  const customColumnIndices = []; // Track custom columns between Item and Pre-Reqs
 
   // Find special rows and header row
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || row.length === 0) continue;
+    if (!row || row.length === 0)
+      continue;
 
     const firstCell = row[0];
 
     // Identify special rows
     if (firstCell === ROW_TYPES.TITLE) {
       checklist.metadata.titleRow = i + 1;
-      checklist.title = row.find((cell, idx) => idx > 0 && cell) || '';
+      checklist.title = row.find((cell, idx) => idx > 0 && cell) || "";
     } else if (firstCell === ROW_TYPES.SETTINGS) {
       checklist.metadata.settingsRow = i + 1;
     } else if (firstCell === ROW_TYPES.QUICK_FILTER) {
@@ -70,7 +71,8 @@ export function parseChecklist(rows) {
 
       // Map column names to indices and detect custom columns
       row.forEach((header, idx) => {
-        if (!header) return;
+        if (!header)
+          return;
 
         const headerName = Object.keys(COLUMNS).find(key => COLUMNS[key] === header);
         if (headerName) {
@@ -104,16 +106,16 @@ export function parseChecklist(rows) {
 
       const item = {
         row: i + 1,
-        checked: row[columnIndices.CHECK] || '',
-        type: row[columnIndices.TYPE] || '',
-        item: row[columnIndices.ITEM] || '',
-        preReqs: row[columnIndices.PRE_REQS] || '',
-        notes: row[columnIndices.NOTES] || '',
+        checked: row[columnIndices.CHECK] || "",
+        type: row[columnIndices.TYPE] || "",
+        item: row[columnIndices.ITEM] || "",
+        preReqs: row[columnIndices.PRE_REQS] || "",
+        notes: row[columnIndices.NOTES] || "",
       };
 
       // Add custom column values
-      customColumnIndices.forEach(col => {
-        item[col.name] = row[col.index] || '';
+      customColumnIndices.forEach((col) => {
+        item[col.name] = row[col.index] || "";
       });
 
       // Only add non-empty items
@@ -128,7 +130,7 @@ export function parseChecklist(rows) {
 
 /**
  * Format checklist data for writing to sheet
- * @param {Object} checklistData - Structured checklist data
+ * @param {object} checklistData - Structured checklist data
  * @returns {Array} 2D array ready for sheet
  */
 export function formatChecklistForSheet(checklistData) {
@@ -138,14 +140,14 @@ export function formatChecklistForSheet(checklistData) {
   const customColumns = checklistData.customColumns || DEFAULT_CUSTOM_COLUMNS;
 
   // Title row
-  rows.push([ROW_TYPES.TITLE, '', checklistData.title || 'Checklist']);
+  rows.push([ROW_TYPES.TITLE, "", checklistData.title || "Checklist"]);
 
   // Settings row (placeholder)
-  rows.push([ROW_TYPES.SETTINGS, '']);
+  rows.push([ROW_TYPES.SETTINGS, ""]);
 
   // Quick Filter row (if included)
   if (checklistData.includeQuickFilter) {
-    rows.push([ROW_TYPES.QUICK_FILTER, '']);
+    rows.push([ROW_TYPES.QUICK_FILTER, ""]);
   }
 
   // Header row - includes custom columns between Item and Pre-Reqs
@@ -163,19 +165,19 @@ export function formatChecklistForSheet(checklistData) {
   // Data rows
   for (const item of checklistData.items) {
     const row = [
-      item.checked || '',  // Checkbox (usually empty for new items)
-      item.type || '',
-      item.item || '',
+      item.checked || "", // Checkbox (usually empty for new items)
+      item.type || "",
+      item.item || "",
     ];
 
     // Add custom column values
-    customColumns.forEach(colName => {
-      row.push(item[colName] || '');
+    customColumns.forEach((colName) => {
+      row.push(item[colName] || "");
     });
 
     // Add standard columns
-    row.push(item.preReqs || '');
-    row.push(item.notes || '');
+    row.push(item.preReqs || "");
+    row.push(item.notes || "");
 
     rows.push(row);
   }
@@ -187,11 +189,11 @@ export function formatChecklistForSheet(checklistData) {
  * Export checklist from sheet to JSON
  * @param {string} spreadsheetId - Sheet ID
  * @param {string} sheetName - Name of the sheet tab (default: first sheet)
- * @returns {Promise<Object>} Checklist data
+ * @returns {Promise<object>} Checklist data
  */
-export async function exportChecklist(spreadsheetId, sheetName = '') {
+export async function exportChecklist(spreadsheetId, sheetName = "") {
   // Use A:Z to get all columns (handles custom columns)
-  const range = sheetName ? `${sheetName}!A:Z` : 'A:Z';
+  const range = sheetName ? `${sheetName}!A:Z` : "A:Z";
   const rows = await readSheet(spreadsheetId, range);
   return parseChecklist(rows);
 }
@@ -199,23 +201,23 @@ export async function exportChecklist(spreadsheetId, sheetName = '') {
 /**
  * Import checklist data into existing sheet
  * @param {string} spreadsheetId - Sheet ID
- * @param {Object} checklistData - Checklist data to import
+ * @param {object} checklistData - Checklist data to import
  * @param {string} sheetName - Name of the sheet tab
- * @param {Object} options - Import options (merge, overwrite, etc.)
- * @returns {Promise<Object>} Import result
+ * @param {object} options - Import options (merge, overwrite, etc.)
+ * @returns {Promise<object>} Import result
  */
-export async function importChecklist(spreadsheetId, checklistData, sheetName = '', options = {}) {
-  const { mode = 'append' } = options;
+export async function importChecklist(spreadsheetId, checklistData, sheetName = "", options = {}) {
+  const { mode = "append" } = options;
 
   const formattedData = formatChecklistForSheet(checklistData);
 
-  if (mode === 'overwrite') {
+  if (mode === "overwrite") {
     // Overwrite entire sheet
-    const range = sheetName ? `${sheetName}!A1` : 'A1';
+    const range = sheetName ? `${sheetName}!A1` : "A1";
     return await writeSheet(spreadsheetId, range, formattedData);
-  } else if (mode === 'append') {
+  } else if (mode === "append") {
     // Append to existing data
-    const range = sheetName ? `${sheetName}!A:F` : 'A:F';
+    const range = sheetName ? `${sheetName}!A:F` : "A:F";
     return await appendSheet(spreadsheetId, range, formattedData.slice(4)); // Skip header rows
   } else {
     throw new Error(`Unknown import mode: ${mode}`);
@@ -224,8 +226,8 @@ export async function importChecklist(spreadsheetId, checklistData, sheetName = 
 
 /**
  * Validate checklist data
- * @param {Object} checklistData - Checklist data to validate
- * @returns {Object} Validation result with errors
+ * @param {object} checklistData - Checklist data to validate
+ * @returns {object} Validation result with errors
  */
 export function validateChecklist(checklistData) {
   const errors = [];
@@ -234,7 +236,7 @@ export function validateChecklist(checklistData) {
 
   // Check for required fields
   if (!checklistData.items || checklistData.items.length === 0) {
-    errors.push('No items found in checklist');
+    errors.push("No items found in checklist");
   }
 
   // Validate each item
@@ -242,7 +244,7 @@ export function validateChecklist(checklistData) {
     const itemNum = idx + 1;
 
     // Check for required item name
-    if (!item.item || item.item.trim() === '') {
+    if (!item.item || item.item.trim() === "") {
       errors.push(`Item #${itemNum}: Missing item name`);
       continue;
     }
@@ -255,12 +257,12 @@ export function validateChecklist(checklistData) {
 
     // Validate pre-reqs reference existing items
     if (item.preReqs) {
-      const preReqs = item.preReqs.split('\n').filter(pr => pr.trim());
+      const preReqs = item.preReqs.split("\n").filter(pr => pr.trim());
       for (const preReq of preReqs) {
         // Simple validation - check if pre-req looks like an item name
         // More complex validation would parse MISSED, AND/OR, etc.
-        const cleanPreReq = preReq.replace(/^(MISSED|USES|OPTION|OPTIONAL|BLOCKS|BLOCKED|LINKED)\s+/i, '').trim();
-        if (cleanPreReq && !itemNames.has(cleanPreReq) && cleanPreReq !== '*') {
+        const cleanPreReq = preReq.replace(/^(MISSED|USES|OPTION|OPTIONAL|BLOCKS|BLOCKED|LINKED)\s+/i, "").trim();
+        if (cleanPreReq && !itemNames.has(cleanPreReq) && cleanPreReq !== "*") {
           warnings.push(`Item #${itemNum} "${item.item}": Pre-req "${cleanPreReq}" not found in items list`);
         }
       }
@@ -271,5 +273,112 @@ export function validateChecklist(checklistData) {
     valid: errors.length === 0,
     errors,
     warnings,
+  };
+}
+
+/**
+ * Create a new checklist by duplicating an existing template
+ * @param {string} spreadsheetId - The ID of the spreadsheet
+ * @param {string} newName - Name for the new checklist
+ * @param {object} templateSheet - Template sheet info {name, sheetId, metaSheet, index}
+ * @param {object} templateMetaSheetInfo - Template meta sheet info {sheetId, index}
+ * @returns {Promise<object>} Created sheet info
+ */
+export async function createChecklist(spreadsheetId, newName, templateSheet, templateMetaSheetInfo) {
+  console.log(`📋 Creating new checklist "${newName}" from template "${templateSheet.name}"...`);
+
+  // Calculate target indices: new checklist right after template meta, new meta after checklist
+  const targetChecklistIndex = templateMetaSheetInfo.index + 1;
+  const targetMetaIndex = targetChecklistIndex + 1;
+
+  // Step 1: Duplicate the template checklist sheet at the target position
+  console.log(`  1️⃣  Duplicating checklist sheet at index ${targetChecklistIndex}...`);
+  const newSheet = await duplicateSheet(spreadsheetId, templateSheet.sheetId, newName, targetChecklistIndex);
+  console.log(`     ✓ Created sheet with ID ${newSheet.sheetId}`);
+
+  // Step 2: Duplicate the template meta sheet at the target position
+  console.log(`  2️⃣  Duplicating meta sheet at index ${targetMetaIndex}...`);
+  const metaSheetName = `${newName} Meta`;
+  const newMetaSheet = await duplicateSheet(spreadsheetId, templateMetaSheetInfo.sheetId, metaSheetName, targetMetaIndex);
+  console.log(`     ✓ Created meta sheet with ID ${newMetaSheet.sheetId}`);
+
+  // Step 3: Read the new checklist sheet to find where data rows start
+  console.log(`  3️⃣  Finding checklist header row...`);
+  const range = `${newName}!A:A`;
+  const rows = await readSheet(spreadsheetId, range);
+
+  let headerRowIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i] && rows[i][0] === COLUMNS.CHECK) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    throw new Error("Could not find header row (✓) in template sheet");
+  }
+
+  const firstDataRow = headerRowIndex + 1;
+  const totalRows = rows.length;
+
+  console.log(`     ✓ Header at row ${headerRowIndex + 1}, data starts at row ${firstDataRow + 1}`);
+
+  // Step 4: Clear all checklist data rows if there are any
+  if (totalRows > firstDataRow) {
+    console.log(`  4️⃣  Clearing ${totalRows - firstDataRow} checklist data rows...`);
+    // Clear the data instead of deleting rows (Google Sheets doesn't allow deleting all rows)
+    const clearRange = `${newName}!A${firstDataRow + 1}:Z`;
+    await clearSheet(spreadsheetId, clearRange);
+    console.log(`     ✓ Checklist data rows cleared`);
+  } else {
+    console.log(`  4️⃣  No checklist data rows to clear`);
+  }
+
+  // Step 5: Clear meta sheet data (keep only header row)
+  console.log(`  5️⃣  Clearing meta sheet data...`);
+  const metaRange = `${metaSheetName}!A:A`;
+  const metaRows = await readSheet(spreadsheetId, metaRange);
+
+  if (metaRows.length > 1) {
+    // Clear everything after row 1 (the header row)
+    const metaClearRange = `${metaSheetName}!A2:Z`;
+    await clearSheet(spreadsheetId, metaClearRange);
+    console.log(`     ✓ Cleared ${metaRows.length - 1} meta data rows`);
+  } else {
+    console.log(`     ✓ No meta data rows to clear`);
+  }
+
+  // Step 6: Update the title in cell B1
+  console.log(`  6️⃣  Updating title...`);
+  const titleUpdateRange = `${newName}!B1`;
+  await writeSheet(spreadsheetId, titleUpdateRange, [[` ${newName}`]]);
+  console.log(`     ✓ Title updated to " ${newName}"`);
+
+  // Step 7: Link the sheets with developer metadata
+  console.log(`  7️⃣  Linking checklist and meta sheets...`);
+  await batchUpdateSpreadsheet(spreadsheetId, [
+    {
+      createDeveloperMetadata: {
+        developerMetadata: {
+          metadataKey: "metaForSheet",
+          metadataValue: newName,
+          location: {
+            sheetId: newMetaSheet.sheetId,
+          },
+          visibility: "PROJECT",
+        },
+      },
+    },
+  ]);
+  console.log(`     ✓ Sheets linked with developer metadata`);
+
+  console.log(`\n✨ Successfully created checklist "${newName}"!`);
+  console.log(`   Checklist sheet: ${newName}`);
+  console.log(`   Meta sheet: ${metaSheetName}`);
+
+  return {
+    checklist: newSheet,
+    meta: newMetaSheet,
   };
 }

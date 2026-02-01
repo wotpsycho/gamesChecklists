@@ -125,3 +125,91 @@ export async function batchUpdate(spreadsheetId, data) {
 
   return response.data;
 }
+
+/**
+ * Execute batch requests (for sheet operations like duplicate, delete, rename)
+ * @param {string} spreadsheetId - The ID of the spreadsheet
+ * @param {Array} requests - Array of batch request objects
+ * @returns {Promise<Object>} Batch update response
+ */
+export async function batchUpdateSpreadsheet(spreadsheetId, requests) {
+  const sheets = await getSheetsClient();
+
+  const response = await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    resource: {
+      requests,
+    },
+  });
+
+  return response.data;
+}
+
+/**
+ * Duplicate an existing sheet
+ * @param {string} spreadsheetId - The ID of the spreadsheet
+ * @param {number} sourceSheetId - The ID of the sheet to duplicate
+ * @param {string} newSheetName - Name for the duplicated sheet
+ * @param {number} insertSheetIndex - Optional index where the new sheet should be inserted
+ * @returns {Promise<Object>} New sheet info
+ */
+export async function duplicateSheet(spreadsheetId, sourceSheetId, newSheetName, insertSheetIndex) {
+  const request = {
+    duplicateSheet: {
+      sourceSheetId,
+      newSheetName,
+    },
+  };
+
+  if (insertSheetIndex !== undefined) {
+    request.duplicateSheet.insertSheetIndex = insertSheetIndex;
+  }
+
+  const response = await batchUpdateSpreadsheet(spreadsheetId, [request]);
+
+  return response.replies[0].duplicateSheet.properties;
+}
+
+/**
+ * Delete rows from a sheet
+ * @param {string} spreadsheetId - The ID of the spreadsheet
+ * @param {number} sheetId - The ID of the sheet
+ * @param {number} startIndex - Start row index (0-based, inclusive)
+ * @param {number} endIndex - End row index (0-based, exclusive)
+ * @returns {Promise<Object>} Delete response
+ */
+export async function deleteRows(spreadsheetId, sheetId, startIndex, endIndex) {
+  return await batchUpdateSpreadsheet(spreadsheetId, [
+    {
+      deleteDimension: {
+        range: {
+          sheetId,
+          dimension: 'ROWS',
+          startIndex,
+          endIndex,
+        },
+      },
+    },
+  ]);
+}
+
+/**
+ * Update sheet properties (name, etc.)
+ * @param {string} spreadsheetId - The ID of the spreadsheet
+ * @param {number} sheetId - The ID of the sheet
+ * @param {Object} properties - Properties to update
+ * @returns {Promise<Object>} Update response
+ */
+export async function updateSheetProperties(spreadsheetId, sheetId, properties) {
+  return await batchUpdateSpreadsheet(spreadsheetId, [
+    {
+      updateSheetProperties: {
+        properties: {
+          sheetId,
+          ...properties,
+        },
+        fields: Object.keys(properties).join(','),
+      },
+    },
+  ]);
+}
