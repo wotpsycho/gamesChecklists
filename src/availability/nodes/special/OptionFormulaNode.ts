@@ -1,7 +1,7 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
 import { COLUMN } from '../../../ChecklistApp';
-import { OR, AND, NOT, EQ, VALUE } from '../../formula-helpers';
+import { OR, AND, NOT, EQ, VALUE } from '../../utilities/formula-helpers';
 import { SPECIAL_PREFIXES, USAGES } from '../../constants';
 import { STATUS } from '../../../ChecklistApp';
 import { BooleanFormulaValueNode } from '../value';

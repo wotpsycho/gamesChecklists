@@ -6,7 +6,7 @@ import {
   parenRegExp,
   quoteRegExp,
   quoteMapping,
-} from '../../parser-utilities';
+} from '../../utilities/parser-utilities';
 
 /**
  * Abstract base class for all formula AST nodes.

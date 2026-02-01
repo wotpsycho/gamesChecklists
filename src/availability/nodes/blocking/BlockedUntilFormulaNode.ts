@@ -1,6 +1,6 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
-import { OR, AND, NOT } from '../../formula-helpers';
+import { OR, AND, NOT } from '../../utilities/formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import type { BlockedArgs } from '../shared';

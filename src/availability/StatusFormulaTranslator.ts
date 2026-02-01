@@ -5,7 +5,7 @@ import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from '../Checklis
 // Import types
 import type { column, row, FormulaHelper, Range, RichTextValue } from './types';
 import type { IStatusFormulaTranslator, RowCounts } from './interfaces';
-import type { sheetValueInfo, columnValues } from './parser-utilities';
+import type { sheetValueInfo, columnValues } from './utilities/parser-utilities';
 
 // Import constants
 import { SPECIAL_PREFIXES, PHASE, USAGES } from './constants';
@@ -31,7 +31,7 @@ import {
   COUNTIF,
   formulaTypeToString,
   getNumItemInfo,
-} from './formula-helpers';
+} from './utilities/formula-helpers';
 
 // Import parser utilities
 import {
@@ -42,7 +42,7 @@ import {
   quoteMapping,
   parentheticalMapping,
   PREFIX_REG_EXP,
-} from './parser-utilities';
+} from './utilities/parser-utilities';
 
 // Import node classes - all from the organized nodes module
 import {
@@ -78,7 +78,7 @@ export {
   getTranslatorForChecklist,
   validateAndGenerateStatusFormulasForChecklist,
   addLinksToPreReqs,
-} from './translator-helpers';
+} from './utilities/translator-helpers';
 
 export class StatusFormulaTranslator implements IStatusFormulaTranslator {
     readonly checklist: Checklist;

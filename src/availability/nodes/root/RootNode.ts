@@ -1,9 +1,9 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
-import type { sheetValueInfo } from '../../parser-utilities';
+import type { sheetValueInfo } from '../../utilities/parser-utilities';
 import { COLUMN, STATUS } from '../../../ChecklistApp';
 import { PHASE } from '../../constants';
-import { AND, OR, IFS, VALUE } from '../../formula-helpers';
+import { AND, OR, IFS, VALUE } from '../../utilities/formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import { CellFormulaParser } from '../../CellFormulaParser';

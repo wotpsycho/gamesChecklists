@@ -1,6 +1,6 @@
 import type { row, column } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs, RowCounts } from '../../interfaces';
-import { VALUE, COUNTIF, MULT, ADD, MINUS } from '../../formula-helpers';
+import { VALUE, COUNTIF, MULT, ADD, MINUS } from '../../utilities/formula-helpers';
 import { STATUS, COLUMN } from '../../../ChecklistApp';
 import type { NumberNode } from '../shared';
 import { FormulaValueNode } from './FormulaValueNode';

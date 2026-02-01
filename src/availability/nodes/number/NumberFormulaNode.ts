@@ -7,7 +7,7 @@ import {
   MULT,
   DIV,
   VALUE,
-} from '../../formula-helpers';
+} from '../../utilities/formula-helpers';
 import { STATUS } from '../../../ChecklistApp';
 import type { NumberNode } from '../shared';
 import { NumberFormulaValueNode } from '../value';

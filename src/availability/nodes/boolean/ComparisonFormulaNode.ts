@@ -11,7 +11,7 @@ import {
   X_ITEMS,
   VALUE,
   formulaTypeToString,
-} from '../../formula-helpers';
+} from '../../utilities/formula-helpers';
 import * as Formula from '../../../Formulas';
 import { STATUS } from '../../../ChecklistApp';
 import type { NumberNode } from '../shared';

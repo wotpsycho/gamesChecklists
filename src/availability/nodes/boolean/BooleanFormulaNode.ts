@@ -11,7 +11,7 @@ import {
   GTE,
   X_ITEMS,
   VALUE,
-} from '../../formula-helpers';
+} from '../../utilities/formula-helpers';
 import { ComparisonFormulaNode } from './ComparisonFormulaNode';
 import { BooleanFormulaValueNode } from '../value';
 

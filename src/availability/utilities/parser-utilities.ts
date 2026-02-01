@@ -1,5 +1,5 @@
-import type { row, column } from './types';
-import { SPECIAL_PREFIXES } from './constants';
+import type { row, column } from '../types';
+import { SPECIAL_PREFIXES } from '../constants';
 
 /**
  * Information about a sheet value including its position and content

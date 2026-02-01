@@ -1,7 +1,7 @@
 import type { row, FormulaHelper } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
 import { PHASE } from '../../constants';
-import { AND, GTE, NOT, VALUE, MINUS } from '../../formula-helpers';
+import { AND, GTE, NOT, VALUE, MINUS } from '../../utilities/formula-helpers';
 import * as Formula from '../../../Formulas';
 import { COLUMN } from '../../../ChecklistApp';
 import { virtualItems } from '../shared';

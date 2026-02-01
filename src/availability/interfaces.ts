@@ -1,5 +1,5 @@
 import type { row, column } from './types';
-import type { columnValues } from './parser-utilities';
+import type { columnValues } from './utilities/parser-utilities';
 import type { PHASE } from './constants';
 import type { Checklist } from '../ChecklistApp';
 

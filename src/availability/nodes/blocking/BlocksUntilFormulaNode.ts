@@ -1,7 +1,7 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
 import { COLUMN } from '../../../ChecklistApp';
-import { VALUE } from '../../formula-helpers';
+import { VALUE } from '../../utilities/formula-helpers';
 import { time, timeEnd } from '../../../util';
 import { FormulaValueNode } from '../value/FormulaValueNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';

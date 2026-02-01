@@ -1,5 +1,5 @@
-import * as Formula from '../Formulas';
-import type { FormulaHelper } from './types';
+import * as Formula from '../../Formulas';
+import type { FormulaHelper } from '../types';
 
 const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
 const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;

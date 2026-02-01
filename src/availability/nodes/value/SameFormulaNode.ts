@@ -1,6 +1,6 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { OR, VALUE } from '../../formula-helpers';
+import { OR, VALUE } from '../../utilities/formula-helpers';
 import { COLUMN } from '../../../ChecklistApp';
 // Import CellFormulaParser from local module (circular dependency resolved at runtime)
 import { CellFormulaParser } from '../../CellFormulaParser';

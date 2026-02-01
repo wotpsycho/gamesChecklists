@@ -9,14 +9,14 @@ import {
   getParenPlaceholder,
   quoteMapping,
   parentheticalMapping,
-} from './parser-utilities';
+} from './utilities/parser-utilities';
 import {
   BooleanFormulaNode,
   FormulaNode,
   OptionFormulaNode,
   SameFormulaNode,
 } from './nodes';
-import { OR, AND, VALUE, IFS, IF } from './formula-helpers';
+import { OR, AND, VALUE, IFS, IF } from './utilities/formula-helpers';
 
 // Import StatusFormulaTranslator type
 import type { StatusFormulaTranslator } from './StatusFormulaTranslator';
