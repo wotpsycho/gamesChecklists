@@ -1,13 +1,12 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { COLUMN } from '../../../ChecklistApp';
 import { OR, AND, NOT, EQ, VALUE } from '../../utilities/formula-helpers';
 import { SPECIAL_PREFIXES, USAGES } from '../../constants';
-import { STATUS } from '../../../ChecklistApp';
 import { BooleanFormulaValueNode } from '../value';
 import { CellFormulaParser } from '../../CellFormulaParser';
 import type { FormulaValueNode } from '../value';
 import { virtualItems } from '../shared';
+import { COLUMN, STATUS } from "../../../shared-types";
 
 /**
  * OptionFormulaNode handles OPTION prefix for choice-based items

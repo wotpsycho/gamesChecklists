@@ -7,17 +7,17 @@ import { time, timeEnd } from './util';
 import * as Formula from './Formulas';
 import { SheetBase } from './SheetBase';
 import * as ChecklistApp from './ChecklistApp';
-import { ChecklistSettings, SETTING } from './ChecklistSettings';
+import { SETTING } from './ChecklistSettings';
 import * as ChecklistMeta from './ChecklistMeta';
 import * as Status from './availability/StatusFormulaTranslator';
 
 // Import global functions (GAS event handlers)
 import { onOpen, onEdit, handleEdit, handleChange, AttachTriggers, CalculatePreReqs, LinkPreReqs } from './Triggers';
 import { ResetChecklist } from './Reset';
-import { ProcessMeta, CreateMetaSheet } from './ChecklistMeta';
+import { CreateMetaSheet, ProcessMeta } from "./checklist-helpers";
 
 // Export Settings as an object with both ChecklistSettings and SETTING
-export const Settings = { ChecklistSettings, SETTING };
+export const Settings = { SETTING };
 
 // Export everything as a bundle object (Rollup outro will create top-level declarations)
 export {
@@ -29,7 +29,6 @@ export {
   SheetBase,
 
   // Settings components
-  ChecklistSettings,
   SETTING,
 
   // Utilities

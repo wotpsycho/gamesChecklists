@@ -8,9 +8,9 @@ import {
   DIV,
   VALUE,
 } from '../../utilities/formula-helpers';
-import { STATUS } from '../../../ChecklistApp';
 import type { NumberNode } from '../shared';
 import { NumberFormulaValueNode } from '../value';
+import { STATUS } from "../../../shared-types";
 
 /**
  * Number formula node handling arithmetic operators (+, -, *, /)

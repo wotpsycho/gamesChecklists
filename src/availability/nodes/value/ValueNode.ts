@@ -2,8 +2,8 @@ import type { row } from '../../types';
 import type { IStatusFormulaTranslator, RowCounts, NodeArgs } from '../../interfaces';
 import { PHASE } from '../../constants';
 import { Node } from '../base';
-import { COLUMN } from '../../../ChecklistApp';
 import { ValueNodeTypes, virtualItems } from '../shared';
+import { COLUMN } from "../../../shared-types";
 
 /**
  * Regular expressions for parsing value node syntax

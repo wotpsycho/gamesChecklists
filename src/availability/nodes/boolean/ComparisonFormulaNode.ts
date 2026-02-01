@@ -13,9 +13,9 @@ import {
   formulaTypeToString,
 } from '../../utilities/formula-helpers';
 import * as Formula from '../../../Formulas';
-import { STATUS } from '../../../ChecklistApp';
 import type { NumberNode } from '../shared';
 import { NumberFormulaNode } from '../number';
+import { STATUS } from "../../../shared-types";
 
 /**
  * Comparison formula node for comparing two number nodes

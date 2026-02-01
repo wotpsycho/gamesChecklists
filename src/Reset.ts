@@ -1,6 +1,5 @@
 import { time, timeEnd } from './util';
-import { getActiveChecklist } from './ChecklistApp';
-import * as ChecklistMeta from './ChecklistMeta';
+import { getActiveChecklist, promptMetaSheetCreate } from "./checklist-helpers";
 
 export function ResetChecklist(checklist = getActiveChecklist()) {
   let title = "Refreshing Checklist";
@@ -48,7 +47,7 @@ export function ResetChecklist(checklist = getActiveChecklist()) {
       checklist.name = response.getResponseText() || defaultName;
     }
     if (!checklist.metaSheet) {
-      ChecklistMeta.promptMetaSheetCreate(checklist, title);
+      promptMetaSheetCreate(checklist, title);
     }
 
     time("nonUI");

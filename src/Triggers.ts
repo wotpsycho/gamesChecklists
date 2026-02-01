@@ -1,5 +1,6 @@
 import { time, timeEnd } from './util';
-import { getChecklistFromEvent, getActiveChecklist, Checklist } from './ChecklistApp';
+import { Checklist } from './ChecklistApp';
+import {getActiveChecklist, getChecklistFromEvent} from "./checklist-helpers";
 
 export function onEdit(event: GoogleAppsScript.Events.SheetsOnEdit): void {
   // const dataRange = event.source.getDataRange();

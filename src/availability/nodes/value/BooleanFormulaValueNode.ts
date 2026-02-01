@@ -3,11 +3,11 @@ import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
 import { PHASE } from '../../constants';
 import { AND, GTE, NOT, VALUE, MINUS } from '../../utilities/formula-helpers';
 import * as Formula from '../../../Formulas';
-import { COLUMN } from '../../../ChecklistApp';
 import { virtualItems } from '../shared';
 import { FormulaValueNode } from './FormulaValueNode';
 import { NumberFormulaValueNode } from './NumberFormulaValueNode';
 import { SameFormulaNode } from './SameFormulaNode';
+import { COLUMN } from "../../../shared-types";
 
 /**
  * Boolean value node representing item existence/count checks

@@ -1,13 +1,13 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
 import type { sheetValueInfo } from '../../utilities/parser-utilities';
-import { COLUMN, STATUS } from '../../../ChecklistApp';
 import { AND, OR, NOT, IFS, VALUE } from '../../utilities/formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import { OptionFormulaNode } from '../special/OptionFormulaNode';
 import { CellFormulaParser } from '../../CellFormulaParser';
 import { RootNode } from './RootNode';
+import { COLUMN, STATUS } from "../../../shared-types";
 
 /**
  * LinkedFormulaNode - Special root node for LINKED prerequisites

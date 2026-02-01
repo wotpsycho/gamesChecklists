@@ -59,10 +59,11 @@ import { getActiveChecklist, Checklist } from './ChecklistApp';
 - **Location**: `build/Code.js` + `build/appsscript.json`
 
 **Global Exports (for Google Apps Script):**
+
 ```javascript
 g.ChecklistApp = ChecklistApp;
 g.ChecklistMeta = ChecklistMeta;
-g.Settings = { ChecklistSettings, SETTING };
+g.Settings = {ChecklistSettings, SETTING};
 g.Status = Status;
 g.Formula = Formula;
 g.ChecklistApp.SheetBase = SheetBase;

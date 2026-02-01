@@ -1,11 +1,8 @@
 import { time, timeEnd } from './util';
 import * as Formula from './Formulas';
 import type { Checklist } from './ChecklistApp';
-import { STATUS, ROW, COLUMN, getActiveChecklist } from './ChecklistApp';
-import * as ChecklistMeta from './ChecklistMeta';
-
-type row = number | string;
-type column = number | string;
+import { COLUMN, ROW, STATUS, type row, type column } from "./shared-types";
+import { promptMetaSheetCreate } from "./checklist-helpers";
 
 export enum SETTING  {
     // MODE        = "Mode",
@@ -137,30 +134,13 @@ export enum SETTING  {
 
 class ChecklistSettingsError extends Error {}
 
+
 // const checklistSettings: {[x:number]:ChecklistSettings} = {};
 
 export class ChecklistSettings {
   readonly checklist: Checklist;
-    private constructor(checklist: Checklist) {
+    constructor(checklist: Checklist) {
       this.checklist = checklist;
-    }
-
-    private static readonly checklistSettings: {[x:number]:ChecklistSettings} = {}
-
-    static getSettingsForChecklist(checklist = getActiveChecklist()): ChecklistSettings {
-      if (!this.checklistSettings[checklist.id]) {
-        this.checklistSettings[checklist.id] = new ChecklistSettings(checklist);
-      }
-      return this.checklistSettings[checklist.id];
-    }
-
-    static getSettingsForActiveChecklist(): ChecklistSettings {
-      return ChecklistSettings.getSettingsForChecklist(getActiveChecklist());
-    }
-
-    static handleChange(checklist: Checklist,event: GoogleAppsScript.Events.SheetsOnEdit): void {
-      const settings = this.getSettingsForChecklist(checklist);
-      settings.handleChange(event);
     }
 
     handleChange(event: GoogleAppsScript.Events.SheetsOnEdit): void {
@@ -307,7 +287,7 @@ export class ChecklistSettings {
       return this.__rowSettings;
     }
   }
-
+// export type {ChecklistSettings}
 // eslint-disable-next-line @typescript-eslint/no-this-alias
 class ChecklistSetting {
     readonly setting: SETTING;
@@ -513,7 +493,7 @@ class ChecklistSetting {
       }(settings);
       const metaAction = new class extends SettingAction{
         execute() {
-          if (!this.settings.checklist.meta) ChecklistMeta.promptMetaSheetCreate(this.settings.checklist);
+          if (!this.settings.checklist.meta) promptMetaSheetCreate(this.settings.checklist);
           if (this.settings.checklist.meta) this.settings.checklist.syncMeta();
         }
       }(settings);

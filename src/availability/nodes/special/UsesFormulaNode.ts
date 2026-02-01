@@ -1,11 +1,11 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { COLUMN } from '../../../ChecklistApp';
 import { OR, AND, NOT, IF, VALUE, MINUS, ADD, getNumItemInfo } from '../../utilities/formula-helpers';
 import * as Formula from '../../../Formulas';
 import { BooleanFormulaValueNode } from '../value';
 import type { useInfo } from '../shared';
 import { virtualItems, usesInfo } from '../shared';
+import { COLUMN } from "../../../shared-types";
 
 /**
  * UsesFormulaNode - Tracks consumable items that can be used multiple times

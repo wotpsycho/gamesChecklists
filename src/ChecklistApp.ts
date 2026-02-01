@@ -1,43 +1,12 @@
 import { time, timeEnd } from './util';
 import * as Formula from './Formulas';
-import { SheetBase, type Sheet, type Range, type RichTextValue, type sheetValue } from './SheetBase';
+import { type Range, type Sheet, SheetBase, type sheetValue } from './SheetBase';
 import * as ChecklistMeta from './ChecklistMeta';
-import { ChecklistSettings, SETTING } from './ChecklistSettings';
-import { validateAndGenerateStatusFormulasForChecklist, addLinksToPreReqs } from './availability';
-import { getActiveSheet as _getActiveSheet, setActiveSheet as _setActiveSheet } from './SheetHelpers';
-
-export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;
-export type DeveloperMetadata = GoogleAppsScript.Spreadsheet.DeveloperMetadata;
-
-export enum COLUMN {
-  CHECK= "✓",
-  TYPE= "Type",
-  ITEM= "Item",
-  NOTES= "Notes",
-  PRE_REQS= "Pre-Reqs",
-  STATUS= "Available",
-}
-export type column = number|COLUMN|string; // byHeader column is valid, so strings are valid
-
-export enum ROW {
-  TITLE= "TITLE",
-  SETTINGS= "SETTINGS",
-  QUICK_FILTER= "QUICK_FILTER",
-  HEADERS= "HEADERS",
-}
-export type row = ROW | number;
-export type dataRow = number;
-export enum STATUS {
-  CHECKED= "CHECKED",
-  AVAILABLE= "TRUE",
-  MISSED= "MISSED",
-  PR_USED= "PR_USED",
-  PR_NOT_MET= "FALSE",
-  UNKNOWN= "UNKNOWN",
-  ERROR= "ERROR",
-}
-export const FINAL_ITEM_TYPE = "Game Complete";
-
+import { type ChecklistSettings, type SETTING } from './ChecklistSettings';
+import { addLinksToPreReqs, validateAndGenerateStatusFormulasForChecklist } from './availability';
+import { COLUMN, column, DeveloperMetadata, EditEvent, ROW, STATUS } from "./shared-types";
+import { getChecklistByMetaSheet, getMetaFromChecklist } from "./checklist-helpers";
+import { getSettingsForChecklist } from "./settings-helpers";
 
 const COLOR = {
     ERROR: "#ff0000",
@@ -63,39 +32,6 @@ const COLOR = {
   
   const MAX_EMPTY_ROWS:number = 100;
   
-// const checklists:{[x:number]:Checklist} = {};
-// APP SECTION
-export function getChecklistFromEvent(event:GoogleAppsScript.Events.SheetsOnOpen|GoogleAppsScript.Events.SheetsOnEdit): Checklist {
-  return Checklist.fromEvent(event);
-}
-export function getChecklistBySheet(sheet: Sheet = getActiveSheet()): Checklist {
-  return Checklist.fromSheet(sheet);
-}
-
-export function getChecklistByMetaSheet(metaSheet: Sheet): Checklist {
-  const metaDevMeta:DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-  if (metaDevMeta && metaDevMeta[0]) {
-    const sheet:Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
-    if (sheet) {
-      const checklist:Checklist = getChecklistBySheet(sheet);
-      checklist.metaSheet = metaSheet;
-      return checklist;
-    }
-  }
-}
-
-export function getActiveChecklist(): Checklist {
-  return getChecklistBySheet(getActiveSheet());
-}
-
-// Re-export from SheetHelpers to avoid circular dependency
-export function getActiveSheet(): Sheet {
-  return _getActiveSheet();
-}
-
-export function setActiveSheet(sheet: Sheet): void {
-  return _setActiveSheet(sheet);
-}
 // END APP SECTION
 
 export class Checklist extends SheetBase {
@@ -227,7 +163,7 @@ export class Checklist extends SheetBase {
       return this.sheetId;
     }
     get meta(): ChecklistMeta.MetaSheet {
-      return this.metaSheet && ChecklistMeta.getFromChecklist(this);
+      return this.metaSheet && getMetaFromChecklist(this);
     }
     get editable (): boolean {
       return super.editable;
@@ -254,7 +190,7 @@ export class Checklist extends SheetBase {
     }
     
     get settings(): ChecklistSettings {
-      return ChecklistSettings.getSettingsForChecklist(this);
+      return getSettingsForChecklist(this);
     }
 
     get isLatest():boolean {

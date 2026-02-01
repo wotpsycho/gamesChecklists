@@ -2,51 +2,13 @@ import { time, timeEnd } from './util';
 import * as Formula from './Formulas';
 import { SheetBase } from './SheetBase';
 import type { Checklist } from './ChecklistApp';
-import { getActiveChecklist, getChecklistByMetaSheet, COLUMN, ROW, FINAL_ITEM_TYPE } from './ChecklistApp';
+import { COLUMN, FINAL_ITEM_TYPE, ROW } from "./shared-types";
 
 type ConditionalFormatRuleBuilder = GoogleAppsScript.Spreadsheet.ConditionalFormatRuleBuilder;
 type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
 type Range = GoogleAppsScript.Spreadsheet.Range;
 
 const PARENT_REGEX = /^PARENT\((.*)\)$/;
-
-
-export function getFromActiveChecklist(_interactive: boolean = false): MetaSheet {
-  return getFromChecklist(getActiveChecklist(),_interactive);
-}
-
-export function getFromChecklist(checklist: Checklist = getActiveChecklist(), _interactive: boolean = false): MetaSheet {
-  if (!checklist.isChecklist || !checklist.metaSheet) {
-    const checklistFromMeta = getChecklistByMetaSheet(checklist.sheet);
-    if (checklistFromMeta) checklist = checklistFromMeta;
-  }
-  if (!checklist.metaSheet && _interactive) {
-    promptMetaSheetCreate(checklist);
-  }
-  return MetaSheet.fromChecklist(checklist);
-}
-
-export function getFromSheet(sheet: Sheet): MetaSheet {
-  const checklist = getChecklistByMetaSheet(sheet);
-  return checklist && checklist.meta;
-}
-
-export function promptMetaSheetCreate(checklist: Checklist, title: string = "Meta Sheet Create"): void {
-    const ui = SpreadsheetApp.getUi();
-    const defaultMetaSheetName = checklist.name + " Meta";
-    const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
-    if (response.getSelectedButton() != ui.Button.OK) return;
-    const metaSheetName = response.getResponseText() || defaultMetaSheetName;
-    const existingSheet = checklist.spreadsheet.getSheetByName(metaSheetName);
-    if (existingSheet) {
-      const response = ui.alert(title, `Sheet already exists, set as meta sheet?`, ui.ButtonSet.YES_NO);
-      if (response == ui.Button.YES) {
-        checklist.metaSheet = existingSheet;
-      }
-    } else {
-      checklist.createMetaSheet(metaSheetName);
-    }
-  }
 
 
 type columnMetadata = {
@@ -537,11 +499,3 @@ export class MetaSheet extends SheetBase {
     }
   }
 
-export function ProcessMeta(): void {
-  const meta = getFromActiveChecklist(true);
-  meta && meta.syncWithChecklist();
-}
-
-export function CreateMetaSheet(): void {
-  promptMetaSheetCreate(getActiveChecklist());
-}

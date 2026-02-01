@@ -1,37 +1,32 @@
-import type { row, column } from './types';
-import type { IStatusFormulaTranslator } from './interfaces';
-import { COLUMN, STATUS } from '../ChecklistApp';
-import { SPECIAL_PREFIXES, PHASE } from './constants';
+import type { row } from './types';
+import { PHASE, SPECIAL_PREFIXES } from './constants';
 import {
-  type sheetValueInfo,
-  PREFIX_REG_EXP,
-  getQuotePlaceholder,
   getParenPlaceholder,
-  quoteMapping,
+  getQuotePlaceholder,
   parentheticalMapping,
+  PREFIX_REG_EXP,
+  quoteMapping,
+  type sheetValueInfo,
 } from './utilities/parser-utilities';
+// Import specialized node classes from nodes module
 import {
+  BlockedUntilFormulaNode,
+  BlocksUntilFormulaNode,
   BooleanFormulaNode,
+  CheckedRootNode,
   FormulaNode,
+  LinkedFormulaNode,
+  MissedFormulaNode,
+  OptionalFormulaNode,
   OptionFormulaNode,
-  SameFormulaNode,
+  RootNode,
+  UsesFormulaNode,
 } from './nodes';
-import { OR, AND, VALUE, IFS, IF } from './utilities/formula-helpers';
 
 // Import StatusFormulaTranslator type
 import type { StatusFormulaTranslator } from './StatusFormulaTranslator';
-
-// Import specialized node classes from nodes module
-import {
-  RootNode,
-  CheckedRootNode,
-  LinkedFormulaNode,
-  UsesFormulaNode,
-  MissedFormulaNode,
-  OptionalFormulaNode,
-  BlocksUntilFormulaNode,
-  BlockedUntilFormulaNode,
-} from './nodes';
+import { COLUMN } from "../shared-types";
+import { IStatusFormulaTranslator } from "./interfaces";
 
 /**
  * CellFormulaParser parses prerequisite text and creates formula node trees

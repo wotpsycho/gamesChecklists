@@ -1,12 +1,12 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
 import type { sheetValueInfo } from '../../utilities/parser-utilities';
-import { COLUMN, STATUS } from '../../../ChecklistApp';
 import { PHASE } from '../../constants';
 import { AND, OR, IFS, VALUE } from '../../utilities/formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import { CellFormulaParser } from '../../CellFormulaParser';
+import { COLUMN, STATUS } from "../../../shared-types";
 
 /**
  * RootNode - The root of a formula node tree for a checklist row

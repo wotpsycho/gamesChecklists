@@ -1,7 +1,6 @@
 import { time, timeEnd } from '../util';
 import * as Formula from '../Formulas';
 import type { Checklist } from '../ChecklistApp';
-import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from '../ChecklistApp';
 // Import types
 import type { column, row, FormulaHelper, Range, RichTextValue } from './types';
 import type { IStatusFormulaTranslator, RowCounts } from './interfaces';
@@ -71,6 +70,8 @@ import {
 
 // Import cell formula parser
 import { CellFormulaParser } from './CellFormulaParser';
+import { COLUMN, FINAL_ITEM_TYPE, STATUS } from "../shared-types";
+import { getActiveChecklist } from "../checklist-helpers";
 
 // Re-export translator helpers for backwards compatibility
 export {
