@@ -19,4 +19,5 @@ export * from './nodes';
 // Re-export cell formula parser
 export * from './cell-formula-parser';
 
-// Note: Additional exports (translator) will be added as they are extracted
+// Re-export translator helpers
+export * from './translator-helpers';

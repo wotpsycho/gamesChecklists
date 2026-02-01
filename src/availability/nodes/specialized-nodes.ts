@@ -1,28 +1,12 @@
 import type { row } from '../types';
 import type { IStatusFormulaTranslator, NodeArgs, RowCounts } from '../interfaces';
 import { COLUMN } from '../../ChecklistApp';
-import { OR, AND, NOT, IF, VALUE, MINUS, ADD } from '../formula-helpers';
+import { OR, AND, NOT, IF, VALUE, MINUS, ADD, getNumItemInfo } from '../formula-helpers';
 import * as Formula from '../../Formulas';
 import { time, timeEnd } from '../../util';
 import { FormulaNode } from './base-nodes';
 import { BooleanFormulaNode, BooleanFormulaValueNode, FormulaValueNode, virtualItems } from './boolean-number-nodes';
 import { CellFormulaParser } from '../cell-formula-parser';
-
-// Helper for parsing "x3" or "3x" item counts
-const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
-const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
-const getNumItemInfo = (text: string, _defaultNum: number = undefined): { num?: number; item: string } => {
-  let match = text.match(numItemsPrefixRegExp);
-  if (match) {
-    return { num: Number(match[1]), item: match[2] };
-  } else if ((match = text.match(numItemsPostfixRegExp))) {
-    return { num: Number(match[2]), item: match[1] };
-  } else if (_defaultNum || _defaultNum === 0) {
-    return { num: _defaultNum, item: text };
-  } else {
-    return { item: text };
-  }
-};
 
 /**
  * UsesFormulaNode - Tracks consumable items that can be used multiple times

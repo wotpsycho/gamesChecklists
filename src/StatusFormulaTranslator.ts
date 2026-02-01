@@ -66,38 +66,20 @@ import {
   GeneratedBlockedUntilFormulaNode,
   type BlocksArgs,
   type BlockedArgs,
+  getNumItemInfo,
+  getActiveChecklistTranslator,
+  getTranslatorForChecklist,
+  validateAndGenerateStatusFormulasForChecklist,
+  addLinksToPreReqs,
 } from './availability';
 
-const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
-const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
-const getNumItemInfo = (text: string, _defaultNum: number = undefined): { num?: number; item: string } => {
-  let match = text.match(numItemsPrefixRegExp);
-  if (match) {
-    return { num: Number(match[1]), item: match[2] };
-  } else if ((match = text.match(numItemsPostfixRegExp))) {
-    return { num: Number(match[2]), item: match[1] };
-  } else if (_defaultNum || _defaultNum === 0) {
-    return { num: _defaultNum, item: text };
-  } else {
-    return { item: text };
-  }
+// Re-export for backwards compatibility
+export {
+  getActiveChecklistTranslator,
+  getTranslatorForChecklist,
+  validateAndGenerateStatusFormulasForChecklist,
+  addLinksToPreReqs,
 };
-
-export function getActiveChecklistTranslator(): StatusFormulaTranslator {
-  return getTranslatorForChecklist(getActiveChecklist());
-}
-
-export function getTranslatorForChecklist(checklist: Checklist = getActiveChecklist()): StatusFormulaTranslator {
-  return StatusFormulaTranslator.fromChecklist(checklist);
-}
-
-export function validateAndGenerateStatusFormulasForChecklist(checklist:Checklist = getActiveChecklist()): void {
-  StatusFormulaTranslator.fromChecklist(checklist).validateAndGenerateStatusFormulas();
-}
-
-export function addLinksToPreReqs(checklist:Checklist = getActiveChecklist(), startRow = checklist.firstDataRow, endRow = checklist.lastRow): void{
-  StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow,endRow);
-}
 
 export class StatusFormulaTranslator implements IStatusFormulaTranslator {
     readonly checklist: Checklist;
