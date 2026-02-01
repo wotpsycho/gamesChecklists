@@ -1,23 +1,23 @@
-import type { row, column } from './types';
-import type { columnValues } from './utilities/parser-utilities';
-import type { PHASE } from './constants';
-import type { Checklist } from '../ChecklistApp';
+import type { Checklist } from "../ChecklistApp";
+import type { PHASE } from "./constants";
+import type { column, row } from "./types";
+import type { columnValues } from "./utilities";
 
 /**
  * Type representing row counts indexed by row number
  */
-export type RowCounts = {
+export interface RowCounts {
   [x: number]: number;
-};
+}
 
 /**
  * Arguments for creating formula nodes
  */
-export type NodeArgs = {
+export interface NodeArgs {
   text: string;
   translator: IStatusFormulaTranslator;
   row: row;
-};
+}
 
 /**
  * Interface for StatusFormulaTranslator that nodes depend on.
@@ -31,25 +31,25 @@ export interface IStatusFormulaTranslator {
   /**
    * Get all values in a column organized by row and by value
    */
-  getColumnValues(column: column): columnValues;
+  getColumnValues: (column: column) => columnValues;
 
   /**
    * Get row counts for a given column and identifier
    */
-  getRowCounts(column: column, id: string, _implicitPrefix?: boolean): RowCounts;
+  getRowCounts: (column: column, id: string, _implicitPrefix?: boolean) => RowCounts;
 
   /**
    * Convert row and column to A1 notation
    */
-  cellA1(row: row, column: column): string;
+  cellA1: (row: row, column: column) => string;
 
   /**
    * Convert array of rows to A1 range notation
    */
-  rowsToA1Ranges(rows: row[], column?: column): string[];
+  rowsToA1Ranges: (rows: row[], column?: column) => string[];
 
   /**
    * Convert row counts to A1 notation with counts
    */
-  rowCountsToA1Counts(rowCounts: Readonly<RowCounts>, column: column): { [x: string]: number };
+  rowCountsToA1Counts: (rowCounts: Readonly<RowCounts>, column: column) => { [x: string]: number };
 }

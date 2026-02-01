@@ -1,12 +1,12 @@
-import type { row } from '../../types';
-import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { OR, AND, NOT, EQ, VALUE } from '../../utilities/formula-helpers';
-import { SPECIAL_PREFIXES, USAGES } from '../../constants';
-import { BooleanFormulaValueNode } from '../value';
-import { CellFormulaParser } from '../../CellFormulaParser';
-import type { FormulaValueNode } from '../value';
-import { virtualItems } from '../shared';
+import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
+import type { row } from "../../types";
+import type { FormulaValueNode } from "../value";
 import { COLUMN, STATUS } from "../../../shared-types";
+import { CellFormulaParser } from "../../CellFormulaParser";
+import { SPECIAL_PREFIXES, USAGES } from "../../constants";
+import { AND, EQ, NOT, OR, VALUE } from "../../utilities";
+import { virtualItems } from "../shared";
+import { BooleanFormulaValueNode } from "../value";
 
 /**
  * OptionFormulaNode handles OPTION prefix for choice-based items
@@ -19,7 +19,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
 
   protected constructor(text: string, translator: IStatusFormulaTranslator, row: row) {
     super(text, translator, row);
-    if (this.valueInfo.rows.length == 0) {
+    if (this.valueInfo.rows.length === 0) {
       if (!virtualItems[this.text]) {
         virtualItems[this.text] = {
           rowCounts: {},
@@ -32,7 +32,8 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
   }
 
   finalize(): OptionFormulaNode {
-    if (this.finalized) return this;
+    if (this.finalized)
+      return this;
     super.finalize();
     this.choiceParser?.addOption(this.row);
     this.finalized = true;
@@ -42,12 +43,14 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
   get choiceRow(): row {
     return this.valueInfo.isVirtual ? undefined : this.valueInfo.rows[0];
   }
+
   get choiceParser(): CellFormulaParser {
     return this.valueInfo.isVirtual ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator, this.choiceRow);
   }
+
   get choiceOptions(): row[] {
     if (this.valueInfo.isVirtual) {
-      return Object.keys(virtualItems[this.text].rowCounts).map((row) => Number(row));
+      return Object.keys(virtualItems[this.text].rowCounts).map(row => Number(row));
     } else {
       return this.choiceParser.getOptions();
     }
@@ -60,7 +63,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
       hasError = true;
     }
     if (!this.valueInfo.isVirtual) {
-      if (this.valueInfo.rows.length != 1) {
+      if (this.valueInfo.rows.length !== 1) {
         this.addError(`"${this.text}" refers to ${this.valueInfo.rows.length} Items\n\n${USAGES[SPECIAL_PREFIXES.OPTION]}`);
         hasError = true;
       }
@@ -74,7 +77,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
       ? NOT(this.toPRUsedFormula())
       : AND(
           NOT(OR(...this.translator.rowsToA1Ranges(this.choiceOptions, COLUMN.CHECK))),
-          CellFormulaParser.getParserForChecklistRow(this.translator, this.choiceRow).toRawPreReqsMetFormula()
+          CellFormulaParser.getParserForChecklistRow(this.translator, this.choiceRow).toRawPreReqsMetFormula(),
         );
   }
 
@@ -82,7 +85,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
     return this._determineFormula(
       OR(...this.translator.rowsToA1Ranges(this.choiceOptions, COLUMN.CHECK)),
       STATUS.PR_USED,
-      STATUS.CHECKED
+      STATUS.CHECKED,
     );
   }
 
@@ -103,7 +106,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
   }
 
   private _getChoiceRowStatusFormula(...statuses: STATUS[]) {
-    return OR(...statuses.map((status) => EQ(this.translator.cellA1(this.choiceRow, COLUMN.STATUS), VALUE(status))));
+    return OR(...statuses.map(status => EQ(this.translator.cellA1(this.choiceRow, COLUMN.STATUS), VALUE(status))));
   }
 
   getAllPossiblePreReqRows(): ReadonlySet<row> {

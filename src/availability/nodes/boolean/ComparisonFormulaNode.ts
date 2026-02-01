@@ -1,21 +1,21 @@
-import type { row, FormulaHelper } from '../../types';
-import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { FormulaNode } from '../base';
+import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
+import type { FormulaHelper, row } from "../../types";
+import type { NumberNode } from "../shared";
+import * as Formula from "../../../Formulas";
+import { STATUS } from "../../../shared-types";
 import {
-  OR,
   AND,
   EQ,
-  NE,
+  formulaTypeToString,
   GT,
   GTE,
-  X_ITEMS,
+  NE,
+  OR,
   VALUE,
-  formulaTypeToString,
-} from '../../utilities/formula-helpers';
-import * as Formula from '../../../Formulas';
-import type { NumberNode } from '../shared';
-import { NumberFormulaNode } from '../number';
-import { STATUS } from "../../../shared-types";
+  X_ITEMS,
+} from "../../utilities";
+import { FormulaNode } from "../base";
+import { NumberFormulaNode } from "../number";
 
 /**
  * Comparison formula node for comparing two number nodes
@@ -30,26 +30,27 @@ export class ComparisonFormulaNode extends FormulaNode<boolean> {
   }: NodeArgs & { formulaType: FormulaHelper }): ComparisonFormulaNode {
     return new ComparisonFormulaNode(text, translator, row, formulaType);
   }
+
   protected children: NumberNode[];
   protected constructor(
     text: string,
     translator: IStatusFormulaTranslator,
     row: row,
-    formulaType: FormulaHelper
+    formulaType: FormulaHelper,
   ) {
     super(text, translator, row);
 
     this.formulaType = formulaType;
     const operands: string[] = formulaType.parseOperands(this.text);
     this.children.push(
-      ...operands.map((operand) =>
+      ...operands.map(operand =>
         NumberFormulaNode.create({
           text: operand,
           translator: this.translator,
           row: this.row,
-          _implicitPrefix: formulaType == X_ITEMS,
-        })
-      )
+          _implicitPrefix: formulaType === X_ITEMS,
+        }),
+      ),
     );
   }
 
@@ -64,7 +65,7 @@ export class ComparisonFormulaNode extends FormulaNode<boolean> {
         isError = lMax < rMin || lMin > rMax;
         break;
       case NE: {
-        isError = lMax == lMin && lMax == rMin && lMax == rMax;
+        isError = lMax === lMin && lMax === rMin && lMax === rMax;
         break;
       }
       case GTE:
@@ -76,87 +77,98 @@ export class ComparisonFormulaNode extends FormulaNode<boolean> {
         break;
     }
     if (isError) {
-      const lRange = lMin == lMax ? lMin : `[${lMin}..${lMax}]`;
-      const rRange = rMin == rMax ? rMin : `[${rMin}..${rMax}]`;
+      const lRange = lMin === lMax ? lMin : `[${lMin}..${lMax}]`;
+      const rRange = rMin === rMax ? rMin : `[${rMin}..${rMax}]`;
       this.addError(
-        `Formula cannot be satisfied: "${this.text} ${this.formulaType.name}" cannot be satisfied: ${lRange} cannot be ${formulaTypeToString(this.formulaType)} ${rRange}`
+        `Formula cannot be satisfied: "${this.text} ${this.formulaType.name}" cannot be satisfied: ${lRange} cannot be ${formulaTypeToString(this.formulaType)} ${rRange}`,
       );
       return true;
     }
   }
+
   toPRUsedFormula(): string {
     return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.PR_USED);
   }
+
   toRawMissedFormula(): string {
     return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.MISSED);
   }
+
   toMissedFormula(): string {
     return this._toFormulaByNotStatus(this.toUnknownFormula.name, [STATUS.MISSED, STATUS.PR_USED]);
   }
+
   toUnknownFormula(): string {
-    if (this.isInCircularDependency()) return VALUE.TRUE;
+    if (this.isInCircularDependency())
+      return VALUE.TRUE;
     // ComparisonFormulaNode doesn't add MISSED check - that's handled by BooleanFormulaNode
     return this._toFormulaByNotStatus(this.toUnknownFormula.name, STATUS.UNKNOWN);
   }
+
   private _toFormulaByNotStatus(
     formulaTypeName: string,
     notStatusesForMax: STATUS | STATUS[],
-    statusesForMin: STATUS | STATUS[] = STATUS.CHECKED
+    statusesForMin: STATUS | STATUS[] = STATUS.CHECKED,
   ): string {
-    if (this.hasErrors()) return VALUE.FALSE;
-    if (this.isInCircularDependency()) return VALUE.FALSE;
-    if (this.hasValue()) return VALUE(this.value);
-    if (!this.formulaType) return this.child[formulaTypeName]();
+    if (this.hasErrors())
+      return VALUE.FALSE;
+    if (this.isInCircularDependency())
+      return VALUE.FALSE;
+    if (this.hasValue())
+      return VALUE(this.value);
+    if (!this.formulaType)
+      return this.child[formulaTypeName]();
 
-    if (notStatusesForMax && !Array.isArray(notStatusesForMax)) notStatusesForMax = [notStatusesForMax];
-    const minStatuses: string[] =
-      statusesForMin && !Array.isArray(statusesForMin)
+    if (notStatusesForMax && !Array.isArray(notStatusesForMax))
+      notStatusesForMax = [notStatusesForMax];
+    const minStatuses: string[]
+      = statusesForMin && !Array.isArray(statusesForMin)
         ? [statusesForMin]
         : ((statusesForMin as string[]) || []);
-    const maxNotStatuses: string[] =
-      notStatusesForMax && !Array.isArray(notStatusesForMax)
+    const maxNotStatuses: string[]
+      = notStatusesForMax && !Array.isArray(notStatusesForMax)
         ? [notStatusesForMax]
         : ((notStatusesForMax as string[]) || []);
     switch (this.formulaType) {
       case GT: {
         return Formula.LTE(
           this.children[0].toFormulaByNotStatus(...maxNotStatuses),
-          this.children[1].toFormulaByStatus(...minStatuses)
+          this.children[1].toFormulaByStatus(...minStatuses),
         );
       }
       case GTE:
       case X_ITEMS: {
         return Formula.LT(
           this.children[0].toFormulaByNotStatus(...maxNotStatuses),
-          this.children[1].toFormulaByStatus(...minStatuses)
+          this.children[1].toFormulaByStatus(...minStatuses),
         );
       }
       case EQ: {
         return OR(
           Formula.LT(
             this.children[0].toFormulaByNotStatus(...maxNotStatuses),
-            this.children[1].toFormulaByStatus(...minStatuses)
+            this.children[1].toFormulaByStatus(...minStatuses),
           ),
           GT(
             this.children[0].toFormulaByStatus(...minStatuses),
-            this.children[1].toFormulaByNotStatus(...maxNotStatuses)
-          )
+            this.children[1].toFormulaByNotStatus(...maxNotStatuses),
+          ),
         );
       }
       case NE: {
         return AND(
           EQ(
             this.children[0].toFormulaByNotStatus(...maxNotStatuses),
-            this.children[0].toFormulaByStatus(...minStatuses)
+            this.children[0].toFormulaByStatus(...minStatuses),
           ),
           EQ(
             this.children[0].toFormulaByNotStatus(...maxNotStatuses),
-            this.children[1].toFormulaByStatus(...minStatuses)
+            this.children[1].toFormulaByStatus(...minStatuses),
           ),
           EQ(
             this.children[0].toFormulaByStatus(...minStatuses),
-            this.children[1].toFormulaByNotStatus(...maxNotStatuses)
-          )
+            this.children[1].toFormulaByNotStatus(...maxNotStatuses),
+          ),
         );
       }
     }

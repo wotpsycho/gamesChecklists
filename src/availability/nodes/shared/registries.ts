@@ -1,4 +1,4 @@
-import type { virtualValueInfo, UsesInfoRegistry } from './types';
+import type { UsesInfoRegistry, virtualValueInfo } from "./types";
 
 /**
  * Global registry of virtual items created by special node types

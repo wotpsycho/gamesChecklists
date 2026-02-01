@@ -1,13 +1,13 @@
-import type { row } from '../../types';
-import type { IStatusFormulaTranslator } from '../../interfaces';
-import { VALUE } from '../../utilities/formula-helpers';
-import { time, timeEnd } from '../../../util';
-import { FormulaValueNode } from '../value/FormulaValueNode';
-import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
-import { CellFormulaParser } from '../../CellFormulaParser';
-import type { BlocksArgs } from '../shared';
-import { GeneratedBlockedUntilFormulaNode } from './GeneratedBlockedUntilFormulaNode';
+import type { IStatusFormulaTranslator } from "../../interfaces";
+import type { row } from "../../types";
+import type { BlocksArgs } from "../shared";
 import { COLUMN } from "../../../shared-types";
+import { time, timeEnd } from "../../../util";
+import { CellFormulaParser } from "../../CellFormulaParser";
+import { VALUE } from "../../utilities";
+import { BooleanFormulaNode } from "../boolean";
+import { FormulaValueNode } from "../value";
+import { GeneratedBlockedUntilFormulaNode } from "./GeneratedBlockedUntilFormulaNode";
 
 const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
 
@@ -18,23 +18,25 @@ const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
 export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
   static create({ text, blocksText, untilText, translator, row }: BlocksArgs) {
     const match = text?.match(untilRegExp) || [];
-    return new BlocksUntilFormulaNode(blocksText || match[1] || "*", untilText || match[2],translator,row);
+    return new BlocksUntilFormulaNode(blocksText || match[1] || "*", untilText || match[2], translator, row);
   }
 
   protected get parser(): CellFormulaParser {
     return CellFormulaParser.getParserForChecklistRow(this.translator, this.row);
   }
 
-  protected constructor(blocksText:string, untilText:string, translator:IStatusFormulaTranslator, row:row) {
-    super(blocksText ?? "*",translator,row);
+  protected constructor(blocksText: string, untilText: string, translator: IStatusFormulaTranslator, row: row) {
+    super(blocksText ?? "*", translator, row);
     if (!untilText) {
       this.addError("Missing UNTIL clause of BLOCKS");
     } else {
-      this.child = BooleanFormulaNode.create({ text:untilText, translator: this.translator, row: this.row });
+      this.child = BooleanFormulaNode.create({ text: untilText, translator: this.translator, row: this.row });
     }
   }
-  finalize():BlocksUntilFormulaNode {
-    if (this.finalized) return this;
+
+  finalize(): BlocksUntilFormulaNode {
+    if (this.finalized)
+      return this;
     super.finalize();
     if (!this.hasErrors()) {
       time("blocksFinalize");
@@ -43,59 +45,68 @@ export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
       this.valueInfo.rows // All rows matching the BLOCKS clause
         .filter(blockedRow => !untilPreReqRows.has(blockedRow)) // Don't block any preReq of UNTIL
         .forEach(blockedRow =>
-          CellFormulaParser.getParserForChecklistRow(this.translator,blockedRow).addChild(
-            GeneratedBlockedUntilFormulaNode.create({ blockedText: `$${this.row}`, untilText: this.child.text, translator: this.translator, row: blockedRow, calculated:true }).finalize()
-          )
+          CellFormulaParser.getParserForChecklistRow(this.translator, blockedRow).addChild(
+            GeneratedBlockedUntilFormulaNode.create({ blockedText: `$${this.row}`, untilText: this.child.text, translator: this.translator, row: blockedRow, calculated: true }).finalize(),
+          ),
         );
       timeEnd("blocksFinalize");
     }
     this.finalized = true;
     return this;
   }
-  getAllPossiblePreReqRows():Set<row>{
+
+  getAllPossiblePreReqRows(): Set<row> {
     return new Set<row>();
   }
-  getDirectPreReqRows():Set<row>{
+
+  getDirectPreReqRows(): Set<row> {
     return new Set<row>();
   }
-  getCircularDependencies():Set<row>{
+
+  getCircularDependencies(): Set<row> {
     return new Set<row>();
   }
+
   toPreReqsMetFormula(): string {
     return VALUE.TRUE;
   }
+
   toPRUsedFormula(): string {
     return VALUE.FALSE;
   }
+
   toRawMissedFormula(): string {
     return VALUE.FALSE;
   }
+
   toMissedFormula(): string {
     return VALUE.FALSE;
   }
+
   toUnknownFormula(): string {
     return VALUE.FALSE;
   }
+
   checkErrors() {
     if (super.checkErrors() || !this.child) {
       return true;
-    } else if (!this.child.getAllPossiblePreReqRows().has(this.row)){
+    } else if (!this.child.getAllPossiblePreReqRows().has(this.row)) {
       this.addError("UNTIL clause must depend on this Item");
-      console.error("UNTIL Clause Depends:: row: %s, childPreReqRows: [%s], child.loop:%s", this.row, [...this.child.getAllPossiblePreReqRows()].join(","),this.child.isInCircularDependency())
+      console.error("UNTIL Clause Depends:: row: %s, childPreReqRows: [%s], child.loop:%s", this.row, [...this.child.getAllPossiblePreReqRows()].join(","), this.child.isInCircularDependency());
       return true;
     } else {
       // console.log("blocksUntil.checkErrors:checking missables")
       const preReqRows = this.parser.getAllPossiblePreReqRows();
       const childPreReqRows = this.child.getAllPossiblePreReqRows();
-      const possiblyMissableRows = [...childPreReqRows].filter(row => !preReqRows.has(row) && CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
+      const possiblyMissableRows = [...childPreReqRows].filter(row => !preReqRows.has(row) && CellFormulaParser.getParserForChecklistRow(this.translator, row).isDirectlyMissable());
       if (possiblyMissableRows.length) {
         const itemsByRow = this.translator.getColumnValues(COLUMN.ITEM).byRow;
-        this.addError("UNTIL clause cannot be missible; remove Pre-Req dependencies on these Items: " +
+        this.addError(`UNTIL clause cannot be missible; remove Pre-Req dependencies on these Items: ${
           possiblyMissableRows.map<string[]>(row =>
             itemsByRow[row].map<string>(valueInfo =>
-              `${valueInfo.value} (Row ${row})`
-            )
-          ).flat().join("\n")
+              `${valueInfo.value} (Row ${row})`,
+            ),
+          ).flat().join("\n")}`,
         );
       }
     }

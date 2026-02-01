@@ -1,9 +1,9 @@
-import type { row } from '../../types';
-import type { IStatusFormulaTranslator, RowCounts, NodeArgs } from '../../interfaces';
-import { PHASE } from '../../constants';
-import { Node } from '../base';
-import { ValueNodeTypes, virtualItems } from '../shared';
+import type { IStatusFormulaTranslator, NodeArgs, RowCounts } from "../../interfaces";
+import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
+import { PHASE } from "../../constants";
+import { Node } from "../base";
+import { ValueNodeTypes, virtualItems } from "../shared";
 
 /**
  * Regular expressions for parsing value node syntax
@@ -11,14 +11,14 @@ import { COLUMN } from "../../../shared-types";
 const ValueNodeTypeRegExps: { [x in ValueNodeTypes]: RegExp } = {
   WITH: /^(?:(?<items>.+) +)?WITH +(?<filteredItems>.+?)$/,
   WITHOUT: /^(?:(?<items>.+) +)?(WITHOUT|UNLESS|EXCEPT) +(?<filteredItems>.+?)$/,
-  VALUE: /^(?:(?<column>.*?[^\s])[!=])?(?<id>.*)$/,
+  VALUE: /^(?:(?<column>.*?\S)[!=])?(?<id>.*)$/,
 };
 
 /**
  * Unescapes column/id values by removing quotes
  */
 const unescapeValue = (text: string): string => {
-  return text?.replace(/^'(.*)'$/, '$1');
+  return text?.replace(/^'(.*)'$/, "$1");
 };
 
 /**
@@ -40,13 +40,16 @@ export class ValueNode extends Node {
   protected get itemsChild(): ValueNode {
     return this.children[0];
   }
+
   protected set itemsChild(child: ValueNode) {
     this.checkPhase(PHASE.BUILDING, PHASE.FINALIZING);
     this.children[0] = child;
   }
+
   protected get filterChild(): ValueNode {
     return this.children[1];
   }
+
   protected set filterChild(child: ValueNode) {
     this.checkPhase(PHASE.BUILDING, PHASE.FINALIZING);
     this.children[1] = child;
@@ -54,21 +57,25 @@ export class ValueNode extends Node {
 
   get numPossible(): number {
     return (
-      (this._isVirtual && virtualItems[this.text].numPossible) ||
-      Object.values(this._rowCounts).reduce((total, count) => total + count, 0)
+      (this._isVirtual && virtualItems[this.text].numPossible)
+      || Object.values(this._rowCounts).reduce((total, count) => total + count, 0)
     );
   }
+
   get rows(): number[] {
     return Object.keys(this._rowCounts)
-      .map((row) => Number(row))
+      .map(row => Number(row))
       .sort((a, b) => a - b);
   }
+
   get isVirtual() {
     return this._isVirtual;
   }
+
   get isSelfReferential() {
     return this._isSelfReferential;
   }
+
   get rowCounts(): Readonly<RowCounts> {
     return { ...this._rowCounts };
   }
@@ -82,7 +89,7 @@ export class ValueNode extends Node {
     let { items, filteredItems } = ValueNodeTypeRegExps.WITH.exec(this.text)?.groups || {};
     if (items || filteredItems) {
       this.type = ValueNodeTypes.WITH;
-      this.itemsChild = new ValueNode(items ?? '*', this.translator, this.row, _implicitPrefix);
+      this.itemsChild = new ValueNode(items ?? "*", this.translator, this.row, _implicitPrefix);
       this.filterChild = new ValueNode(filteredItems, this.translator, this.row);
       [this.column, this.id, this._rowCounts] = [this.itemsChild.column, this.itemsChild.id, { ...this.itemsChild._rowCounts }];
       this.rows.forEach((row) => {
@@ -94,7 +101,7 @@ export class ValueNode extends Node {
       (({ items, filteredItems } = ValueNodeTypeRegExps.WITHOUT.exec(this.text)?.groups || {}), items || filteredItems)
     ) {
       this.type = ValueNodeTypes.WITHOUT;
-      this.itemsChild = new ValueNode(items ?? '*', this.translator, this.row, _implicitPrefix);
+      this.itemsChild = new ValueNode(items ?? "*", this.translator, this.row, _implicitPrefix);
       this.filterChild = new ValueNode(filteredItems, this.translator, this.row);
       [this.column, this.id, this._rowCounts] = [this.itemsChild.column, this.itemsChild.id, { ...this.itemsChild._rowCounts }];
       this.rows.forEach((row) => {
@@ -110,9 +117,9 @@ export class ValueNode extends Node {
       this._rowCounts = this.translator.getRowCounts(
         column || COLUMN.ITEM,
         id,
-        _implicitPrefix && (!column || column == COLUMN.ITEM)
+        _implicitPrefix && (!column || column === COLUMN.ITEM),
       );
-      if (column && this.rows.length == 0) {
+      if (column && this.rows.length === 0) {
         // Assume ! was part Item ID
         this._rowCounts = this.translator.getRowCounts(COLUMN.ITEM, unescapeValue(this.text), _implicitPrefix);
         if (this.rows.length) {
@@ -127,15 +134,16 @@ export class ValueNode extends Node {
       delete this._rowCounts[this.row];
       this._isSelfReferential = true;
     }
-    // if (row == 200) console.log("vn.con: text:%s, rowCounts:%s",text,Object.keys(this._rowCounts));
+    // if (row === 200) console.log("vn.con: text:%s, rowCounts:%s",text,Object.keys(this._rowCounts));
   }
 
   finalize(): ValueNode {
-    if (this.finalized) return this;
+    if (this.finalized)
+      return this;
     super.finalize();
     if (!this.rows.length && virtualItems[this.text]) {
       Object.keys(virtualItems[this.text].rowCounts).forEach(
-        (row) => (this._rowCounts[row] = virtualItems[this.text].rowCounts[row])
+        row => (this._rowCounts[row] = virtualItems[this.text].rowCounts[row]),
       );
       this._isVirtual = true;
     }
@@ -145,24 +153,24 @@ export class ValueNode extends Node {
 
   toString(): string {
     // Remove the outer "" if present
-    return super.toString().replace(/^"(([^"]|\\")*)"$/, '$1');
+    return super.toString().replace(/^"(([^"]|\\")*)"$/, "$1");
   }
 
   checkErrors(): boolean {
     if (super.checkErrors()) {
       return true;
-    } else if (this.rows.length == 0) {
+    } else if (this.rows.length === 0) {
       switch (this.type) {
         case ValueNodeTypes.WITH:
           this.addError(`Could not find any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}"`);
           break;
         case ValueNodeTypes.WITHOUT:
           this.addError(
-            `Could not find any of "${this.itemsChild.toString()}" WITHOUT "${this.filterChild.toString()}"`
+            `Could not find any of "${this.itemsChild.toString()}" WITHOUT "${this.filterChild.toString()}"`,
           );
           break;
         case ValueNodeTypes.VALUE:
-          if (this.column != COLUMN.ITEM) {
+          if (this.column !== COLUMN.ITEM) {
             if (!this.translator.checklist.hasColumn(this.column)) {
               this.addError(`Could not find column "${this.column}"`);
             } else {
@@ -174,9 +182,9 @@ export class ValueNode extends Node {
           break;
       }
       return true;
-    } else if (this.type == ValueNodeTypes.WITHOUT && this.rows.length == this.itemsChild.rows.length) {
+    } else if (this.type === ValueNodeTypes.WITHOUT && this.rows.length === this.itemsChild.rows.length) {
       this.addError(
-        `There are not any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}" (WITHOUT is unnecessary)`
+        `There are not any of "${this.itemsChild.toString()}" WITH "${this.filterChild.toString()}" (WITHOUT is unnecessary)`,
       );
       return true;
     }

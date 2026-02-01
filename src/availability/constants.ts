@@ -1,15 +1,15 @@
 export enum SPECIAL_PREFIXES {
-  USES     = "USES",
-  MISSED   = "MISSED",
-  CHOICE   = "CHOICE", // DEPRECATED, alias for OPTION
-  OPTION   = "OPTION",
-  LINKED   = "LINKED",
-  CHECKED  = "CHECKED",
-  INITIAL  = "INITIAL",
+  USES = "USES",
+  MISSED = "MISSED",
+  CHOICE = "CHOICE", // DEPRECATED, alias for OPTION
+  OPTION = "OPTION",
+  LINKED = "LINKED",
+  CHECKED = "CHECKED",
+  INITIAL = "INITIAL",
   OPTIONAL = "OPTIONAL",
-  BLOCKS   = "BLOCKS",
-  BLOCKED  = "BLOCKED",
-  PERSIST  = "PERSIST",
+  BLOCKS = "BLOCKS",
+  BLOCKED = "BLOCKED",
+  PERSIST = "PERSIST",
 }
 
 export const USAGES = {
@@ -24,7 +24,7 @@ OPTIONs can have additional Pre-Reqs in addition to what are inherited from the 
 
 Example: Item "Yes" and Item "No" both have Pre-Req "OPTION Yes or No?"
 
-NOTE: CHOICE is a deprecated alias for OPTION`
+NOTE: CHOICE is a deprecated alias for OPTION`,
 };
 
 export enum PHASE {

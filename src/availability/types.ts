@@ -1,4 +1,4 @@
-import type * as Formula from '../Formulas';
+import type * as Formula from "../Formulas";
 
 export type Range = GoogleAppsScript.Spreadsheet.Range;
 export type RichTextValue = GoogleAppsScript.Spreadsheet.RichTextValue;

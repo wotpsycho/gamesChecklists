@@ -1,6 +1,6 @@
-import type { Checklist } from '../../ChecklistApp';
-import { StatusFormulaTranslator } from '../StatusFormulaTranslator';
+import type { Checklist } from "../../ChecklistApp";
 import { getActiveChecklist } from "../../checklist-helpers";
+import { StatusFormulaTranslator } from "../StatusFormulaTranslator";
 
 /**
  * Get the StatusFormulaTranslator for the active checklist
@@ -29,7 +29,7 @@ export function validateAndGenerateStatusFormulasForChecklist(checklist: Checkli
 export function addLinksToPreReqs(
   checklist: Checklist = getActiveChecklist(),
   startRow = checklist.firstDataRow,
-  endRow = checklist.lastRow
+  endRow = checklist.lastRow,
 ): void {
   StatusFormulaTranslator.fromChecklist(checklist).addLinksToPreReqsInRange(startRow, endRow);
 }

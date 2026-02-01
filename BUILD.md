@@ -58,11 +58,11 @@ Watches for file changes and rebuilds automatically.
 The entry point imports all modules and exports them to the global scope:
 
 ```typescript
-import * as ChecklistApp from './ChecklistApp';
-import * as Formula from './Formulas';
+import * as ChecklistApp from "./ChecklistApp";
+import * as Formula from "./Formulas";
 // ... other imports
 
-const g = typeof global !== 'undefined' ? global : globalThis;
+const g = typeof global !== "undefined" ? global : globalThis;
 g.ChecklistApp = ChecklistApp;
 g.Formula = Formula;
 g.onOpen = onOpen;
@@ -108,8 +108,8 @@ export class Checklist { ... }
 
 **Imports:**
 ```typescript
-import { Checklist } from './ChecklistApp';
-import * as Formula from './Formulas';
+import { Checklist } from "./ChecklistApp";
+import * as Formula from "./Formulas";
 ```
 
 ## Circular Dependencies

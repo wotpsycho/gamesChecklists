@@ -1,6 +1,6 @@
 # Games Checklists
 
-Personal Coding Project created on accident to create an interactive checklist with Pre-Req dependencies. 
+Personal Coding Project created on accident to create an interactive checklist with Pre-Req dependencies.
 Mainly used to play around with GoogleAppsScripts, ES6, Typescript, and functional programming.
 Main development/master checklist can be found at:
 

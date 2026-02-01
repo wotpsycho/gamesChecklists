@@ -1,27 +1,27 @@
-import typescript from '@rollup/plugin-typescript';
-import resolve from '@rollup/plugin-node-resolve';
-import cleanup from 'rollup-plugin-cleanup';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync } from "node:child_process";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import resolve from "@rollup/plugin-node-resolve";
+import typescript from "@rollup/plugin-typescript";
+import cleanup from "rollup-plugin-cleanup";
 
 // Copy appsscript.json to build directory
 function copyAppsScriptJson() {
   return {
-    name: 'copy-appsscript-json',
+    name: "copy-appsscript-json",
     buildEnd() {
-      mkdirSync('build', { recursive: true });
-      copyFileSync('src/appsscript.json', 'build/appsscript.json');
-    }
+      mkdirSync("build", { recursive: true });
+      copyFileSync("src/appsscript.json", "build/appsscript.json");
+    },
   };
 }
 
 // Add top-level function declarations after the bundle
 function addTopLevelFunctions() {
   return {
-    name: 'add-top-level-functions',
+    name: "add-top-level-functions",
     writeBundle() {
-      const bundlePath = 'build/Code.js';
-      let code = readFileSync(bundlePath, 'utf-8');
+      const bundlePath = "build/Code.js";
+      let code = readFileSync(bundlePath, "utf-8");
 
       // Append top-level declarations after the IIFE
       code += `
@@ -52,45 +52,45 @@ function CreateMetaSheet() { return Bundle.CreateMetaSheet(); }
 `;
 
       writeFileSync(bundlePath, code);
-    }
+    },
   };
 }
 
 // Push to clasp after build (assumes .clasp.json is already configured)
 function claspPush() {
   return {
-    name: 'clasp-push',
+    name: "clasp-push",
     writeBundle() {
       try {
-        execSync('clasp push', { stdio: 'inherit' });
+        execSync("clasp push", { stdio: "inherit" });
       } catch (error) {
-        console.error('Failed to push to clasp:', error.message);
+        console.error("Failed to push to clasp:", error.message);
       }
-    }
+    },
   };
 }
 
 // Check if CLASP_PUSH environment variable is set
 // Note: Using env var instead of CLI flag because rollup rejects unknown flags
-const shouldPush = process.env.CLASP_PUSH === 'true';
+const shouldPush = process.env.CLASP_PUSH === "true";
 
 export default {
-  input: 'src/index.ts',
+  input: "src/index.ts",
   output: {
-    file: 'build/Code.js',
-    format: 'iife',
-    name: 'Bundle',
-    banner: '/* Games Checklist - Bundled with Rollup */',
+    file: "build/Code.js",
+    format: "iife",
+    name: "Bundle",
+    banner: "/* Games Checklist - Bundled with Rollup */",
   },
   plugins: [
     resolve(),
     typescript({
-      tsconfig: './tsconfig.json',
+      tsconfig: "./tsconfig.json",
       declaration: false,
     }),
     cleanup({
-      comments: 'none',
-      extensions: ['js', 'ts'],
+      comments: "none",
+      extensions: ["js", "ts"],
     }),
     copyAppsScriptJson(),
     addTopLevelFunctions(),

@@ -1,2 +1,2 @@
-export { BooleanFormulaNode } from './BooleanFormulaNode';
-export { ComparisonFormulaNode } from './ComparisonFormulaNode';
+export { BooleanFormulaNode } from "./BooleanFormulaNode";
+export { ComparisonFormulaNode } from "./ComparisonFormulaNode";

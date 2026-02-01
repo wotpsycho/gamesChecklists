@@ -1,28 +1,30 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { execSync } from 'child_process';
-import { createInterface } from 'readline';
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 
-const CONFIG_FILE = '.clasp.local.json';
-const CLASP_FILE = '.clasp.json';
+const CONFIG_FILE = ".clasp.local.json";
+const CLASP_FILE = ".clasp.json";
 
 // Parse CLI flags
-const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
-const QUIET = process.argv.includes('--quiet') || process.argv.includes('-q');
+const VERBOSE = process.argv.includes("--verbose") || process.argv.includes("-v");
+const QUIET = process.argv.includes("--quiet") || process.argv.includes("-q");
 
 /**
  * Log message (respects quiet mode)
  */
 function log(message) {
-  if (!QUIET) console.log(message);
+  if (!QUIET)
+    console.log(message);
 }
 
 /**
  * Debug log (only in verbose mode)
  */
 function debug(message) {
-  if (VERBOSE) console.log(`[DEBUG] ${message}`);
+  if (VERBOSE)
+    console.log(`[DEBUG] ${message}`);
 }
 
 /**
@@ -31,7 +33,7 @@ function debug(message) {
 function createPrompt() {
   return createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 }
 
@@ -41,7 +43,7 @@ function createPrompt() {
  * @param {string} defaultValue - Optional default value
  * @returns {Promise<string>} User's answer
  */
-function prompt(question, defaultValue = '') {
+function prompt(question, defaultValue = "") {
   const rl = createPrompt();
 
   return new Promise((resolve) => {
@@ -64,7 +66,7 @@ function confirm(question) {
   return new Promise((resolve) => {
     rl.question(`${question} (y/n): `, (answer) => {
       rl.close();
-      resolve(answer.trim().toLowerCase() === 'y');
+      resolve(answer.trim().toLowerCase() === "y");
     });
   });
 }
@@ -76,11 +78,11 @@ function confirm(question) {
  * @throws {Error} If name is invalid
  */
 function validateSheetName(name) {
-  if (!name || name.trim() === '') {
-    throw new Error('Sheet name cannot be empty');
+  if (!name || name.trim() === "") {
+    throw new Error("Sheet name cannot be empty");
   }
   if (!/^[a-z0-9-]+$/i.test(name)) {
-    throw new Error('Sheet name can only contain letters, numbers, and hyphens');
+    throw new Error("Sheet name can only contain letters, numbers, and hyphens");
   }
   return name.trim();
 }
@@ -92,27 +94,27 @@ function validateSheetName(name) {
  * @throws {Error} If ID is invalid
  */
 function validateScriptId(id) {
-  if (!id || !/^[a-zA-Z0-9_-]{30,}$/.test(id)) {
-    throw new Error('Invalid Script ID format (should be 30+ alphanumeric characters)');
+  if (!id || !/^[\w-]{30,}$/.test(id)) {
+    throw new Error("Invalid Script ID format (should be 30+ alphanumeric characters)");
   }
   return id;
 }
 
 /**
  * Find if a scriptId is already used by another sheet
- * @param {Object} config - Config object
+ * @param {object} config - Config object
  * @param {string} scriptId - Script ID to check
  * @returns {string|null} Name of sheet using this scriptId, or null
  */
 function findDuplicateScriptId(config, scriptId) {
   return Object.entries(config.sheets).find(
-    ([, sheet]) => sheet.scriptId === scriptId
+    ([, sheet]) => sheet.scriptId === scriptId,
   )?.[0] || null;
 }
 
 /**
  * Save config to file
- * @param {Object} config - Config object to save
+ * @param {object} config - Config object to save
  * @returns {boolean} True if successful
  */
 function saveConfig(config) {
@@ -132,12 +134,12 @@ function saveConfig(config) {
  */
 function checkClaspInstalled() {
   try {
-    execSync('clasp --version', { stdio: 'ignore' });
-    debug('clasp is installed');
+    execSync("clasp --version", { stdio: "ignore" });
+    debug("clasp is installed");
     return true;
   } catch {
-    console.error('Error: clasp is not installed');
-    console.error('Install it with: npm install -g @google/clasp');
+    console.error("Error: clasp is not installed");
+    console.error("Install it with: npm install -g @google/clasp");
     return false;
   }
 }
@@ -173,24 +175,24 @@ Examples:
 
 /**
  * Create default config file interactively
- * @returns {Promise<Object>} Created config object
+ * @returns {Promise<object>} Created config object
  */
 async function createDefaultConfig() {
   log(`\n${CONFIG_FILE} not found.`);
 
-  const shouldCreate = await confirm('Would you like to create one now?');
+  const shouldCreate = await confirm("Would you like to create one now?");
 
   if (!shouldCreate) {
-    log('Aborted.');
+    log("Aborted.");
     process.exit(0);
   }
 
-  log('\nLet\'s set up your first deployment target.\n');
+  log("\nLet's set up your first deployment target.\n");
 
-  const projectId = await prompt('Default Project ID (optional, for GCP association)', '');
-  let sheetName = await prompt('Sheet name (identifier)', 'main');
-  let scriptId = await prompt('Script ID (from Apps Script project)');
-  const description = await prompt('Description (optional)', '');
+  const projectId = await prompt("Default Project ID (optional, for GCP association)", "");
+  let sheetName = await prompt("Sheet name (identifier)", "main");
+  let scriptId = await prompt("Script ID (from Apps Script project)");
+  const description = await prompt("Description (optional)", "");
 
   // Validate inputs
   try {
@@ -203,13 +205,13 @@ async function createDefaultConfig() {
 
   const config = {
     ...(projectId && { projectId }),
-    rootDir: './build',
+    rootDir: "./build",
     sheets: {
       [sheetName]: {
-        scriptId: scriptId,
-        ...(description && { description })
-      }
-    }
+        scriptId,
+        ...(description && { description }),
+      },
+    },
   };
 
   if (!saveConfig(config)) {
@@ -224,7 +226,7 @@ async function createDefaultConfig() {
 
 /**
  * Read the local clasp configuration
- * @returns {Promise<Object>} Config object
+ * @returns {Promise<object>} Config object
  */
 async function readConfig() {
   if (!existsSync(CONFIG_FILE)) {
@@ -232,12 +234,12 @@ async function readConfig() {
   }
 
   try {
-    const config = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+    const config = JSON.parse(readFileSync(CONFIG_FILE, "utf-8"));
     debug(`Loaded config from ${CONFIG_FILE}`);
 
     // Validate config structure
-    if (!config.sheets || typeof config.sheets !== 'object') {
-      throw new Error('Invalid config: missing or invalid "sheets" object');
+    if (!config.sheets || typeof config.sheets !== "object") {
+      throw new Error("Invalid config: missing or invalid \"sheets\" object");
     }
 
     return config;
@@ -249,7 +251,7 @@ async function readConfig() {
 
 /**
  * Generate .clasp.json for a specific target
- * @param {Object} config - Config object
+ * @param {object} config - Config object
  * @param {string} targetName - Name of the target sheet
  */
 function generateClaspJson(config, targetName) {
@@ -257,7 +259,7 @@ function generateClaspJson(config, targetName) {
 
   if (!target) {
     console.error(`Error: Target "${targetName}" not found in ${CONFIG_FILE}`);
-    console.error(`Available targets: ${Object.keys(config.sheets).join(', ')}`);
+    console.error(`Available targets: ${Object.keys(config.sheets).join(", ")}`);
     process.exit(1);
   }
 
@@ -266,7 +268,7 @@ function generateClaspJson(config, targetName) {
   const claspConfig = {
     scriptId: target.scriptId,
     ...(projectId && { projectId }), // Only include if projectId exists
-    rootDir: config.rootDir
+    rootDir: config.rootDir,
   };
 
   writeFileSync(CLASP_FILE, JSON.stringify(claspConfig, null, 2));
@@ -283,19 +285,19 @@ function generateClaspJson(config, targetName) {
  * Push to clasp
  */
 function push() {
-  log('Pushing to clasp...');
+  log("Pushing to clasp...");
   try {
-    execSync('clasp push', { stdio: 'inherit' });
-    log('✓ Successfully pushed to clasp');
-  } catch (error) {
-    console.error('✗ Failed to push to clasp');
+    execSync("clasp push", { stdio: "inherit" });
+    log("✓ Successfully pushed to clasp");
+  } catch (_error) {
+    console.error("✗ Failed to push to clasp");
     process.exit(1);
   }
 }
 
 /**
  * Prompt user to select a target
- * @param {Object} config - Config object
+ * @param {object} config - Config object
  * @returns {Promise<string>} Selected target name
  */
 async function promptForTarget(config) {
@@ -306,21 +308,21 @@ async function promptForTarget(config) {
     process.exit(1);
   }
 
-  log('\nAvailable sheets:');
+  log("\nAvailable sheets:");
   sheets.forEach((name, index) => {
     const sheet = config.sheets[name];
-    log(`  ${index + 1}. ${name}${sheet.description ? ' - ' + sheet.description : ''}`);
+    log(`  ${index + 1}. ${name}${sheet.description ? ` - ${sheet.description}` : ""}`);
   });
 
   const rl = createPrompt();
 
   return new Promise((resolve) => {
-    rl.question('\nSelect a sheet (number or name): ', (answer) => {
+    rl.question("\nSelect a sheet (number or name): ", (answer) => {
       rl.close();
 
       // Check if it's a number
-      const num = parseInt(answer);
-      if (!isNaN(num) && num > 0 && num <= sheets.length) {
+      const num = Number.parseInt(answer);
+      if (!Number.isNaN(num) && num > 0 && num <= sheets.length) {
         resolve(sheets[num - 1]);
       } else if (sheets.includes(answer)) {
         resolve(answer);
@@ -334,38 +336,40 @@ async function promptForTarget(config) {
 
 /**
  * List all configured sheets
- * @param {Object} config - Config object
+ * @param {object} config - Config object
  */
 function listSheets(config) {
   const sheets = Object.entries(config.sheets);
 
   if (sheets.length === 0) {
-    log('No sheets configured');
-    log('\nAdd a sheet with: npm run push:add');
+    log("No sheets configured");
+    log("\nAdd a sheet with: npm run push:add");
     return;
   }
 
-  log('\nConfigured sheets:\n');
+  log("\nConfigured sheets:\n");
   sheets.forEach(([name, sheet]) => {
     log(`  ${name}`);
     log(`    Script ID: ${sheet.scriptId}`);
-    if (sheet.description) log(`    Description: ${sheet.description}`);
-    if (sheet.projectId) log(`    Project ID: ${sheet.projectId}`);
-    log('');
+    if (sheet.description)
+      log(`    Description: ${sheet.description}`);
+    if (sheet.projectId)
+      log(`    Project ID: ${sheet.projectId}`);
+    log("");
   });
 }
 
 /**
  * Add a new sheet to the config
- * @param {Object} config - Config object
+ * @param {object} config - Config object
  * @param {string} sheetName - Optional sheet name
  */
 async function addSheet(config, sheetName) {
-  log('\nAdding a new deployment target...\n');
+  log("\nAdding a new deployment target...\n");
 
   // Prompt for sheet name if not provided
   if (!sheetName) {
-    sheetName = await prompt('Sheet name (identifier)');
+    sheetName = await prompt("Sheet name (identifier)");
   }
 
   // Validate sheet name
@@ -383,12 +387,12 @@ async function addSheet(config, sheetName) {
   }
 
   // Prompt for scriptId, description, and optional projectId override
-  let scriptId = await prompt('Script ID (from Apps Script project)');
-  const description = await prompt('Description (optional)', '');
+  let scriptId = await prompt("Script ID (from Apps Script project)");
+  const description = await prompt("Description (optional)", "");
   const projectIdPrompt = config.projectId
     ? `Project ID override (optional, default: ${config.projectId})`
-    : 'Project ID (optional)';
-  const customProjectId = await prompt(projectIdPrompt, '');
+    : "Project ID (optional)";
+  const customProjectId = await prompt(projectIdPrompt, "");
 
   // Validate scriptId
   try {
@@ -407,9 +411,9 @@ async function addSheet(config, sheetName) {
 
   // Add to config
   config.sheets[sheetName] = {
-    scriptId: scriptId,
+    scriptId,
     ...(description && { description }),
-    ...(customProjectId && { projectId: customProjectId })
+    ...(customProjectId && { projectId: customProjectId }),
   };
 
   // Save config
@@ -429,31 +433,31 @@ async function addSheet(config, sheetName) {
  * Main function
  */
 async function main() {
-  const args = process.argv.slice(2).filter(arg => !arg.startsWith('-'));
+  const args = process.argv.slice(2).filter(arg => !arg.startsWith("-"));
   const command = args[0];
 
   // Handle help
-  if (process.argv.includes('-h') || process.argv.includes('--help')) {
+  if (process.argv.includes("-h") || process.argv.includes("--help")) {
     showHelp();
     return;
   }
 
   // Check if clasp is installed (skip for list command)
-  if (command !== 'list' && command !== 'add') {
+  if (command !== "list" && command !== "add") {
     if (!checkClaspInstalled()) {
       process.exit(1);
     }
   }
 
   // Handle list command
-  if (command === 'list') {
+  if (command === "list") {
     const config = await readConfig();
     listSheets(config);
     return;
   }
 
   // Handle add command
-  if (command === 'add') {
+  if (command === "add") {
     const config = await readConfig();
     const sheetName = args[1]; // Optional
     await addSheet(config, sheetName);
@@ -461,7 +465,7 @@ async function main() {
   }
 
   // Handle --all flag
-  if (process.argv.includes('--all')) {
+  if (process.argv.includes("--all")) {
     const config = await readConfig();
     const sheets = Object.keys(config.sheets);
 
@@ -481,14 +485,14 @@ async function main() {
   let targetName = null;
 
   // Determine target
-  if (command === 'setup' || command === 'push') {
+  if (command === "setup" || command === "push") {
     targetName = args[1];
   } else if (command && config.sheets[command]) {
     // Direct sheet name provided
     targetName = command;
   } else if (command) {
     console.error(`Unknown command or sheet: ${command}`);
-    console.error('Run with --help to see usage information');
+    console.error("Run with --help to see usage information");
     process.exit(1);
   }
 
@@ -501,12 +505,12 @@ async function main() {
   generateClaspJson(config, targetName);
 
   // Push if command is 'push' or no command specified
-  if (!command || command === 'push' || config.sheets[command]) {
+  if (!command || command === "push" || config.sheets[command]) {
     push();
   }
 }
 
-main().catch(error => {
-  console.error('Error:', error.message);
+main().catch((error) => {
+  console.error("Error:", error.message);
   process.exit(1);
 });

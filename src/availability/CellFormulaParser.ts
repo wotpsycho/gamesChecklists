@@ -1,32 +1,35 @@
-import type { row } from './types';
-import { PHASE, SPECIAL_PREFIXES } from './constants';
-import {
-  getParenPlaceholder,
-  getQuotePlaceholder,
-  parentheticalMapping,
-  PREFIX_REG_EXP,
-  quoteMapping,
-  type sheetValueInfo,
-} from './utilities/parser-utilities';
+import type { IStatusFormulaTranslator } from "./interfaces";
 // Import specialized node classes from nodes module
+import type {
+  FormulaNode,
+} from "./nodes";
+// Import StatusFormulaTranslator type
+import type { StatusFormulaTranslator } from "./StatusFormulaTranslator";
+import type { row } from "./types";
+
+import type { sheetValueInfo } from "./utilities";
+import { COLUMN } from "../shared-types";
+import { PHASE, SPECIAL_PREFIXES } from "./constants";
 import {
   BlockedUntilFormulaNode,
   BlocksUntilFormulaNode,
   BooleanFormulaNode,
   CheckedRootNode,
-  FormulaNode,
   LinkedFormulaNode,
   MissedFormulaNode,
   OptionalFormulaNode,
   OptionFormulaNode,
   RootNode,
   UsesFormulaNode,
-} from './nodes';
+} from "./nodes";
+import {
+  getParenPlaceholder,
+  getQuotePlaceholder,
+  parentheticalMapping,
+  PREFIX_REG_EXP,
+  quoteMapping,
 
-// Import StatusFormulaTranslator type
-import type { StatusFormulaTranslator } from './StatusFormulaTranslator';
-import { COLUMN } from "../shared-types";
-import { IStatusFormulaTranslator } from "./interfaces";
+} from "./utilities";
 
 /**
  * CellFormulaParser parses prerequisite text and creates formula node trees
@@ -34,27 +37,28 @@ import { IStatusFormulaTranslator } from "./interfaces";
  * Singleton pattern: one parser per checklist row
  */
 export class CellFormulaParser {
-  private static readonly parsers: {[x:number]: CellFormulaParser} = {};
-  static getParserForChecklistRow(translator: IStatusFormulaTranslator,row:row,_defaultValue: string = undefined):CellFormulaParser {
-    const key:string = `${translator.checklist.id}:${row}`;
+  private static readonly parsers: { [x: number]: CellFormulaParser } = {};
+  static getParserForChecklistRow(translator: IStatusFormulaTranslator, row: row, _defaultValue: string = undefined): CellFormulaParser {
+    const key: string = `${translator.checklist.id}:${row}`;
     if (!this.parsers[key]) {
-      this.parsers[key] = new CellFormulaParser(translator as StatusFormulaTranslator,row,_defaultValue);
+      this.parsers[key] = new CellFormulaParser(translator as StatusFormulaTranslator, row, _defaultValue);
     }
     return this.parsers[key];
   }
+
   private readonly row: row;
   private readonly rootNode: RootNode;
   readonly translator: StatusFormulaTranslator;
   readonly preReqText: string;
-  private constructor(translator: StatusFormulaTranslator, row:row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
+  private constructor(translator: StatusFormulaTranslator, row: row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
     this.translator = translator;
     this.row = row;
     this.preReqText = cellValue.toString();
 
-    const lines:string[] = [];
-    this.preReqText.split(/[\n;]/).forEach((line:string,i:number) => {
+    const lines: string[] = [];
+    this.preReqText.split(/[\n;]/).forEach((line: string, i: number) => {
       if (i > 0 && line.indexOf("...") === 0) {
-        lines[lines.length-1] += line.substring(3);
+        lines[lines.length - 1] += line.substring(3);
       } else {
         lines.push(line);
       }
@@ -65,42 +69,43 @@ export class CellFormulaParser {
     let linkedFlag: boolean = false;
     let checkedFlag: boolean = false;
     let persistFlag: boolean = false;
-    for (let j:number = 0; j < lines.length; j++) {
-      let line:string = lines[j].trim();
+    for (let j: number = 0; j < lines.length; j++) {
+      let line: string = lines[j].trim();
       let isLinked = linkedFlag;
-      if (!line) continue;
+      if (!line)
+        continue;
 
-      if (line.trim().toUpperCase() == SPECIAL_PREFIXES.LINKED.toUpperCase()) {
+      if (line.trim().toUpperCase() === SPECIAL_PREFIXES.LINKED.toUpperCase()) {
         linkedFlag = true;
         continue;
       }
-      if (line.trim().toUpperCase() == SPECIAL_PREFIXES.CHECKED || line.trim().toUpperCase() == SPECIAL_PREFIXES.INITIAL) {
+      if (line.trim().toUpperCase() === SPECIAL_PREFIXES.CHECKED || line.trim().toUpperCase() === SPECIAL_PREFIXES.INITIAL) {
         checkedFlag = true;
         continue;
       }
-      if (line.trim().toUpperCase() == SPECIAL_PREFIXES.PERSIST) {
+      if (line.trim().toUpperCase() === SPECIAL_PREFIXES.PERSIST) {
         persistFlag = true;
         continue;
       }
-      line = line.replace(/"(([^"]|\\")*)"/g, (_match,text:string) => {
-        const placeholder:string = getQuotePlaceholder();
+      line = line.replace(/"(([^"]|\\")*)"/g, (_match, text: string) => {
+        const placeholder: string = getQuotePlaceholder();
         quoteMapping[placeholder] = text;
         return placeholder;
       });
 
       let match: RegExpMatchArray;
-      const parenMatcher:RegExp = /\((([^()]|\\\(|\\\))*)\)/;
+      const parenMatcher: RegExp = /\((([^()]|\\\(|\\\))*)\)/;
       // eslint-disable-next-line no-cond-assign
       while (match = line.match(parenMatcher)) {
-        const placeholder:string = getParenPlaceholder();
+        const placeholder: string = getParenPlaceholder();
         parentheticalMapping[placeholder] = match[1];
         line = line.replace(parenMatcher, placeholder);
       }
       let childFormulaNode: FormulaNode<boolean>;
-      const prefixCheck:RegExpMatchArray = line.match(PREFIX_REG_EXP);
+      const prefixCheck: RegExpMatchArray = line.match(PREFIX_REG_EXP);
       // specific Prefix node, or default to boolean node
       if (prefixCheck) {
-        const text:string = prefixCheck[2].trim();
+        const text: string = prefixCheck[2].trim();
         switch (prefixCheck[1].toUpperCase()) {
           case SPECIAL_PREFIXES.USES.toUpperCase():
             childFormulaNode = UsesFormulaNode.create({ text, translator: this.translator, row });
@@ -119,7 +124,7 @@ export class CellFormulaParser {
             childFormulaNode = BlocksUntilFormulaNode.create({ text, translator: this.translator, row });
             break;
           case SPECIAL_PREFIXES.BLOCKED.toUpperCase():
-            childFormulaNode = BlockedUntilFormulaNode.create({text, translator: this.translator, row});
+            childFormulaNode = BlockedUntilFormulaNode.create({ text, translator: this.translator, row });
             break;
           case SPECIAL_PREFIXES.LINKED.toUpperCase():
             isLinked = true;
@@ -129,15 +134,16 @@ export class CellFormulaParser {
       } else {
         childFormulaNode = BooleanFormulaNode.create({ text: line, translator: this.translator, row });
       }
-      if (isLinked) linkedChildren.push(childFormulaNode);
+      if (isLinked)
+        linkedChildren.push(childFormulaNode);
       else children.push(childFormulaNode);
     }
     if (checkedFlag) {
-      this.rootNode = new CheckedRootNode(children,this.translator,row);
+      this.rootNode = new CheckedRootNode(children, this.translator, row);
     } else if (linkedChildren.length) {
-      this.rootNode = new LinkedFormulaNode(children,linkedChildren,this.translator,row);
+      this.rootNode = new LinkedFormulaNode(children, linkedChildren, this.translator, row);
     } else {
-      this.rootNode = new RootNode(children,this.translator,row);
+      this.rootNode = new RootNode(children, this.translator, row);
     }
     this.rootNode.persist = persistFlag;
   }
@@ -146,48 +152,50 @@ export class CellFormulaParser {
    * Mark as finalized so that no further changes are allowed
    */
   private finalized = false;
-  finalize():CellFormulaParser {
-    if (this.finalized) return this;
+  finalize(): CellFormulaParser {
+    if (this.finalized)
+      return this;
     this.checkPhase(PHASE.FINALIZING);
     this.rootNode.finalize();
     this.finalized = true;
     return this;
   }
 
-  private isPhase(phase:PHASE) {
-    return this.translator.phase == phase;
+  private isPhase(phase: PHASE) {
+    return this.translator.phase === phase;
   }
-  private checkPhase(...phases:PHASE[]) {
-    if (!phases.reduce((isPhase,requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
+
+  private checkPhase(...phases: PHASE[]) {
+    if (!phases.reduce((isPhase, requiredPhase) => isPhase || this.isPhase(requiredPhase), false)) {
       throw new Error(`Invalid operation: Requires PHASE "${phases.join("\"|\"")}" but is "${this.translator.phase}" (Row ${this.row})`);
     }
   }
 
-  toFormula():string {
+  toFormula(): string {
     this.checkPhase(PHASE.FINALIZED);
     return this.toStatusFormula();
   }
 
-  hasErrors():boolean {
+  hasErrors(): boolean {
     return this.getErrors().size > 0;
   }
 
-  getErrors():ReadonlySet<string> {
+  getErrors(): ReadonlySet<string> {
     return this.rootNode.getErrors();
   }
 
-  getAllPossiblePreReqs():string[] {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+  getAllPossiblePreReqs(): string[] {
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
-    const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+    const itemValues: { [x: number]: sheetValueInfo[] } = this.translator.getColumnValues(COLUMN.ITEM).byRow;
     return [...this.getAllPossiblePreReqRows()].map(row => itemValues[row].map(info => info.value)).flat();
   }
 
-  getAllDirectlyMissablePreReqs():string[] {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+  getAllDirectlyMissablePreReqs(): string[] {
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
-    const allMissableRows:row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator,row).isDirectlyMissable());
-    const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
+    const allMissableRows: row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator, row).isDirectlyMissable());
+    const itemValues: { [x: number]: sheetValueInfo[] } = this.translator.getColumnValues(COLUMN.ITEM).byRow;
     return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
   }
 
@@ -197,20 +205,22 @@ export class CellFormulaParser {
   }
 
   getDirectPreReqRows(): ReadonlySet<number> {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
     return this.rootNode.getDirectPreReqRows();
   }
 
-  isControlled():boolean {
+  isControlled(): boolean {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.isControlled();
   }
-  getControlledByInfos():sheetValueInfo[] {
+
+  getControlledByInfos(): sheetValueInfo[] {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.getControlledByInfos();
   }
-  toControlledFormula():string {
+
+  toControlledFormula(): string {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toControlledFormula();
   }
@@ -220,30 +230,30 @@ export class CellFormulaParser {
     this.rootNode.addChild(child);
   }
 
-  addOption(row:row) {
+  addOption(row: row) {
     this.checkPhase(PHASE.FINALIZING);
     this.rootNode.addOption(row);
   }
 
-  getOptions():row[] {
+  getOptions(): row[] {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.getOptions();
   }
 
-  getAllPossiblePreReqRows():ReadonlySet<row> {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+  getAllPossiblePreReqRows(): ReadonlySet<row> {
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
     return this.rootNode.getAllPossiblePreReqRows();
   }
 
-  isDirectlyMissable():boolean {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+  isDirectlyMissable(): boolean {
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
     return this.rootNode.isDirectlyMissable();
   }
 
-  isInCircularDependency():boolean {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+  isInCircularDependency(): boolean {
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
     return this.getCircularDependencies().has(this.row);
   }
@@ -252,50 +262,60 @@ export class CellFormulaParser {
   private _circularDependencies: ReadonlySet<row>;
   private _isCircular: boolean;
   getCircularDependencies(previous = []): ReadonlySet<row> {
-    this.checkPhase(PHASE.FINALIZING,PHASE.FINALIZED);
+    this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
-    if (this._circularDependencies) return this._circularDependencies;
+    if (this._circularDependencies)
+      return this._circularDependencies;
     const circularDependencies: Set<row> = new Set<row>();
     if (this._lockCircular) {
-      previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add,circularDependencies);
+      previous.slice(previous.indexOf(this.row)).forEach(circularDependencies.add, circularDependencies);
     } else {
       previous.push(this.row);
       this._lockCircular = true;
       this.rootNode.getCircularDependencies([...previous]).forEach(circularDependencies.add, circularDependencies);
       this._lockCircular = false;
     }
-    if (circularDependencies.has(this.row)) this._isCircular = true;
+    if (circularDependencies.has(this.row))
+      this._isCircular = true;
     this._circularDependencies = circularDependencies;
     return this._circularDependencies;
   }
+
   toRawPreReqsMetFormula(): string {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toRawPreReqsMetFormula();
   }
+
   toPreReqsMetFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toPreReqsMetFormula();
   }
+
   toRawMissedFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toRawMissedFormula();
   }
+
   toMissedFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toMissedFormula();
   }
+
   toPRUsedFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toPRUsedFormula();
   }
+
   toUnknownFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toUnknownFormula();
   }
+
   toErrorFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toErrorFormula();
   }
+
   toStatusFormula() {
     this.checkPhase(PHASE.FINALIZED);
     return this.rootNode.toStatusFormula();

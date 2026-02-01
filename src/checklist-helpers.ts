@@ -1,3 +1,4 @@
+import type { DeveloperMetadata } from "./shared-types";
 /**
  * Checklist Helper Functions
  *
@@ -9,33 +10,32 @@
  * This is resolved at runtime since neither module calls the other during initialization.
  */
 import type { Sheet } from "./SheetBase";
-import type { DeveloperMetadata } from "./shared-types";
-import { getActiveSheet } from "./SheetHelpers";
 import { Checklist } from "./ChecklistApp";
 import { MetaSheet } from "./ChecklistMeta";
+import { getActiveSheet } from "./SheetHelpers";
 
 export function getChecklistFromEvent(event: GoogleAppsScript.Events.SheetsOnOpen | GoogleAppsScript.Events.SheetsOnEdit): Checklist {
-    return Checklist.fromEvent(event);
+  return Checklist.fromEvent(event);
 }
 
 export function getChecklistBySheet(sheet: Sheet = getActiveSheet()): Checklist {
-    return Checklist.fromSheet(sheet);
+  return Checklist.fromSheet(sheet);
 }
 
 export function getChecklistByMetaSheet(metaSheet: Sheet): Checklist {
-    const metaDevMeta: DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
-    if (metaDevMeta && metaDevMeta[0]) {
-        const sheet: Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
-        if (sheet) {
-            const checklist: Checklist = getChecklistBySheet(sheet);
-            checklist.metaSheet = metaSheet;
-            return checklist;
-        }
+  const metaDevMeta: DeveloperMetadata[] = metaSheet.createDeveloperMetadataFinder().withKey("metaForSheet").withVisibility(SpreadsheetApp.DeveloperMetadataVisibility.PROJECT).find();
+  if (metaDevMeta && metaDevMeta[0]) {
+    const sheet: Sheet = metaSheet.getParent().getSheetByName(metaDevMeta[0].getValue());
+    if (sheet) {
+      const checklist: Checklist = getChecklistBySheet(sheet);
+      checklist.metaSheet = metaSheet;
+      return checklist;
     }
+  }
 }
 
 export function getActiveChecklist(): Checklist {
-    return getChecklistBySheet(getActiveSheet());
+  return getChecklistBySheet(getActiveSheet());
 }
 
 export function getMetaFromActiveChecklist(_interactive: boolean = false): MetaSheet {
@@ -45,7 +45,8 @@ export function getMetaFromActiveChecklist(_interactive: boolean = false): MetaS
 export function getMetaFromChecklist(checklist: Checklist = getActiveChecklist(), _interactive: boolean = false): MetaSheet {
   if (!checklist.isChecklist || !checklist.metaSheet) {
     const checklistFromMeta = getChecklistByMetaSheet(checklist.sheet);
-    if (checklistFromMeta) checklist = checklistFromMeta;
+    if (checklistFromMeta)
+      checklist = checklistFromMeta;
   }
   if (!checklist.metaSheet && _interactive) {
     promptMetaSheetCreate(checklist);
@@ -60,14 +61,15 @@ export function getMetaFromSheet(sheet: Sheet): MetaSheet {
 
 export function promptMetaSheetCreate(checklist: Checklist, title: string = "Meta Sheet Create"): void {
   const ui = SpreadsheetApp.getUi();
-  const defaultMetaSheetName = checklist.name + " Meta";
+  const defaultMetaSheetName = `${checklist.name} Meta`;
   const response = ui.prompt(title, `Enter the name for the new Meta Sheet (will contain formatting options). Leave blank for "${defaultMetaSheetName}"`, ui.ButtonSet.OK_CANCEL);
-  if (response.getSelectedButton() != ui.Button.OK) return;
+  if (response.getSelectedButton() !== ui.Button.OK)
+    return;
   const metaSheetName = response.getResponseText() || defaultMetaSheetName;
   const existingSheet = checklist.spreadsheet.getSheetByName(metaSheetName);
   if (existingSheet) {
     const response = ui.alert(title, `Sheet already exists, set as meta sheet?`, ui.ButtonSet.YES_NO);
-    if (response == ui.Button.YES) {
+    if (response === ui.Button.YES) {
       checklist.metaSheet = existingSheet;
     }
   } else {

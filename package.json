@@ -1,12 +1,14 @@
 {
   "name": "games-checklists",
+  "type": "module",
   "version": "1.0.0",
   "private": true,
-  "license": "UNLICENSED",
-  "type": "module",
   "description": "Google Apps Script checklist with prerequisites",
+  "license": "UNLICENSED",
   "scripts": {
     "build": "rollup -c",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "push": "npm run build && node scripts/clasp-deploy.js push",
     "push:all": "npm run build && node scripts/clasp-deploy.js --all",
     "push:add": "node scripts/clasp-deploy.js add",
@@ -15,9 +17,11 @@
     "watch:push": "node scripts/watch-push.js"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^7.2.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/google-apps-script": "^2.0.8",
+    "eslint": "^9.39.2",
     "rollup": "^4.57.1",
     "rollup-plugin-cleanup": "^3.2.1",
     "tslib": "^2.8.1",

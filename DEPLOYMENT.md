@@ -15,13 +15,13 @@ Your deployment targets are stored in `.clasp.local.json` (git-ignored):
 
 ```json
 {
-  "projectId": "wotpsychos-checklists",  // Optional: default for all sheets
+  "projectId": "wotpsychos-checklists", // Optional: default for all sheets
   "rootDir": "./build",
   "sheets": {
     "sheet-name": {
       "scriptId": "your-script-id",
       "description": "Optional description",
-      "projectId": "optional-override"  // Optional: override default projectId
+      "projectId": "optional-override" // Optional: override default projectId
     }
   }
 }

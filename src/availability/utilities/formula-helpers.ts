@@ -1,65 +1,76 @@
-import * as Formula from '../../Formulas';
-import type { FormulaHelper } from '../types';
+import type { FormulaHelper } from "../types";
+import * as Formula from "../../Formulas";
 
 const numItemsPostfixRegExp = /^ *(.*?) +x(\d+) *$/;
 const numItemsPrefixRegExp = /^ *(\d+)x +(.*?) *$/;
 
-export const getNumItemInfo = (text: string, _defaultNum: number = undefined): {num?: number, item: string} => {
+export const getNumItemInfo = (text: string, _defaultNum: number = undefined): { num?: number; item: string } => {
   let match = text.match(numItemsPrefixRegExp);
   if (match) {
-    return {num: Number(match[1]), item: match[2]};
+    return { num: Number(match[1]), item: match[2] };
   } else if ((match = text.match(numItemsPostfixRegExp))) {
-    return {num: Number(match[2]), item: match[1]};
+    return { num: Number(match[2]), item: match[1] };
   } else if (_defaultNum || _defaultNum === 0) {
-    return {num: _defaultNum, item: text};
+    return { num: _defaultNum, item: text };
   } else {
-    return {item: text};
+    return { item: text };
   }
 };
 
 const FormulaHelperFactory = (formula: Formula.StringFormula, regExp: RegExp, isFlexible: boolean = false): FormulaHelper => {
   const parseOperands = (text: string): string[] => {
     const match: RegExpMatchArray = text?.match(regExp);
-    if (!match) return;
-    if (!isFlexible) return match.slice(1);
+    if (!match)
+      return;
+    if (!isFlexible)
+      return match.slice(1);
 
     const results = [];
     const lMatch = match[1];
     const lResult = parseOperands(lMatch);
-    if (lResult) results.push(...lResult);
+    if (lResult)
+      results.push(...lResult);
     else results.push(lMatch);
 
     const rMatch = match[2];
     const rResult = parseOperands(rMatch);
-    if (rResult) results.push(...rResult);
+    if (rResult)
+      results.push(...rResult);
     else results.push(rMatch);
 
     return results;
   };
   return Object.assign(
     (...args: string[]) => formula(...args),
-    formula, {
+    formula,
+    {
       generateFormula: formula,
       identify: (text: string): boolean => !!(text?.match(regExp)),
       parseOperands,
-    });
+    },
+  );
 };
 
 const ReversibleFormulaHelper = (formula: Formula.StringFormula, regExp: RegExp, reversibleRegExp: RegExp): FormulaHelper => {
   const parseOperands = (text: string): string[] => {
-    if (!text) return;
+    if (!text)
+      return;
     let match = text.match(regExp);
-    if (match) return match.slice(1);
+    if (match)
+      return match.slice(1);
     match = text.match(reversibleRegExp);
-    if (match) return match.slice(1).reverse();
+    if (match)
+      return match.slice(1).reverse();
   };
   return Object.assign(
     (...args: string[]) => formula(...args),
-    formula, {
+    formula,
+    {
       generateFormula: formula,
       identify: (text: string): boolean => !!(text?.match(regExp) || text?.match(reversibleRegExp)),
       parseOperands,
-    });
+    },
+  );
 };
 
 export const OR = FormulaHelperFactory(Formula.OR, /^ *(.+?) *\|\| *(.+?) *$/, true);
@@ -79,7 +90,7 @@ export const ADD = FormulaHelperFactory(Formula.ADD, /^ *(.+?) +\+ +(.+?) *$/, t
 export const { FORMULA, VALUE, IFS, IF, COUNTIF } = Formula;
 
 export const formulaTypeToString = (formulaType: FormulaHelper): string => {
-  switch(formulaType) {
+  switch (formulaType) {
     case OR: return "||";
     case AND: return "&&";
     case NOT: return "!";

@@ -38,18 +38,18 @@ Successfully migrated the Games Checklists Google Apps Script project from TypeS
 #### 3. Import Patterns Used
 
 ```typescript
-// Utilities
-import { time, timeEnd } from './util';
-
-// Formula namespace (preserved)
-import * as Formula from './Formulas';
-
-// Types and classes
-import { SheetBase, type Sheet, type Range } from './SheetBase';
-import type { sheetValue } from './SheetBase';
+import type { Range, Sheet, sheetValue } from "./SheetBase";
 
 // Functions
-import { getActiveChecklist, Checklist } from './ChecklistApp';
+import { Checklist, getActiveChecklist } from "./ChecklistApp";
+
+// Formula namespace (preserved)
+import * as Formula from "./Formulas";
+// Types and classes
+import { SheetBase } from "./SheetBase";
+
+// Utilities
+import { time, timeEnd } from "./util";
 ```
 
 #### 4. Build Output
@@ -63,7 +63,7 @@ import { getActiveChecklist, Checklist } from './ChecklistApp';
 ```javascript
 g.ChecklistApp = ChecklistApp;
 g.ChecklistMeta = ChecklistMeta;
-g.Settings = {ChecklistSettings, SETTING};
+g.Settings = { ChecklistSettings, SETTING };
 g.Status = Status;
 g.Formula = Formula;
 g.ChecklistApp.SheetBase = SheetBase;

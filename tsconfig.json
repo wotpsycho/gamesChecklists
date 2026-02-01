@@ -1,13 +1,13 @@
 {
-    "compilerOptions": {
-        "lib": [
-            "esnext"
-        ],
-        "target": "ES2019",
-        "module": "ES2015",
-        "experimentalDecorators": true,
-        "moduleResolution": "node",
-        "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true
-    }
+  "compilerOptions": {
+    "target": "ES2019",
+    "lib": [
+      "esnext"
+    ],
+    "experimentalDecorators": true,
+    "module": "ES2015",
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  }
 }

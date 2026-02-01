@@ -1,13 +1,13 @@
-import type { row, FormulaHelper } from '../../types';
-import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { PHASE } from '../../constants';
-import { AND, GTE, NOT, VALUE, MINUS } from '../../utilities/formula-helpers';
-import * as Formula from '../../../Formulas';
-import { virtualItems } from '../shared';
-import { FormulaValueNode } from './FormulaValueNode';
-import { NumberFormulaValueNode } from './NumberFormulaValueNode';
-import { SameFormulaNode } from './SameFormulaNode';
+import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
+import type { FormulaHelper, row } from "../../types";
+import * as Formula from "../../../Formulas";
 import { COLUMN } from "../../../shared-types";
+import { PHASE } from "../../constants";
+import { AND, GTE, MINUS, NOT, VALUE } from "../../utilities";
+import { virtualItems } from "../shared";
+import { FormulaValueNode } from "./FormulaValueNode";
+import { NumberFormulaValueNode } from "./NumberFormulaValueNode";
+import { SameFormulaNode } from "./SameFormulaNode";
 
 /**
  * Boolean value node representing item existence/count checks
@@ -22,6 +22,7 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
       return new BooleanFormulaValueNode(text, translator, row);
     }
   }
+
   protected readonly formulaType: FormulaHelper = GTE;
   protected readonly children: NumberFormulaValueNode[];
   protected numNeeded: number;
@@ -36,7 +37,7 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
         _implicitPrefix,
       });
       this.neededChild = NumberFormulaValueNode.create({
-        text: '1',
+        text: "1",
         translator: this.translator,
         row: this.row,
         _implicitPrefix,
@@ -46,16 +47,17 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
 
   protected determineValue(): void {
     if (
-      typeof this.text == 'boolean' ||
-      this.text.toString().toUpperCase() == 'TRUE' ||
-      this.text.toString().toUpperCase() == 'FALSE'
+      typeof this.text === "boolean"
+      || this.text.toString().toUpperCase() === "TRUE"
+      || this.text.toString().toUpperCase() === "FALSE"
     ) {
-      this.value = typeof this.text == 'boolean' ? (this.text as boolean) : this.text.toString().toUpperCase() == 'TRUE';
+      this.value = typeof this.text === "boolean" ? (this.text as boolean) : this.text.toString().toUpperCase() === "TRUE";
     }
   }
 
   finalize(): BooleanFormulaValueNode {
-    if (this.finalized) return this;
+    if (this.finalized)
+      return this;
     super.finalize();
     if (!this.hasValue()) {
       if (this.valueInfo.isVirtual && virtualItems[this.text].numNeeded) {
@@ -74,15 +76,18 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
     this.finalize();
     return this.children[0];
   }
+
   protected set availableChild(child: NumberFormulaValueNode) {
     this.checkPhase(PHASE.BUILDING, PHASE.FINALIZING);
     this.children[0] = child;
   }
+
   protected get neededChild(): NumberFormulaValueNode {
     this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
     return this.children[1];
   }
+
   protected set neededChild(child: NumberFormulaValueNode) {
     this.checkPhase(PHASE.BUILDING, PHASE.FINALIZING);
     this.children[1] = child;
@@ -90,7 +95,7 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
 
   toPreReqsMetFormula(): string {
     this.checkPhase(PHASE.FINALIZED);
-    if (!this.hasValue() && this.numNeeded == this.valueInfo.numPossible) {
+    if (!this.hasValue() && this.numNeeded === this.valueInfo.numPossible) {
       return AND(...this.translator.rowsToA1Ranges(this.valueInfo.rows, COLUMN.CHECK));
     } else {
       return super.toPreReqsMetFormula();
@@ -98,35 +103,39 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
   }
 
   toPRUsedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
+    if (this.hasValue())
+      return VALUE.FALSE;
     return AND(
       GTE(MINUS(this.availableChild.toTotalFormula(), this.availableChild.toRawMissedFormula()), VALUE(this.numNeeded)),
-      Formula.LT(this.availableChild.toPRNotUsedFormula(), VALUE(this.numNeeded))
+      Formula.LT(this.availableChild.toPRNotUsedFormula(), VALUE(this.numNeeded)),
     );
   }
 
   toRawMissedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
+    if (this.hasValue())
+      return VALUE.FALSE;
     return Formula.LT(this.availableChild.toRawNotMissedFormula(), VALUE(this.numNeeded));
   }
 
   toMissedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
+    if (this.hasValue())
+      return VALUE.FALSE;
     return Formula.LT(this.availableChild.toNotMissedFormula(), VALUE(this.numNeeded));
   }
 
   toUnknownFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
+    if (this.hasValue())
+      return VALUE.FALSE;
     return AND(
       NOT(this.toMissedFormula()),
       Formula.LT(
         MINUS(
           this.availableChild.toTotalFormula(),
           this.availableChild.toMissedFormula(),
-          this.availableChild.toUnknownFormula()
+          this.availableChild.toUnknownFormula(),
         ),
-        VALUE(this.numNeeded)
-      )
+        VALUE(this.numNeeded),
+      ),
     );
   }
 
@@ -135,7 +144,7 @@ export class BooleanFormulaValueNode extends FormulaValueNode<boolean> {
       return true;
     } else if (this.valueInfo.numPossible < this.numNeeded) {
       this.addError(
-        'There are only ' + this.valueInfo.numPossible + ', not ' + this.numNeeded + ', of ' + this.valueInfo.column + ' "' + this.valueInfo.id + '"' + (this.valueInfo.isSelfReferential ? ' (when excluding itself)' : '')
+        `There are only ${this.valueInfo.numPossible}, not ${this.numNeeded}, of ${this.valueInfo.column} "${this.valueInfo.id}"${this.valueInfo.isSelfReferential ? " (when excluding itself)" : ""}`,
       );
       return true;
     }

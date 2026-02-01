@@ -1,4 +1,4 @@
-import type { FormulaNode } from '../base/FormulaNode';
+import type { FormulaNode } from "../base";
 
 /**
  * Interface for number nodes with min/max value computation

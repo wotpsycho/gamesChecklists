@@ -1,6 +1,5 @@
 function _timeHelper(timeFunction: (label: string) => void, labels: unknown[]): void {
-  const timeLabels = [];
-  // If last argument is true, it was used as a flag in old code - just remove it
+// If last argument is true, it was used as a flag in old code - just remove it
   if (labels.length > 0 && labels[labels.length - 1] === true) {
     labels.pop();
   }

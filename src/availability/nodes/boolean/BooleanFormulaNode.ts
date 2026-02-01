@@ -1,19 +1,19 @@
-import type { row } from '../../types';
-import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { FormulaNode } from '../base';
+import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
+import type { row } from "../../types";
 import {
-  OR,
   AND,
-  NOT,
   EQ,
-  NE,
   GT,
   GTE,
-  X_ITEMS,
+  NE,
+  NOT,
+  OR,
   VALUE,
-} from '../../utilities/formula-helpers';
-import { ComparisonFormulaNode } from './ComparisonFormulaNode';
-import { BooleanFormulaValueNode } from '../value';
+  X_ITEMS,
+} from "../../utilities";
+import { FormulaNode } from "../base";
+import { BooleanFormulaValueNode } from "../value";
+import { ComparisonFormulaNode } from "./ComparisonFormulaNode";
 
 /**
  * Boolean formula node handling boolean operators (AND, OR, NOT)
@@ -23,6 +23,7 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
   static create({ text, translator, row }: NodeArgs): BooleanFormulaNode {
     return new BooleanFormulaNode(text, translator, row);
   }
+
   protected readonly children: FormulaNode<boolean>[];
   protected constructor(text: string, translator: IStatusFormulaTranslator, row: row) {
     super(text, translator, row);
@@ -33,9 +34,9 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
           this.formulaType = booleanFormulaTranslationHelper;
           const operands: string[] = booleanFormulaTranslationHelper.parseOperands(this.text);
           this.children.push(
-            ...operands.map((operand) =>
-              BooleanFormulaNode.create({ text: operand, translator: this.translator, row: this.row })
-            )
+            ...operands.map(operand =>
+              BooleanFormulaNode.create({ text: operand, translator: this.translator, row: this.row }),
+            ),
           );
           return;
         }
@@ -59,18 +60,21 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
   }
 
   toPRUsedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
-    if (this.isInCircularDependency()) return VALUE.FALSE;
-    if (!this.formulaType) return this.child.toPRUsedFormula();
+    if (this.hasValue())
+      return VALUE.FALSE;
+    if (this.isInCircularDependency())
+      return VALUE.FALSE;
+    if (!this.formulaType)
+      return this.child.toPRUsedFormula();
     switch (this.formulaType) {
       case AND: {
         return OR(
-          ...this.children.map((child) => AND(NOT(child.toRawMissedFormula()), child.toPRUsedFormula()))
+          ...this.children.map(child => AND(NOT(child.toRawMissedFormula()), child.toPRUsedFormula())),
         );
       }
       case OR: {
         return AND(
-          ...this.children.map((child) => AND(NOT(child.toRawMissedFormula()), child.toPRUsedFormula()))
+          ...this.children.map(child => AND(NOT(child.toRawMissedFormula()), child.toPRUsedFormula())),
         );
       }
       case NOT: {
@@ -80,15 +84,18 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
   }
 
   toRawMissedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
-    if (this.isInCircularDependency()) return VALUE.FALSE;
-    if (!this.formulaType) return this.child.toRawMissedFormula();
+    if (this.hasValue())
+      return VALUE.FALSE;
+    if (this.isInCircularDependency())
+      return VALUE.FALSE;
+    if (!this.formulaType)
+      return this.child.toRawMissedFormula();
     switch (this.formulaType) {
       case AND: {
-        return OR(...this.children.map((child) => child.toRawMissedFormula()));
+        return OR(...this.children.map(child => child.toRawMissedFormula()));
       }
       case OR: {
-        return AND(...this.children.map((child) => child.toRawMissedFormula()));
+        return AND(...this.children.map(child => child.toRawMissedFormula()));
       }
       case NOT: {
         return this.child.toRawMissedFormula(); // TODO ???
@@ -97,15 +104,18 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
   }
 
   toMissedFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
-    if (this.isInCircularDependency()) return VALUE.FALSE;
-    if (!this.formulaType) return this.child.toMissedFormula();
+    if (this.hasValue())
+      return VALUE.FALSE;
+    if (this.isInCircularDependency())
+      return VALUE.FALSE;
+    if (!this.formulaType)
+      return this.child.toMissedFormula();
     switch (this.formulaType) {
       case AND: {
-        return OR(...this.children.map((child) => child.toMissedFormula()));
+        return OR(...this.children.map(child => child.toMissedFormula()));
       }
       case OR: {
-        return AND(...this.children.map((child) => child.toMissedFormula()));
+        return AND(...this.children.map(child => child.toMissedFormula()));
       }
       case NOT: {
         return this.child.toMissedFormula(); // TODO ???
@@ -114,22 +124,25 @@ export class BooleanFormulaNode extends FormulaNode<boolean> {
   }
 
   toUnknownFormula(): string {
-    if (this.hasValue()) return VALUE.FALSE;
-    if (this.isInCircularDependency()) return VALUE.TRUE;
-    if (!this.formulaType) return this.child.toUnknownFormula();
+    if (this.hasValue())
+      return VALUE.FALSE;
+    if (this.isInCircularDependency())
+      return VALUE.TRUE;
+    if (!this.formulaType)
+      return this.child.toUnknownFormula();
     switch (this.formulaType) {
       case AND: {
         // For AND: unknown if none are raw missed AND at least one is unknown
         return AND(
-          ...this.children.map((child) => NOT(child.toRawMissedFormula())),
-          OR(...this.children.map((child) => child.toUnknownFormula()))
+          ...this.children.map(child => NOT(child.toRawMissedFormula())),
+          OR(...this.children.map(child => child.toUnknownFormula())),
         );
       }
       case OR: {
         // For OR: at least one unknown AND each child is either unknown or missed
         return AND(
-          OR(...this.children.map((child) => child.toUnknownFormula())),
-          ...this.children.map((child) => OR(child.toUnknownFormula(), child.toMissedFormula()))
+          OR(...this.children.map(child => child.toUnknownFormula())),
+          ...this.children.map(child => OR(child.toUnknownFormula(), child.toMissedFormula())),
         );
       }
       case NOT: {

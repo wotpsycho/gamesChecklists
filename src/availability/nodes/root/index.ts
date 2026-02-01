@@ -1,3 +1,3 @@
-export { RootNode } from './RootNode';
-export { LinkedFormulaNode } from './LinkedFormulaNode';
-export { CheckedRootNode } from './CheckedRootNode';
+export { CheckedRootNode } from "./CheckedRootNode";
+export { LinkedFormulaNode } from "./LinkedFormulaNode";
+export { RootNode } from "./RootNode";

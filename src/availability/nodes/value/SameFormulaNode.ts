@@ -1,10 +1,10 @@
-import type { row } from '../../types';
-import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
-import { OR, VALUE } from '../../utilities/formula-helpers';
-// Import CellFormulaParser from local module (circular dependency resolved at runtime)
-import { CellFormulaParser } from '../../CellFormulaParser';
-import { FormulaValueNode } from './FormulaValueNode';
+import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
+import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
+// Import CellFormulaParser from local module (circular dependency resolved at runtime)
+import { CellFormulaParser } from "../../CellFormulaParser";
+import { OR, VALUE } from "../../utilities";
+import { FormulaValueNode } from "./FormulaValueNode";
 
 /**
  * SameFormulaNode handles SAME/COPY syntax
@@ -25,7 +25,8 @@ export class SameFormulaNode extends FormulaValueNode<boolean> {
   }
 
   finalize(): SameFormulaNode {
-    if (this.finalized) return this;
+    if (this.finalized)
+      return this;
     super.finalize();
     this.sameRow = this.valueInfo.rows[0];
     this.finalized = true;
@@ -33,7 +34,7 @@ export class SameFormulaNode extends FormulaValueNode<boolean> {
   }
 
   toPreReqsMetFormula() {
-    return OR(this.translator.cellA1(this.sameRow, COLUMN.CHECK), this.sameRowParser?.toPreReqsMetFormula() || '');
+    return OR(this.translator.cellA1(this.sameRow, COLUMN.CHECK), this.sameRowParser?.toPreReqsMetFormula() || "");
   }
 
   toErrorFormula() {
@@ -41,29 +42,29 @@ export class SameFormulaNode extends FormulaValueNode<boolean> {
   }
 
   toMissedFormula() {
-    return this.sameRowParser?.toMissedFormula() || '';
+    return this.sameRowParser?.toMissedFormula() || "";
   }
 
   toPRUsedFormula() {
-    return this.sameRowParser?.toPRUsedFormula() || '';
+    return this.sameRowParser?.toPRUsedFormula() || "";
   }
 
   toRawMissedFormula() {
-    return this.sameRowParser?.toRawMissedFormula() || '';
+    return this.sameRowParser?.toRawMissedFormula() || "";
   }
 
   toUnknownFormula() {
-    return this.sameRowParser?.toUnknownFormula() || '';
+    return this.sameRowParser?.toUnknownFormula() || "";
   }
 
   checkErrors() {
     if (super.checkErrors()) {
       return true;
-    } else if (this.valueInfo.rows.length != 1) {
-      this.addError('SAME must link to only 1 Item but an Item can have multiple SAME');
+    } else if (this.valueInfo.rows.length !== 1) {
+      this.addError("SAME must link to only 1 Item but an Item can have multiple SAME");
       return true;
     } else if (this.valueInfo.numPossible > 1) {
-      this.addError('Cannot use SAME with Numerical Equations');
+      this.addError("Cannot use SAME with Numerical Equations");
       return true;
     }
     return false;

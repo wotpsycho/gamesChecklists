@@ -1,7 +1,7 @@
-import type { FormulaHelper } from '../../types';
-import { PHASE } from '../../constants';
-import { VALUE } from '../../utilities/formula-helpers';
-import { Node } from './Node';
+import type { FormulaHelper } from "../../types";
+import { PHASE } from "../../constants";
+import { VALUE } from "../../utilities";
+import { Node } from "./Node";
 
 /**
  * Abstract base class for formula nodes that can generate various formula types.
@@ -13,13 +13,13 @@ export abstract class FormulaNode<T extends number | boolean | unknown> extends 
   protected value: T;
 
   hasValue(): boolean {
-    return typeof this.value !== 'undefined';
+    return typeof this.value !== "undefined";
   }
 
   updateValue(value: T) {
     this.checkPhase(PHASE.BUILDING, PHASE.FINALIZING);
     if (!this.hasValue()) {
-      throw new Error('Cannot update value on a non-value node');
+      throw new Error("Cannot update value on a non-value node");
     }
     this.value = value;
   }
@@ -42,7 +42,7 @@ export abstract class FormulaNode<T extends number | boolean | unknown> extends 
       return VALUE(this.value as string);
     } else if (this.formulaType) {
       formula = this.formulaType.generateFormula(
-        ...this.children.map((child) => child.toPreReqsMetFormula())
+        ...this.children.map(child => child.toPreReqsMetFormula()),
       );
     } else if (this.child) {
       formula = this.child.toPreReqsMetFormula();
