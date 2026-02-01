@@ -3,7 +3,6 @@ import type { row } from "../../types";
 import type { sheetValueInfo } from "../../utilities";
 import type { FormulaNode } from "../base";
 import { COLUMN, STATUS } from "../../../shared-types";
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { PHASE } from "../../constants";
 import { AND, IFS, OR, VALUE } from "../../utilities";
 import { BooleanFormulaNode } from "../boolean";
@@ -71,7 +70,7 @@ export class RootNode extends BooleanFormulaNode {
    */
   toPreReqsMetFormula(): string {
     if (this.optionsRows.length > 0) {
-      return OR(...this.optionsRows.map(optionRow => CellFormulaParser.getParserForChecklistRow(this.translator, optionRow).toPreReqsMetFormula()));
+      return OR(...this.optionsRows.map(optionRow => this.translator.getParserForRow(optionRow).toPreReqsMetFormula()));
     } else {
       return this.toRawPreReqsMetFormula();
     }

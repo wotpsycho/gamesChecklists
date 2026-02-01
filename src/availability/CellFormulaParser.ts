@@ -3,8 +3,6 @@ import type { IStatusFormulaTranslator } from "./interfaces";
 import type {
   FormulaNode,
 } from "./nodes";
-// Import StatusFormulaTranslator type
-import type { StatusFormulaTranslator } from "./StatusFormulaTranslator";
 import type { row } from "./types";
 
 import type { sheetValueInfo } from "./utilities";
@@ -41,16 +39,16 @@ export class CellFormulaParser {
   static getParserForChecklistRow(translator: IStatusFormulaTranslator, row: row, _defaultValue: string = undefined): CellFormulaParser {
     const key: string = `${translator.checklist.id}:${row}`;
     if (!this.parsers[key]) {
-      this.parsers[key] = new CellFormulaParser(translator as StatusFormulaTranslator, row, _defaultValue);
+      this.parsers[key] = new CellFormulaParser(translator, row, _defaultValue);
     }
     return this.parsers[key];
   }
 
   private readonly row: row;
   private readonly rootNode: RootNode;
-  readonly translator: StatusFormulaTranslator;
+  readonly translator: IStatusFormulaTranslator;
   readonly preReqText: string;
-  private constructor(translator: StatusFormulaTranslator, row: row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
+  private constructor(translator: IStatusFormulaTranslator, row: row, cellValue = translator.checklist.getValue(row, COLUMN.PRE_REQS)) {
     this.translator = translator;
     this.row = row;
     this.preReqText = cellValue.toString();
@@ -194,7 +192,7 @@ export class CellFormulaParser {
   getAllDirectlyMissablePreReqs(): string[] {
     this.checkPhase(PHASE.FINALIZING, PHASE.FINALIZED);
     this.finalize();
-    const allMissableRows: row[] = [...this.getAllPossiblePreReqRows()].filter(row => CellFormulaParser.getParserForChecklistRow(this.translator, row).isDirectlyMissable());
+    const allMissableRows: row[] = [...this.getAllPossiblePreReqRows()].filter(row => this.translator.getParserForRow(row).isDirectlyMissable());
     const itemValues: { [x: number]: sheetValueInfo[] } = this.translator.getColumnValues(COLUMN.ITEM).byRow;
     return [...allMissableRows].map(row => itemValues[row].map(info => info.value)).flat().filter(value => value);
   }

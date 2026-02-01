@@ -1,8 +1,7 @@
+import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
-// Import CellFormulaParser from local module (circular dependency resolved at runtime)
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { OR, VALUE } from "../../utilities";
 import { FormulaValueNode } from "./FormulaValueNode";
 
@@ -17,7 +16,7 @@ export class SameFormulaNode extends FormulaValueNode<boolean> {
 
   private sameRow: row;
   private get sameRowParser(): CellFormulaParser {
-    return this.sameRow && CellFormulaParser.getParserForChecklistRow(this.translator, this.sameRow);
+    return this.sameRow && this.translator.getParserForRow(this.sameRow);
   }
 
   protected constructor(text: string, translator: IStatusFormulaTranslator, row: row) {

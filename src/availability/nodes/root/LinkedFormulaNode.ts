@@ -4,7 +4,6 @@ import type { sheetValueInfo } from "../../utilities";
 import type { FormulaNode } from "../base";
 import type { OptionFormulaNode } from "../special";
 import { COLUMN, STATUS } from "../../../shared-types";
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { AND, IFS, NOT, OR, VALUE } from "../../utilities";
 import { RootNode } from "./RootNode";
 
@@ -63,7 +62,7 @@ export class LinkedFormulaNode extends RootNode {
       this.addError("LINKED Cannot be in Pre-Req circular dependency");
       return VALUE.FALSE;
     }
-    return AND(...this.children.map(child => (child as OptionFormulaNode).choiceRow ? CellFormulaParser.getParserForChecklistRow(child.translator, (child as OptionFormulaNode).choiceRow).toPreReqsMetFormula() : child.toPreReqsMetFormula()));
+    return AND(...this.children.map(child => (child as OptionFormulaNode).choiceRow ? child.translator.getParserForRow((child as OptionFormulaNode).choiceRow).toPreReqsMetFormula() : child.toPreReqsMetFormula()));
   }
 
   toPreReqsMetFormula(): string {
@@ -80,7 +79,7 @@ export class LinkedFormulaNode extends RootNode {
       }, new Set<number>())
       .forEach(row => linkedAvailableFormulas.push(
         AND(
-          CellFormulaParser.getParserForChecklistRow(this.translator, row).toPreReqsMetFormula(),
+          this.translator.getParserForRow(row).toPreReqsMetFormula(),
           NOT(this.translator.cellA1(row, COLUMN.CHECK)),
         ),
       ),

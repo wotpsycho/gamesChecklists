@@ -1,8 +1,8 @@
+import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
 import type { FormulaValueNode } from "../value";
 import { COLUMN, STATUS } from "../../../shared-types";
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { SPECIAL_PREFIXES, USAGES } from "../../constants";
 import { AND, EQ, NOT, OR, VALUE } from "../../utilities";
 import { virtualItems } from "../shared";
@@ -45,7 +45,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
   }
 
   get choiceParser(): CellFormulaParser {
-    return this.valueInfo.isVirtual ? undefined : CellFormulaParser.getParserForChecklistRow(this.translator, this.choiceRow);
+    return this.valueInfo.isVirtual ? undefined : this.translator.getParserForRow(this.choiceRow);
   }
 
   get choiceOptions(): row[] {
@@ -77,7 +77,7 @@ export class OptionFormulaNode extends BooleanFormulaValueNode {
       ? NOT(this.toPRUsedFormula())
       : AND(
           NOT(OR(...this.translator.rowsToA1Ranges(this.choiceOptions, COLUMN.CHECK))),
-          CellFormulaParser.getParserForChecklistRow(this.translator, this.choiceRow).toRawPreReqsMetFormula(),
+          this.translator.getParserForRow(this.choiceRow).toRawPreReqsMetFormula(),
         );
   }
 

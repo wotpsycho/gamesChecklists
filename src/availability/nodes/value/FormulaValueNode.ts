@@ -1,7 +1,5 @@
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
-// Import CellFormulaParser from local module (circular dependency resolved at runtime)
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { FormulaNode } from "../base";
 import { virtualItems } from "../shared";
 import { ValueNode } from "./ValueNode";
@@ -44,7 +42,7 @@ export abstract class FormulaValueNode<T> extends FormulaNode<T> {
       } else {
         const allPossiblePreReqs: Set<row> = new Set(this.valueInfo.rows);
         this.valueInfo.rows.forEach(row =>
-          CellFormulaParser.getParserForChecklistRow(this.translator, Number(row))
+          this.translator.getParserForRow(Number(row))
             .getAllPossiblePreReqRows()
             .forEach(allPossiblePreReqs.add, allPossiblePreReqs),
         );
@@ -70,7 +68,7 @@ export abstract class FormulaValueNode<T> extends FormulaNode<T> {
       previous.push(this.row);
       this._lockCircular = true;
       this.valueInfo.rows.forEach((row) => {
-        CellFormulaParser.getParserForChecklistRow(this.translator, Number(row))
+        this.translator.getParserForRow(Number(row))
           .getCircularDependencies([...previous])
           .forEach(circularDependencies.add, circularDependencies);
       });

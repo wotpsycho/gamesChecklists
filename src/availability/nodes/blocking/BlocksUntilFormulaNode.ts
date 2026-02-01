@@ -1,9 +1,9 @@
+import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
 import type { BlocksArgs } from "../shared";
 import { COLUMN } from "../../../shared-types";
 import { time, timeEnd } from "../../../util";
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { VALUE } from "../../utilities";
 import { BooleanFormulaNode } from "../boolean";
 import { FormulaValueNode } from "../value";
@@ -22,7 +22,7 @@ export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
   }
 
   protected get parser(): CellFormulaParser {
-    return CellFormulaParser.getParserForChecklistRow(this.translator, this.row);
+    return this.translator.getParserForRow(this.row);
   }
 
   protected constructor(blocksText: string, untilText: string, translator: IStatusFormulaTranslator, row: row) {
@@ -45,7 +45,7 @@ export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
       this.valueInfo.rows // All rows matching the BLOCKS clause
         .filter(blockedRow => !untilPreReqRows.has(blockedRow)) // Don't block any preReq of UNTIL
         .forEach(blockedRow =>
-          CellFormulaParser.getParserForChecklistRow(this.translator, blockedRow).addChild(
+          this.translator.getParserForRow(blockedRow).addChild(
             GeneratedBlockedUntilFormulaNode.create({ blockedText: `$${this.row}`, untilText: this.child.text, translator: this.translator, row: blockedRow, calculated: true }).finalize(),
           ),
         );
@@ -98,7 +98,7 @@ export class BlocksUntilFormulaNode extends FormulaValueNode<boolean> {
       // console.log("blocksUntil.checkErrors:checking missables")
       const preReqRows = this.parser.getAllPossiblePreReqRows();
       const childPreReqRows = this.child.getAllPossiblePreReqRows();
-      const possiblyMissableRows = [...childPreReqRows].filter(row => !preReqRows.has(row) && CellFormulaParser.getParserForChecklistRow(this.translator, row).isDirectlyMissable());
+      const possiblyMissableRows = [...childPreReqRows].filter(row => !preReqRows.has(row) && this.translator.getParserForRow(row).isDirectlyMissable());
       if (possiblyMissableRows.length) {
         const itemsByRow = this.translator.getColumnValues(COLUMN.ITEM).byRow;
         this.addError(`UNTIL clause cannot be missible; remove Pre-Req dependencies on these Items: ${

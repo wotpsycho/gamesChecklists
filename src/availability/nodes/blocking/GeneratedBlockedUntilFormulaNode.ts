@@ -1,7 +1,7 @@
+import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
 import type { BlockedArgs } from "../shared";
-import { CellFormulaParser } from "../../CellFormulaParser";
 import { VALUE } from "../../utilities";
 import { BlockedUntilFormulaNode } from "./BlockedUntilFormulaNode";
 
@@ -15,7 +15,7 @@ export class GeneratedBlockedUntilFormulaNode extends BlockedUntilFormulaNode {
   }
 
   protected get parser(): CellFormulaParser {
-    return CellFormulaParser.getParserForChecklistRow(this.translator, this.row);
+    return this.translator.getParserForRow(this.row);
   }
 
   constructor(blockedText: string, untilText: string, translator: IStatusFormulaTranslator, row: row) {

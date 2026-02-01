@@ -2,8 +2,8 @@ import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
 import type { BlockedArgs } from "../shared";
 import { AND, NOT, OR } from "../../utilities";
-import { FormulaNode } from "../base";
-import { BooleanFormulaNode } from "../boolean";
+import { FormulaNode } from "../base/FormulaNode";
+import { BooleanFormulaNode } from "../boolean/BooleanFormulaNode";
 
 const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
 

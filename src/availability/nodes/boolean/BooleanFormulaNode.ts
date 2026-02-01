@@ -12,7 +12,7 @@ import {
   X_ITEMS,
 } from "../../utilities";
 import { FormulaNode } from "../base";
-import { BooleanFormulaValueNode } from "../value";
+import { BooleanFormulaValueNode } from "../value/BooleanFormulaValueNode";
 import { ComparisonFormulaNode } from "./ComparisonFormulaNode";
 
 /**

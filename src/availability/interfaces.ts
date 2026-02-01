@@ -1,4 +1,5 @@
 import type { Checklist } from "../ChecklistApp";
+import type { CellFormulaParser } from "./CellFormulaParser";
 import type { PHASE } from "./constants";
 import type { column, row } from "./types";
 import type { columnValues } from "./utilities";
@@ -52,4 +53,11 @@ export interface IStatusFormulaTranslator {
    * Convert row counts to A1 notation with counts
    */
   rowCountsToA1Counts: (rowCounts: Readonly<RowCounts>, column: column) => { [x: string]: number };
+
+  /**
+   * Get a CellFormulaParser instance for the specified row.
+   * This method breaks circular dependencies by allowing nodes to access parsers
+   * through the translator interface rather than directly importing CellFormulaParser.
+   */
+  getParserForRow: (row: row) => CellFormulaParser;
 }

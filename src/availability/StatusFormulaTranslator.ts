@@ -11,7 +11,6 @@ import { time, timeEnd } from "../util";
 
 // Import cell formula parser
 import { CellFormulaParser } from "./CellFormulaParser";
-
 // Import constants
 import { PHASE } from "./constants";
 
@@ -27,14 +26,6 @@ import FontLine = GoogleAppsScript.Spreadsheet.FontLine;
 import FontStyle = GoogleAppsScript.Spreadsheet.FontStyle;
 import FontWeight = GoogleAppsScript.Spreadsheet.FontWeight;
 // Import parser utilities
-
-// Re-export translator helpers for backwards compatibility
-export {
-  addLinksToPreReqs,
-  getActiveChecklistTranslator,
-  getTranslatorForChecklist,
-  validateAndGenerateStatusFormulasForChecklist,
-} from "./utilities/translator-helpers";
 
 export class StatusFormulaTranslator implements IStatusFormulaTranslator {
   readonly checklist: Checklist;
@@ -534,5 +525,9 @@ export class StatusFormulaTranslator implements IStatusFormulaTranslator {
     }
     rangeCounts[Formula.A1(firstRow, column, lastRow, column)] = num;
     return rangeCounts;
+  }
+
+  getParserForRow(row: row): CellFormulaParser {
+    return CellFormulaParser.getParserForChecklistRow(this, row);
   }
 }

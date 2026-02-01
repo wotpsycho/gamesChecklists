@@ -2,7 +2,7 @@ import type * as ChecklistMeta from "./ChecklistMeta";
 import type { ChecklistSettings, SETTING } from "./ChecklistSettings";
 import type { column, DeveloperMetadata, EditEvent } from "./shared-types";
 import type { Range, Sheet, sheetValue } from "./SheetBase";
-import { addLinksToPreReqs, validateAndGenerateStatusFormulasForChecklist } from "./availability";
+import { StatusFormulaTranslator } from "./availability";
 import { getChecklistByMetaSheet, getMetaFromChecklist } from "./checklist-helpers";
 import * as Formula from "./Formulas";
 import { getSettingsForChecklist } from "./settings-helpers";
@@ -79,7 +79,7 @@ export class Checklist extends SheetBase {
     if (typeof this._title === "undefined") {
       const titleValues: sheetValue[] = this.getRowValues(ROW.TITLE, 2);
       const titleIndex: number = titleValues.findIndex(value => value);
-      this._title = titleIndex >= 0 ? titleValues[titleIndex] as string : null;
+      this._title = titleIndex >= 0 ? titleValues[titleIndex].toString() : null;
       this._titleColumn = titleIndex >= 0 ? titleIndex + 2 : 3;
     }
     return this._title;
@@ -499,8 +499,9 @@ export class Checklist extends SheetBase {
     this.resetDataValidation(true);
     timeEnd("dataValidation");
 
-    validateAndGenerateStatusFormulasForChecklist(this);
-    addLinksToPreReqs(this);
+    const statusFormulaTranslator = StatusFormulaTranslator.fromChecklist(this);
+    statusFormulaTranslator.validateAndGenerateStatusFormulas();
+    statusFormulaTranslator.addLinksToPreReqsInRange(this.firstDataRow, this.lastRow);
 
     time("available rules");
     // Add conditional formatting rules
@@ -1041,11 +1042,11 @@ export class Checklist extends SheetBase {
   // END REPORTING SECTION
   // STATUS SECTION
   public calculateStatusFormulas(): void {
-    validateAndGenerateStatusFormulasForChecklist(this);
+    StatusFormulaTranslator.fromChecklist(this).validateAndGenerateStatusFormulas();
   }
 
   linkPreReqs(range: Range = this.getColumnDataRange(COLUMN.PRE_REQS)): void {
-    addLinksToPreReqs(this, range.getRow(), range.getLastRow());
+    StatusFormulaTranslator.fromChecklist(this).addLinksToPreReqsInRange(range.getRow(), range.getLastRow());
   }
 
   linkMeta() {
