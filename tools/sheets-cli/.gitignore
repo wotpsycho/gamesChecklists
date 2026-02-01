@@ -2,6 +2,9 @@
 credentials.json
 token.json
 
+# Spreadsheet configuration (local)
+.sheets.local.json
+
 # Node modules
 node_modules/
 
