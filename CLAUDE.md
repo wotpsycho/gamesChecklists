@@ -74,6 +74,21 @@ The status formulas are automatically generated and dynamically update as items 
 
 ## Architecture
 
+### File Naming Convention
+
+The project uses the following file naming convention:
+
+**Root `src/` directory:**
+- Files follow kebab-case (e.g., `index.ts`, `util.ts`)
+- Exception: Class-containing files use PascalCase (e.g., `SheetBase.ts`, `ChecklistApp.ts`)
+
+**`src/availability/` directory and subdirectories:**
+- Files containing a single class → PascalCase matching the class name (e.g., `BooleanFormulaNode.ts`)
+- Files with multiple classes → PascalCase of the "main" class
+- Non-class files (utilities, types, registries) → kebab-case (e.g., `types.ts`, `registries.ts`, `index.ts`)
+
+This convention improves discoverability: seeing `BooleanFormulaNode.ts` immediately indicates it contains the `BooleanFormulaNode` class.
+
 ### Module Organization
 
 The codebase uses ES6 modules bundled via Rollup into a single IIFE for Google Apps Script:
