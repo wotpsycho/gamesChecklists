@@ -2,19 +2,16 @@ import { time, timeEnd } from '../util';
 import * as Formula from '../Formulas';
 import type { Checklist } from '../ChecklistApp';
 import { STATUS, COLUMN, getActiveChecklist, FINAL_ITEM_TYPE } from '../ChecklistApp';
+// Import types
+import type { column, row, FormulaHelper, Range, RichTextValue } from './types';
+import type { IStatusFormulaTranslator, RowCounts } from './interfaces';
+import type { sheetValueInfo, columnValues } from './parser-utilities';
+
+// Import constants
+import { SPECIAL_PREFIXES, PHASE, USAGES } from './constants';
+
+// Import formula helpers
 import {
-  type Range,
-  type RichTextValue,
-  type column,
-  type row,
-  type FormulaHelper,
-  type IStatusFormulaTranslator,
-  type RowCounts,
-  type sheetValueInfo,
-  type columnValues,
-  SPECIAL_PREFIXES,
-  PHASE,
-  USAGES,
   OR,
   AND,
   NOT,
@@ -33,6 +30,11 @@ import {
   IF,
   COUNTIF,
   formulaTypeToString,
+  getNumItemInfo,
+} from './formula-helpers';
+
+// Import parser utilities
+import {
   getParenPlaceholder,
   getQuotePlaeholder,
   quoteRegExp,
@@ -40,10 +42,11 @@ import {
   quoteMapping,
   parentheticalMapping,
   PREFIX_REG_EXP,
-  Node,
-  FormulaNode,
-  type NodeArgs,
-  type NumberNode,
+} from './parser-utilities';
+
+// Import node classes
+import { Node, FormulaNode } from './nodes/base-nodes';
+import {
   BooleanFormulaNode,
   ComparisonFormulaNode,
   NumberFormulaNode,
@@ -54,20 +57,23 @@ import {
   OptionFormulaNode,
   SameFormulaNode,
   virtualItems,
-  CellFormulaParser,
+} from './nodes/boolean-number-nodes';
+import {
   RootNode,
   CheckedRootNode,
   LinkedFormulaNode,
+} from './nodes/root-nodes';
+import {
   UsesFormulaNode,
   MissedFormulaNode,
   OptionalFormulaNode,
   BlocksUntilFormulaNode,
   BlockedUntilFormulaNode,
   GeneratedBlockedUntilFormulaNode,
-  type BlocksArgs,
-  type BlockedArgs,
-  getNumItemInfo,
-} from './index';
+} from './nodes/specialized-nodes';
+
+// Import cell formula parser
+import { CellFormulaParser } from './cell-formula-parser';
 
 // Re-export translator helpers for backwards compatibility
 export {
