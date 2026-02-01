@@ -3,7 +3,7 @@ import * as Formula from './Formulas';
 import { SheetBase, type Sheet, type Range, type RichTextValue, type sheetValue } from './SheetBase';
 import * as ChecklistMeta from './ChecklistMeta';
 import { ChecklistSettings, SETTING } from './ChecklistSettings';
-import { validateAndGenerateStatusFormulasForChecklist, addLinksToPreReqs } from './StatusFormulaTranslator';
+import { validateAndGenerateStatusFormulasForChecklist, addLinksToPreReqs } from './availability';
 import { getActiveSheet as _getActiveSheet, setActiveSheet as _setActiveSheet } from './SheetHelpers';
 
 export type EditEvent = GoogleAppsScript.Events.SheetsOnEdit;

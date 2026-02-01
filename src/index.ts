@@ -9,7 +9,7 @@ import { SheetBase } from './SheetBase';
 import * as ChecklistApp from './ChecklistApp';
 import { ChecklistSettings, SETTING } from './ChecklistSettings';
 import * as ChecklistMeta from './ChecklistMeta';
-import * as Status from './StatusFormulaTranslator';
+import * as Status from './availability/StatusFormulaTranslator';
 
 // Import global functions (GAS event handlers)
 import { onOpen, onEdit, handleEdit, handleChange, AttachTriggers, CalculatePreReqs, LinkPreReqs } from './Triggers';
