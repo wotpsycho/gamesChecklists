@@ -1,6 +1,6 @@
 import type { Checklist } from '../ChecklistApp';
 import { getActiveChecklist } from '../ChecklistApp';
-import { StatusFormulaTranslator } from './status-formula-translator';
+import { StatusFormulaTranslator } from './StatusFormulaTranslator';
 
 /**
  * Get the StatusFormulaTranslator for the active checklist

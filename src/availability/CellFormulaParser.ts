@@ -19,7 +19,7 @@ import {
 import { OR, AND, VALUE, IFS, IF } from './formula-helpers';
 
 // Import StatusFormulaTranslator type
-import type { StatusFormulaTranslator } from './status-formula-translator';
+import type { StatusFormulaTranslator } from './StatusFormulaTranslator';
 
 // Import specialized node classes from nodes module
 import {

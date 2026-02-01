@@ -5,7 +5,7 @@ import { OR, AND, NOT, EQ, VALUE } from '../../formula-helpers';
 import { SPECIAL_PREFIXES, USAGES } from '../../constants';
 import { STATUS } from '../../../ChecklistApp';
 import { BooleanFormulaValueNode } from '../value';
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import type { FormulaValueNode } from '../value';
 import { virtualItems } from '../shared';
 

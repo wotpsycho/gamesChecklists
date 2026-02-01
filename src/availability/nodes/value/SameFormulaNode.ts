@@ -3,7 +3,7 @@ import type { IStatusFormulaTranslator, NodeArgs } from '../../interfaces';
 import { OR, VALUE } from '../../formula-helpers';
 import { COLUMN } from '../../../ChecklistApp';
 // Import CellFormulaParser from local module (circular dependency resolved at runtime)
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import { FormulaValueNode } from './FormulaValueNode';
 
 /**

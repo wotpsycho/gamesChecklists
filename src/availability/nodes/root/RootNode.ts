@@ -6,7 +6,7 @@ import { PHASE } from '../../constants';
 import { AND, OR, IFS, VALUE } from '../../formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 
 /**
  * RootNode - The root of a formula node tree for a checklist row

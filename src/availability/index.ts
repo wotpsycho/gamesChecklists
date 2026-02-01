@@ -17,10 +17,10 @@ export * from './parser-utilities';
 export * from './nodes';
 
 // Re-export cell formula parser
-export * from './cell-formula-parser';
+export * from './CellFormulaParser';
 
 // Re-export translator helpers
 export * from './translator-helpers';
 
 // Re-export status formula translator
-export * from './status-formula-translator';
+export * from './StatusFormulaTranslator';

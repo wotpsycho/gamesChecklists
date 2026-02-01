@@ -70,7 +70,7 @@ import {
 } from './nodes';
 
 // Import cell formula parser
-import { CellFormulaParser } from './cell-formula-parser';
+import { CellFormulaParser } from './CellFormulaParser';
 
 // Re-export translator helpers for backwards compatibility
 export {

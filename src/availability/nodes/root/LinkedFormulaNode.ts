@@ -6,7 +6,7 @@ import { AND, OR, NOT, IFS, VALUE } from '../../formula-helpers';
 import { FormulaNode } from '../base/FormulaNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import { OptionFormulaNode } from '../special/OptionFormulaNode';
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import { RootNode } from './RootNode';
 
 /**

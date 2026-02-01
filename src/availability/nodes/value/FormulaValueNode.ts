@@ -3,7 +3,7 @@ import type { IStatusFormulaTranslator } from '../../interfaces';
 import { FormulaNode } from '../base';
 import { PHASE } from '../../constants';
 // Import CellFormulaParser from local module (circular dependency resolved at runtime)
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import { virtualItems } from '../shared';
 import { ValueNode } from './ValueNode';
 

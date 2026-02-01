@@ -5,7 +5,7 @@ import { VALUE } from '../../formula-helpers';
 import { time, timeEnd } from '../../../util';
 import { FormulaValueNode } from '../value/FormulaValueNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import type { BlocksArgs } from '../shared';
 import { GeneratedBlockedUntilFormulaNode } from './GeneratedBlockedUntilNode';
 

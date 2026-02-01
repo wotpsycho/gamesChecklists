@@ -1,7 +1,7 @@
 import type { row } from '../../types';
 import type { IStatusFormulaTranslator } from '../../interfaces';
 import { VALUE } from '../../formula-helpers';
-import { CellFormulaParser } from '../../cell-formula-parser';
+import { CellFormulaParser } from '../../CellFormulaParser';
 import type { BlockedArgs } from '../shared';
 import { BlockedUntilFormulaNode } from './BlockedUntilFormulaNode';
 
