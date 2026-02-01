@@ -81,6 +81,21 @@ export function parseChecklist(rows) {
           checklist.customColumns.push(header);
         }
       });
+
+      // Validate required columns exist
+      if (columnIndices.CHECK === undefined) {
+        throw new Error(`Missing required column: "${COLUMNS.CHECK}" (checkbox column)`);
+      }
+      if (columnIndices.ITEM === undefined) {
+        throw new Error(`Missing required column: "${COLUMNS.ITEM}"`);
+      }
+      // TYPE, PRE_REQS, and NOTES are optional but warn if missing
+      if (columnIndices.TYPE === undefined) {
+        console.warn(`⚠️  Warning: "${COLUMNS.TYPE}" column not found`);
+      }
+      if (columnIndices.PRE_REQS === undefined) {
+        console.warn(`⚠️  Warning: "${COLUMNS.PRE_REQS}" column not found`);
+      }
     } else if (headerRowIndex >= 0 && i > headerRowIndex) {
       // This is a data row
       if (checklist.metadata.firstDataRow === null) {

@@ -12,11 +12,27 @@ const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 
 /**
  * Load saved credentials if they exist
+ * Combines refresh token with client secrets from credentials.json
  */
 async function loadSavedCredentials() {
   try {
-    const content = await fs.readFile(TOKEN_PATH);
-    const credentials = JSON.parse(content);
+    // Read token (contains only refresh_token)
+    const tokenContent = await fs.readFile(TOKEN_PATH);
+    const token = JSON.parse(tokenContent);
+
+    // Read credentials to get client_id and client_secret
+    const credContent = await fs.readFile(CREDENTIALS_PATH);
+    const keys = JSON.parse(credContent);
+    const key = keys.installed || keys.web;
+
+    // Combine token with client credentials (but don't save client_secret to token)
+    const credentials = {
+      type: 'authorized_user',
+      client_id: key.client_id,
+      client_secret: key.client_secret,
+      refresh_token: token.refresh_token,
+    };
+
     return google.auth.fromJSON(credentials);
   } catch (err) {
     return null;
@@ -25,15 +41,12 @@ async function loadSavedCredentials() {
 
 /**
  * Save credentials to disk for future use
+ * Only saves refresh_token, not client_secret (security)
  */
 async function saveCredentials(client) {
-  const content = await fs.readFile(CREDENTIALS_PATH);
-  const keys = JSON.parse(content);
-  const key = keys.installed || keys.web;
+  // Only save refresh_token, NOT client_secret
   const payload = JSON.stringify({
     type: 'authorized_user',
-    client_id: key.client_id,
-    client_secret: key.client_secret,
     refresh_token: client.credentials.refresh_token,
   });
   await fs.writeFile(TOKEN_PATH, payload);
