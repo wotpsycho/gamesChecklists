@@ -27,6 +27,25 @@ export async function saveConfig(config) {
 }
 
 /**
+ * Check if a sheet is a checklist by reading its header row
+ * @param {string} spreadsheetId - Spreadsheet ID
+ * @param {string} sheetName - Sheet name
+ * @returns {Promise<boolean>} True if sheet has ✓ in header
+ */
+async function isChecklistSheet(spreadsheetId, sheetName) {
+  try {
+    const { readSheet } = await import('./sheets.js');
+    const range = `${sheetName}!A1:A10`;
+    const rows = await readSheet(spreadsheetId, range);
+
+    // Look for ✓ in first column (checklist header marker)
+    return rows.some(row => row[0] === '✓');
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
  * Add or update a spreadsheet in the config
  * @param {string} name - Short name/alias for the spreadsheet
  * @param {string} spreadsheetId - Google Sheets ID
@@ -38,7 +57,6 @@ export async function addSpreadsheet(name, spreadsheetId, refresh = true) {
 
   let entry = {
     id: spreadsheetId,
-    name: name,
     title: '',
     sheets: [],
     lastUpdated: new Date().toISOString(),
@@ -48,11 +66,39 @@ export async function addSpreadsheet(name, spreadsheetId, refresh = true) {
     // Fetch metadata from Google Sheets
     const metadata = await getSheetMetadata(spreadsheetId);
     entry.title = metadata.properties.title;
-    entry.sheets = metadata.sheets.map(sheet => ({
+
+    // Filter for checklist sheets and detect their meta sheets
+    const allSheets = metadata.sheets.map(sheet => ({
       name: sheet.properties.title,
       sheetId: sheet.properties.sheetId,
       index: sheet.properties.index,
     }));
+
+    // Check each sheet to see if it's a checklist
+    const checklistSheets = [];
+    for (const sheet of allSheets) {
+      // Skip sheets that end with " Meta"
+      if (sheet.name.endsWith(' Meta')) {
+        continue;
+      }
+
+      // Check if this is a checklist sheet
+      const isChecklist = await isChecklistSheet(spreadsheetId, sheet.name);
+      if (isChecklist) {
+        // Look for associated meta sheet
+        const metaSheetName = `${sheet.name} Meta`;
+        const metaSheet = allSheets.find(s => s.name === metaSheetName);
+
+        checklistSheets.push({
+          name: sheet.name,
+          sheetId: sheet.sheetId,
+          index: sheet.index,
+          metaSheet: metaSheet ? metaSheetName : null,
+        });
+      }
+    }
+
+    entry.sheets = checklistSheets;
   }
 
   config.spreadsheets[name] = entry;
@@ -79,11 +125,35 @@ export async function getSpreadsheet(name, validate = false) {
     // Refresh metadata to ensure cache is current
     const metadata = await getSheetMetadata(entry.id);
     entry.title = metadata.properties.title;
-    entry.sheets = metadata.sheets.map(sheet => ({
+
+    // Re-filter for checklist sheets
+    const allSheets = metadata.sheets.map(sheet => ({
       name: sheet.properties.title,
       sheetId: sheet.properties.sheetId,
       index: sheet.properties.index,
     }));
+
+    const checklistSheets = [];
+    for (const sheet of allSheets) {
+      if (sheet.name.endsWith(' Meta')) {
+        continue;
+      }
+
+      const isChecklist = await isChecklistSheet(entry.id, sheet.name);
+      if (isChecklist) {
+        const metaSheetName = `${sheet.name} Meta`;
+        const metaSheet = allSheets.find(s => s.name === metaSheetName);
+
+        checklistSheets.push({
+          name: sheet.name,
+          sheetId: sheet.sheetId,
+          index: sheet.index,
+          metaSheet: metaSheet ? metaSheetName : null,
+        });
+      }
+    }
+
+    entry.sheets = checklistSheets;
     entry.lastUpdated = new Date().toISOString();
 
     config.spreadsheets[name] = entry;
@@ -91,6 +161,28 @@ export async function getSpreadsheet(name, validate = false) {
   }
 
   return entry;
+}
+
+/**
+ * Rename a spreadsheet in the config
+ * @param {string} oldName - Current name
+ * @param {string} newName - New name
+ */
+export async function renameSpreadsheet(oldName, newName) {
+  const config = await loadConfig();
+
+  if (!config.spreadsheets[oldName]) {
+    throw new Error(`Spreadsheet "${oldName}" not found in config`);
+  }
+
+  if (config.spreadsheets[newName]) {
+    throw new Error(`Spreadsheet "${newName}" already exists in config`);
+  }
+
+  config.spreadsheets[newName] = config.spreadsheets[oldName];
+  delete config.spreadsheets[oldName];
+
+  await saveConfig(config);
 }
 
 /**
