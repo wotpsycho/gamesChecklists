@@ -36,7 +36,7 @@ import {
 // Import parser utilities
 import {
   getParenPlaceholder,
-  getQuotePlaeholder,
+  getQuotePlaceholder,
   quoteRegExp,
   parenRegExp,
   quoteMapping,

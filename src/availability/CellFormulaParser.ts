@@ -5,7 +5,7 @@ import { SPECIAL_PREFIXES, PHASE } from './constants';
 import {
   type sheetValueInfo,
   PREFIX_REG_EXP,
-  getQuotePlaeholder,
+  getQuotePlaceholder,
   getParenPlaceholder,
   quoteMapping,
   parentheticalMapping,
@@ -88,7 +88,7 @@ export class CellFormulaParser {
         continue;
       }
       line = line.replace(/"(([^"]|\\")*)"/g, (_match,text:string) => {
-        const placeholder:string = getQuotePlaeholder();
+        const placeholder:string = getQuotePlaceholder();
         quoteMapping[placeholder] = text;
         return placeholder;
       });

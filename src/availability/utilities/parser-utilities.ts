@@ -28,7 +28,7 @@ let UID_Counter: number = 0;
 const [parenIdentifier, quoteIdentifier] = ["PPH", "QPH"];
 
 export const getParenPlaceholder = (): string => `${parenIdentifier}_${UID_Counter++}_${parenIdentifier}`;
-export const getQuotePlaeholder = (): string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
+export const getQuotePlaceholder = (): string => `${quoteIdentifier}_${UID_Counter++}_${quoteIdentifier}`;
 
 export const quoteRegExp: RegExp = RegExp(`${quoteIdentifier}_\\d+_${quoteIdentifier}`);
 export const parenRegExp: RegExp = RegExp(`${parenIdentifier}_\\d+_${parenIdentifier}`);

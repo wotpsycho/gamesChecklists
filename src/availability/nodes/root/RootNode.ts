@@ -45,6 +45,7 @@ export class RootNode extends BooleanFormulaNode {
       const itemValues:{[x:number]:sheetValueInfo[]} = this.translator.getColumnValues(COLUMN.ITEM).byRow;
       return this.optionsRows.map(optionRow => itemValues[optionRow]).flat();
     }
+    return [];
   }
   toControlledFormula(): string {
     if (this.isControlled()) {

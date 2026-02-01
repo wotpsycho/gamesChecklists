@@ -7,7 +7,7 @@ import { FormulaValueNode } from '../value/FormulaValueNode';
 import { BooleanFormulaNode } from '../boolean/BooleanFormulaNode';
 import { CellFormulaParser } from '../../CellFormulaParser';
 import type { BlocksArgs } from '../shared';
-import { GeneratedBlockedUntilFormulaNode } from './GeneratedBlockedUntilNode';
+import { GeneratedBlockedUntilFormulaNode } from './GeneratedBlockedUntilFormulaNode';
 
 const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
 
