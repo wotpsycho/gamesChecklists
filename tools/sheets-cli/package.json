@@ -1,0 +1,23 @@
+{
+  "name": "sheets-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for managing Games Checklists data via Google Sheets API",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "export": "node cli.js export",
+    "import": "node cli.js import",
+    "create": "node cli.js create"
+  },
+  "keywords": [
+    "google-sheets",
+    "checklist",
+    "games"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
+    "googleapis": "^171.0.0"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "title": "Sample Game Checklist",
+  "includeQuickFilter": false,
+  "items": [
+    {
+      "type": "Quest",
+      "item": "Tutorial Quest",
+      "preReqs": "",
+      "notes": "INFO: First quest in the game"
+    },
+    {
+      "type": "Quest",
+      "item": "Chapter 1 - The Beginning",
+      "preReqs": "Tutorial Quest",
+      "notes": ""
+    },
+    {
+      "type": "Achievement",
+      "item": "First Steps",
+      "preReqs": "Tutorial Quest",
+      "notes": "Complete the tutorial"
+    },
+    {
+      "type": "Collectible",
+      "item": "Bronze Coin",
+      "preReqs": "",
+      "notes": "Found in starting area"
+    },
+    {
+      "type": "Quest",
+      "item": "Chapter 2 - Rising Action",
+      "preReqs": "Chapter 1 - The Beginning",
+      "notes": ""
+    },
+    {
+      "type": "Quest",
+      "item": "Side Quest: Lost Cat",
+      "preReqs": "Chapter 1 - The Beginning",
+      "notes": "WARN: Missable after Chapter 3"
+    },
+    {
+      "type": "Quest",
+      "item": "Chapter 3 - The Choice",
+      "preReqs": "Chapter 2 - Rising Action",
+      "notes": ""
+    },
+    {
+      "type": "Quest",
+      "item": "Path A: Alliance",
+      "preReqs": "OPTION Chapter 3 - The Choice",
+      "notes": "WARN: Choosing this locks out Path B"
+    },
+    {
+      "type": "Quest",
+      "item": "Path B: Betrayal",
+      "preReqs": "OPTION Chapter 3 - The Choice\nMISSED Path A: Alliance",
+      "notes": "WARN: Choosing this locks out Path A"
+    },
+    {
+      "type": "Achievement",
+      "item": "Master Collector",
+      "preReqs": "Bronze Coin",
+      "notes": "Collect all collectibles"
+    }
+  ]
+}
