@@ -3,13 +3,30 @@ export * from './shared';
 
 // Re-export base node classes
 export * from './base';
+
+// Re-export value nodes
+export * from './value';
+
+// Re-export boolean nodes
+export * from './boolean';
+
+// Re-export number nodes
+export * from './number';
+
+// Re-export special nodes
+export * from './special';
+
+// Re-export constraint nodes
+export * from './constraint';
+
+// Re-export root nodes
+export * from './root';
+
+// Re-export blocking nodes
+export * from './blocking';
+
+// Keep these for backward compatibility - they now re-export from the new structure
 export * from './base-nodes';
-
-// Re-export boolean, number, and value formula nodes
 export * from './boolean-number-nodes';
-
-// Re-export root node classes
 export * from './root-nodes';
-
-// Re-export specialized node classes
 export * from './specialized-nodes';
