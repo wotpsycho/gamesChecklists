@@ -2,7 +2,7 @@ import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
-import { OR, VALUE } from "../../utilities";
+import { OR, VALUE } from "../../utilities/formula-helpers";
 import { FormulaValueNode } from "./FormulaValueNode";
 
 /**

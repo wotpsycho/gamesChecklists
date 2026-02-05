@@ -1,12 +1,12 @@
 import type { CellFormulaParser } from "../../CellFormulaParser";
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
-import type { FormulaValueNode } from "../value";
+import type { FormulaValueNode } from "../value/FormulaValueNode";
 import { COLUMN, STATUS } from "../../../shared-types";
 import { SPECIAL_PREFIXES, USAGES } from "../../constants";
-import { AND, EQ, NOT, OR, VALUE } from "../../utilities";
-import { virtualItems } from "../shared";
-import { BooleanFormulaValueNode } from "../value";
+import { AND, EQ, NOT, OR, VALUE } from "../../utilities/formula-helpers";
+import { virtualItems } from "../shared/registries";
+import { BooleanFormulaValueNode } from "../value/BooleanFormulaValueNode";
 
 /**
  * OptionFormulaNode handles OPTION prefix for choice-based items

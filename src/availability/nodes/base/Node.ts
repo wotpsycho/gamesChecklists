@@ -6,7 +6,7 @@ import {
   parentheticalMapping,
   quoteMapping,
   quoteRegExp,
-} from "../../utilities";
+} from "../../utilities/parser-utilities";
 
 /**
  * Abstract base class for all formula AST nodes.

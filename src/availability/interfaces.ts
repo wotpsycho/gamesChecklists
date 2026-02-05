@@ -2,7 +2,7 @@ import type { Checklist } from "../ChecklistApp";
 import type { CellFormulaParser } from "./CellFormulaParser";
 import type { PHASE } from "./constants";
 import type { column, row } from "./types";
-import type { columnValues } from "./utilities";
+import type { columnValues } from "./utilities/parser-utilities";
 
 /**
  * Type representing row counts indexed by row number

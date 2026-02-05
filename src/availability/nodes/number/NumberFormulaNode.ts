@@ -1,6 +1,6 @@
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
-import type { NumberNode } from "../shared";
+import type { NumberNode } from "../shared/interfaces";
 import { STATUS } from "../../../shared-types";
 import {
   ADD,
@@ -8,9 +8,9 @@ import {
   MINUS,
   MULT,
   VALUE,
-} from "../../utilities";
-import { FormulaNode } from "../base";
-import { NumberFormulaValueNode } from "../value";
+} from "../../utilities/formula-helpers";
+import { FormulaNode } from "../base/FormulaNode";
+import { NumberFormulaValueNode } from "../value/NumberFormulaValueNode";
 
 /**
  * Number formula node handling arithmetic operators (+, -, *, /)

@@ -2,9 +2,10 @@ import type { IStatusFormulaTranslator, NodeArgs, RowCounts } from "../../interf
 import type { row } from "../../types";
 import { COLUMN } from "../../../shared-types";
 import { PHASE } from "../../constants";
-import { parenRegExp, parentheticalMapping, quoteMapping, quoteRegExp } from "../../utilities";
-import { Node } from "../base";
-import { ValueNodeTypes, virtualItems } from "../shared";
+import { parenRegExp, parentheticalMapping, quoteMapping, quoteRegExp } from "../../utilities/parser-utilities";
+import { Node } from "../base/Node";
+import { ValueNodeTypes } from "../shared/enums";
+import { virtualItems } from "../shared/registries";
 
 /**
  * Regular expressions for parsing value node syntax

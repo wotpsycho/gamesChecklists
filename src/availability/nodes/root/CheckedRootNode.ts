@@ -1,4 +1,4 @@
-import { VALUE } from "../../utilities";
+import { VALUE } from "../../utilities/formula-helpers";
 import { RootNode } from "./RootNode";
 
 /**

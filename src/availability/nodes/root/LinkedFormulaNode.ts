@@ -1,10 +1,10 @@
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
-import type { sheetValueInfo } from "../../utilities";
-import type { FormulaNode } from "../base";
-import type { OptionFormulaNode } from "../special";
+import type { sheetValueInfo } from "../../utilities/parser-utilities";
+import type { FormulaNode } from "../base/FormulaNode";
+import type { OptionFormulaNode } from "../special/OptionFormulaNode";
 import { COLUMN, STATUS } from "../../../shared-types";
-import { AND, IFS, NOT, OR, VALUE } from "../../utilities";
+import { AND, IFS, NOT, OR, VALUE } from "../../utilities/formula-helpers";
 import { RootNode } from "./RootNode";
 
 /**

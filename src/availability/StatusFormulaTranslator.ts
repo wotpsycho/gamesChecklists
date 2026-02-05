@@ -2,7 +2,7 @@ import type { Checklist } from "../ChecklistApp";
 import type { IStatusFormulaTranslator, RowCounts } from "./interfaces";
 // Import types
 import type { column, Range, RichTextValue, row } from "./types";
-import type { columnValues, sheetValueInfo } from "./utilities";
+import type { columnValues, sheetValueInfo } from "./utilities/parser-utilities";
 import * as Formula from "../Formulas";
 
 import { COLUMN, FINAL_ITEM_TYPE, STATUS } from "../shared-types";
@@ -21,7 +21,7 @@ import {
   FORMULA,
   getNumItemInfo,
   VALUE,
-} from "./utilities";
+} from "./utilities/formula-helpers";
 import FontLine = GoogleAppsScript.Spreadsheet.FontLine;
 import FontStyle = GoogleAppsScript.Spreadsheet.FontStyle;
 import FontWeight = GoogleAppsScript.Spreadsheet.FontWeight;

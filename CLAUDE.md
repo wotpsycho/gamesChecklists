@@ -241,6 +241,32 @@ The codebase uses ES6 modules bundled via Rollup into a single IIFE for Google A
 
 Modules are imported in `src/index.ts` and bundled to `build/Code.js` with top-level function declarations for Apps Script compatibility.
 
+### Import Style
+
+**Direct imports only - NO barrel imports:**
+- Always import directly from the source file: `import { Checklist } from "./ChecklistApp"`
+- Never use barrel imports (index.ts files that re-export): `import { Checklist } from "./checklist"` ❌
+- Exception: `src/index.ts` is the bundler entry point and must re-export for Apps Script compatibility
+
+**Rationale:**
+- Barrel imports cause circular dependency issues
+- Direct imports make it clear where code comes from
+- Easier to refactor and track dependencies
+- Better IDE support and tree-shaking
+
+**Examples:**
+```typescript
+// ✓ GOOD: Direct import
+import { Checklist } from "./ChecklistApp";
+import { time, timeEnd } from "./util";
+import { BooleanFormulaNode } from "./availability/nodes/boolean/BooleanFormulaNode";
+
+// ✗ BAD: Barrel import (do not create index.ts re-exports)
+import { Checklist } from "./checklist";  // Would require index.ts
+import { BooleanFormulaNode } from "./availability";  // Would require index.ts
+import { BooleanFormulaNode } from "./availability/nodes/boolean";  // Would require index.ts
+```
+
 ### Key Classes
 
 #### SheetBase (ChecklistApp.SheetBase)

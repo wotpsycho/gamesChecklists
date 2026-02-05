@@ -1,6 +1,6 @@
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { FormulaHelper, row } from "../../types";
-import type { NumberNode } from "../shared";
+import type { NumberNode } from "../shared/interfaces";
 import * as Formula from "../../../Formulas";
 import { STATUS } from "../../../shared-types";
 import {
@@ -13,9 +13,9 @@ import {
   OR,
   VALUE,
   X_ITEMS,
-} from "../../utilities";
-import { FormulaNode } from "../base";
-import { NumberFormulaNode } from "../number";
+} from "../../utilities/formula-helpers";
+import { FormulaNode } from "../base/FormulaNode";
+import { NumberFormulaNode } from "../number/NumberFormulaNode";
 
 /**
  * Comparison formula node for comparing two number nodes

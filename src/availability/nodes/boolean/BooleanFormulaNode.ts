@@ -10,8 +10,8 @@ import {
   OR,
   VALUE,
   X_ITEMS,
-} from "../../utilities";
-import { FormulaNode } from "../base";
+} from "../../utilities/formula-helpers";
+import { FormulaNode } from "../base/FormulaNode";
 import { BooleanFormulaValueNode } from "../value/BooleanFormulaValueNode";
 import { ComparisonFormulaNode } from "./ComparisonFormulaNode";
 

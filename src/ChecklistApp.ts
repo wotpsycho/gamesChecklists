@@ -2,7 +2,7 @@ import type * as ChecklistMeta from "./ChecklistMeta";
 import type { ChecklistSettings, SETTING } from "./ChecklistSettings";
 import type { column, DeveloperMetadata, EditEvent } from "./shared-types";
 import type { Range, Sheet, sheetValue } from "./SheetBase";
-import { StatusFormulaTranslator } from "./availability";
+import { StatusFormulaTranslator } from "./availability/StatusFormulaTranslator";
 import { getChecklistByMetaSheet, getMetaFromChecklist } from "./checklist-helpers";
 import * as Formula from "./Formulas";
 import { getSettingsForChecklist } from "./settings-helpers";

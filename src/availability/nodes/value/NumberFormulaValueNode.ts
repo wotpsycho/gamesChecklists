@@ -1,8 +1,8 @@
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { column, row } from "../../types";
-import type { NumberNode } from "../shared";
+import type { NumberNode } from "../shared/interfaces";
 import { COLUMN, STATUS } from "../../../shared-types";
-import { ADD, COUNTIF, MINUS, MULT, VALUE } from "../../utilities";
+import { ADD, COUNTIF, MINUS, MULT, VALUE } from "../../utilities/formula-helpers";
 import { FormulaValueNode } from "./FormulaValueNode";
 
 /**

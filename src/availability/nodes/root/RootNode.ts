@@ -1,11 +1,11 @@
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
-import type { sheetValueInfo } from "../../utilities";
-import type { FormulaNode } from "../base";
+import type { sheetValueInfo } from "../../utilities/parser-utilities";
+import type { FormulaNode } from "../base/FormulaNode";
 import { COLUMN, STATUS } from "../../../shared-types";
 import { PHASE } from "../../constants";
-import { AND, IFS, OR, VALUE } from "../../utilities";
-import { BooleanFormulaNode } from "../boolean";
+import { AND, IFS, OR, VALUE } from "../../utilities/formula-helpers";
+import { BooleanFormulaNode } from "../boolean/BooleanFormulaNode";
 
 /**
  * RootNode - The root of a formula node tree for a checklist row

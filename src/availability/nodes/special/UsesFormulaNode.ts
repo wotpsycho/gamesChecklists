@@ -1,11 +1,11 @@
 import type { IStatusFormulaTranslator, NodeArgs } from "../../interfaces";
 import type { row } from "../../types";
-import type { useInfo } from "../shared";
+import type { useInfo } from "../shared/types";
 import * as Formula from "../../../Formulas";
 import { COLUMN } from "../../../shared-types";
-import { ADD, getNumItemInfo, IF, MINUS, OR, VALUE } from "../../utilities";
-import { usesInfo, virtualItems } from "../shared";
-import { BooleanFormulaValueNode } from "../value";
+import { ADD, getNumItemInfo, IF, MINUS, OR, VALUE } from "../../utilities/formula-helpers";
+import { usesInfo, virtualItems } from "../shared/registries";
+import { BooleanFormulaValueNode } from "../value/BooleanFormulaValueNode";
 
 /**
  * UsesFormulaNode - Tracks consumable items that can be used multiple times

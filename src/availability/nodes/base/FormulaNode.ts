@@ -1,6 +1,6 @@
 import type { FormulaHelper } from "../../types";
+import { VALUE } from "../../../Formulas";
 import { PHASE } from "../../constants";
-import { VALUE } from "../../utilities";
 import { Node } from "./Node";
 
 /**

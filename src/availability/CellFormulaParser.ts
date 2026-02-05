@@ -1,33 +1,30 @@
 import type { IStatusFormulaTranslator } from "./interfaces";
 // Import specialized node classes from nodes module
-import type {
-  FormulaNode,
-} from "./nodes";
-import type { row } from "./types";
 
-import type { sheetValueInfo } from "./utilities";
+import type { FormulaNode } from "./nodes/base/FormulaNode";
+
+import type { row } from "./types";
+import type { sheetValueInfo,
+} from "./utilities/parser-utilities";
 import { COLUMN } from "../shared-types";
 import { PHASE, SPECIAL_PREFIXES } from "./constants";
-import {
-  BlockedUntilFormulaNode,
-  BlocksUntilFormulaNode,
-  BooleanFormulaNode,
-  CheckedRootNode,
-  LinkedFormulaNode,
-  MissedFormulaNode,
-  OptionalFormulaNode,
-  OptionFormulaNode,
-  RootNode,
-  UsesFormulaNode,
-} from "./nodes";
+import { BlockedUntilFormulaNode } from "./nodes/blocking/BlockedUntilFormulaNode";
+import { BlocksUntilFormulaNode } from "./nodes/blocking/BlocksUntilFormulaNode";
+import { BooleanFormulaNode } from "./nodes/boolean/BooleanFormulaNode";
+import { MissedFormulaNode } from "./nodes/constraint/MissedFormulaNode";
+import { OptionalFormulaNode } from "./nodes/constraint/OptionalFormulaNode";
+import { CheckedRootNode } from "./nodes/root/CheckedRootNode";
+import { LinkedFormulaNode } from "./nodes/root/LinkedFormulaNode";
+import { RootNode } from "./nodes/root/RootNode";
+import { OptionFormulaNode } from "./nodes/special/OptionFormulaNode";
+import { UsesFormulaNode } from "./nodes/special/UsesFormulaNode";
 import {
   getParenPlaceholder,
   getQuotePlaceholder,
   parentheticalMapping,
   PREFIX_REG_EXP,
   quoteMapping,
-
-} from "./utilities";
+} from "./utilities/parser-utilities";
 
 /**
  * CellFormulaParser parses prerequisite text and creates formula node trees

@@ -1,7 +1,7 @@
 import type { IStatusFormulaTranslator } from "../../interfaces";
 import type { row } from "../../types";
-import { FormulaNode } from "../base";
-import { virtualItems } from "../shared";
+import { FormulaNode } from "../base/FormulaNode";
+import { virtualItems } from "../shared/registries";
 import { ValueNode } from "./ValueNode";
 
 /**
