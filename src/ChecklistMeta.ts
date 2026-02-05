@@ -60,7 +60,10 @@ export class MetaSheet extends SheetBase {
           if (baseMetadata) {
             const metaValues = this.getColumnDataValues(column);
             metaValues.forEach((metaValue, i) => {
-              baseMetadata.parents[baseMetadata.metaValues[i]] = metaValue.toString();
+              const metaString = metaValue.toString();
+              if (metaString) {
+                baseMetadata.parents[baseMetadata.metaValues[i]] = metaString;
+              }
             });
           }
         } else if (rawMetaHeader && rawMetaHeader.toString().trim()) {

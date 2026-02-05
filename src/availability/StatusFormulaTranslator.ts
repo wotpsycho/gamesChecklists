@@ -464,6 +464,19 @@ export class StatusFormulaTranslator implements IStatusFormulaTranslator {
       addRows(columnInfo.byRow[rowIdMatch[1]]);
     } else if (columnInfo.byValue[id]) {
       addRows(columnInfo.byValue[id]);
+
+      // Add child values if this column has parent hierarchy in meta
+      if (column !== COLUMN.ITEM && this.checklist.meta) {
+        const columnIndex = this.checklist.toColumnIndex(column);
+        const childValues = this.checklist.meta.getChildValues(columnIndex, id);
+
+        // childValues includes the original value, so skip it to avoid double-counting
+        childValues.forEach((childValue) => {
+          if (childValue !== id && columnInfo.byValue[childValue]) {
+            addRows(columnInfo.byValue[childValue]);
+          }
+        });
+      }
     } else if (looksLikeRegExp) {
       const search: RegExp = new RegExp(`^(${id.replace(/\*/g, ".*")})$`);
       Object.keys(columnInfo.byValue).forEach((value) => {
