@@ -449,11 +449,29 @@ export class SheetBase {
   protected _determineLastNamedColumn = (...columnTypes: column[]): number =>
     (columnTypes.length > 0 ? columnTypes : this.namedColumns).reduce<number>((lastColumn, columnType) => Math.max(lastColumn, this._checkColumn(columnType, true) || 0), 0);
 
-  hideColumn(...columnTypes: column[]): void {
+  hideColumns(...columnTypes: column[]): void {
     columnTypes.forEach((columnType) => {
       const columnIndex = this.toColumnIndex(columnType);
       if (columnIndex) {
         this.sheet.hideColumns(columnIndex);
+      }
+    });
+  }
+
+  showColumns(...columnTypes: column[]): void {
+    columnTypes.forEach((columnType) => {
+      const columnIndex = this.toColumnIndex(columnType);
+      if (columnIndex) {
+        this.sheet.showColumns(columnIndex);
+      }
+    });
+  }
+
+  toggleColumns(...columnTypes: column[]): void {
+    columnTypes.forEach((columnType) => {
+      const columnIndex = this.toColumnIndex(columnType);
+      if (columnIndex) {
+        this.sheet.isColumnHiddenByUser(columnIndex) ? this.sheet.showColumns(columnIndex) : this.sheet.hideColumns(columnIndex);
       }
     });
   }

@@ -308,6 +308,10 @@ export class Checklist extends SheetBase {
             break;
           case "linkmeta": this.linkMeta();
             break;
+          case "note":
+          case "notes":
+            this.toggleColumns(COLUMN.NOTES);
+            break;
           case "status":
           default: {
             const filter = this.removeFilter();
@@ -466,7 +470,7 @@ export class Checklist extends SheetBase {
     this.ensurePreReqsColumn();
     this.ensureNotesColumn();
     this.ensureStatusColumn();
-    this.hideColumn(COLUMN.STATUS);
+    this.hideColumns(COLUMN.STATUS);
 
     this.ensureTitleRow();
     this.ensureSettingsRow();
