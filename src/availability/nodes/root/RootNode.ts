@@ -35,6 +35,12 @@ export class RootNode extends BooleanFormulaNode {
 
   addChild(child: FormulaNode<boolean>) {
     this.checkPhase(PHASE.FINALIZING);
+    // If no children yet (no pre-reqs), activate AND combination so added children
+    // are included in formula generation instead of short-circuiting on value=true
+    if (this.children.length === 0) {
+      this.value = undefined;
+      this.formulaType = AND;
+    }
     this.children.push(child);
   }
 
