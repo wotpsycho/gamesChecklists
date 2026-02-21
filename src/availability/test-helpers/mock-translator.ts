@@ -104,6 +104,18 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
       source = columns[colName] ?? {};
     }
 
+    // Handle $[row] references (e.g., "$10" references item at row 10)
+    const rowIdMatch = id.match(/^\$(\d+)$/);
+    if (rowIdMatch) {
+      const targetRow = Number(rowIdMatch[1]);
+      for (const [, rows] of Object.entries(source)) {
+        if (rows.includes(targetRow)) {
+          counts[targetRow] = (counts[targetRow] || 0) + 1;
+        }
+      }
+      return counts;
+    }
+
     // Support wildcards
     const hasStar = id.includes("*");
     if (_implicitPrefix && !hasStar) {
