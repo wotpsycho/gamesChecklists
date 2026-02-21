@@ -27,8 +27,9 @@ export interface MockTranslatorConfig {
   columnIndices?: Record<string, number>;
 }
 
-interface MockParserStub {
+export interface MockParserStub {
   toPreReqsMetFormula: () => string;
+  toRawPreReqsMetFormula?: () => string;
   toRawMissedFormula: () => string;
   toMissedFormula: () => string;
   toPRUsedFormula: () => string;
@@ -37,6 +38,35 @@ interface MockParserStub {
   getCircularDependencies: (previous?: row[]) => ReadonlySet<row>;
   isDirectlyMissable: () => boolean;
   isInCircularDependency: () => boolean;
+  addChild?: (child: unknown) => void;
+  addOption?: (row: row) => void;
+  isControlled?: () => boolean;
+  getOptions?: () => row[];
+  finalize?: () => unknown;
+}
+
+/**
+ * Creates a mock parser stub with sensible defaults, allowing overrides.
+ */
+export function createMockParser(overrides: Partial<MockParserStub> = {}): MockParserStub {
+  return {
+    toPreReqsMetFormula: () => Formula.VALUE.TRUE,
+    toRawPreReqsMetFormula: () => Formula.VALUE.TRUE,
+    toRawMissedFormula: () => Formula.VALUE.FALSE,
+    toMissedFormula: () => Formula.VALUE.FALSE,
+    toPRUsedFormula: () => Formula.VALUE.FALSE,
+    toUnknownFormula: () => Formula.VALUE.FALSE,
+    getAllPossiblePreReqRows: () => new Set<row>(),
+    getCircularDependencies: () => new Set<row>(),
+    isDirectlyMissable: () => false,
+    isInCircularDependency: () => false,
+    addChild: () => {},
+    addOption: () => {},
+    isControlled: () => false,
+    getOptions: () => [],
+    finalize: () => {},
+    ...overrides,
+  };
 }
 
 let mockIdCounter = 0;
@@ -175,17 +205,7 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
       return registeredParsers[r as number] as unknown as CellFormulaParser;
     }
     // Return a default stub that represents a simple no-prereq row
-    return {
-      toPreReqsMetFormula: () => Formula.VALUE.TRUE,
-      toRawMissedFormula: () => Formula.VALUE.FALSE,
-      toMissedFormula: () => Formula.VALUE.FALSE,
-      toPRUsedFormula: () => Formula.VALUE.FALSE,
-      toUnknownFormula: () => Formula.VALUE.FALSE,
-      getAllPossiblePreReqRows: () => new Set<row>(),
-      getCircularDependencies: () => new Set<row>(),
-      isDirectlyMissable: () => false,
-      isInCircularDependency: () => false,
-    } as unknown as CellFormulaParser;
+    return createMockParser() as unknown as CellFormulaParser;
   }
 
   const checklist = {
