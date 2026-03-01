@@ -4,7 +4,7 @@ import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BooleanFormulaNode } from "../boolean/BooleanFormulaNode";
 import { LinkedFormulaNode } from "./LinkedFormulaNode";
 
-describe("LinkedFormulaNode", () => {
+describe("linkedFormulaNode", () => {
   setupFormulaTests();
 
   describe("basics", () => {

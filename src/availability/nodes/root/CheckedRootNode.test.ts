@@ -2,7 +2,7 @@ import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BooleanFormulaNode } from "../boolean/BooleanFormulaNode";
 import { CheckedRootNode } from "./CheckedRootNode";
 
-describe("CheckedRootNode", () => {
+describe("checkedRootNode", () => {
   setupFormulaTests();
 
   it("isControlled returns true", () => {

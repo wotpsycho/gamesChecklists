@@ -1,7 +1,7 @@
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BooleanFormulaNode } from "./BooleanFormulaNode";
 
-describe("BooleanFormulaNode", () => {
+describe("booleanFormulaNode", () => {
   setupFormulaTests();
 
   describe("parsing", () => {
@@ -12,7 +12,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.hasValue()).toBe(true);
     });
 
-    it("A && B creates AND with two children", () => {
+    it("a && B creates AND with two children", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -20,7 +20,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toPreReqsMetFormula()).toBe("AND($A$10,$A$11)");
     });
 
-    it("A || B creates OR with two children", () => {
+    it("a || B creates OR with two children", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -53,7 +53,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toPreReqsMetFormula()).toBe("TRUE");
     });
 
-    it("AND of two items", () => {
+    it("aND of two items", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -61,7 +61,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toPreReqsMetFormula()).toBe("AND($A$10,$A$11)");
     });
 
-    it("OR of two items", () => {
+    it("oR of two items", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -69,7 +69,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toPreReqsMetFormula()).toBe("OR($A$10,$A$11)");
     });
 
-    it("NOT of one item", () => {
+    it("nOT of one item", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "!Quest A", translator: t, row: 5 }),
         { items: { "Quest A": [10] } },
@@ -86,7 +86,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toPRUsedFormula()).toBe("FALSE");
     });
 
-    it("AND case: OR of (NOT(rawMissed) AND prUsed) per child", () => {
+    it("aND case: OR of (NOT(rawMissed) AND prUsed) per child", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -96,7 +96,7 @@ describe("BooleanFormulaNode", () => {
       expect(formula).toContain("OR");
     });
 
-    it("OR case: AND of (NOT(rawMissed) AND prUsed) per child", () => {
+    it("oR case: AND of (NOT(rawMissed) AND prUsed) per child", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -115,7 +115,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toMissedFormula()).toBe("FALSE");
     });
 
-    it("AND case: OR of children missed formulas", () => {
+    it("aND case: OR of children missed formulas", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -125,7 +125,7 @@ describe("BooleanFormulaNode", () => {
       expect(formula).toContain("OR");
     });
 
-    it("OR case: AND of children missed formulas", () => {
+    it("oR case: AND of children missed formulas", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -144,7 +144,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toRawMissedFormula()).toBe("FALSE");
     });
 
-    it("AND case: OR of children raw missed formulas", () => {
+    it("aND case: OR of children raw missed formulas", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -153,7 +153,7 @@ describe("BooleanFormulaNode", () => {
       expect(formula).toContain("OR");
     });
 
-    it("OR case: AND of children raw missed formulas", () => {
+    it("oR case: AND of children raw missed formulas", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -171,7 +171,7 @@ describe("BooleanFormulaNode", () => {
       expect(node.toUnknownFormula()).toBe("FALSE");
     });
 
-    it("AND case produces AND of NOT(rawMissed) + OR(unknown)", () => {
+    it("aND case produces AND of NOT(rawMissed) + OR(unknown)", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A && Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },
@@ -181,7 +181,7 @@ describe("BooleanFormulaNode", () => {
       expect(formula).toContain("AND");
     });
 
-    it("OR case produces AND of OR(unknown) + per-child OR(unknown,missed)", () => {
+    it("oR case produces AND of OR(unknown) + per-child OR(unknown,missed)", () => {
       const { node } = buildAndFinalize(
         t => BooleanFormulaNode.create({ text: "Quest A || Quest B", translator: t, row: 5 }),
         { items: { "Quest A": [10], "Quest B": [11] } },

@@ -1,12 +1,12 @@
-import { google } from 'googleapis';
-import { authorize } from './auth.js';
+import { google } from "googleapis";
+import { authorize } from "./auth.js";
 
 /**
  * Get authenticated Sheets API client
  */
 async function getSheetsClient() {
   const auth = await authorize();
-  return google.sheets({ version: 'v4', auth });
+  return google.sheets({ version: "v4", auth });
 }
 
 /**
@@ -32,9 +32,9 @@ export async function readSheet(spreadsheetId, range) {
  * @param {string} range - A1 notation range (e.g., 'Sheet1!A1')
  * @param {Array} values - 2D array of values to write
  * @param {string} valueInputOption - How to interpret input ('RAW' or 'USER_ENTERED')
- * @returns {Promise<Object>} Update response
+ * @returns {Promise<object>} Update response
  */
-export async function writeSheet(spreadsheetId, range, values, valueInputOption = 'USER_ENTERED') {
+export async function writeSheet(spreadsheetId, range, values, valueInputOption = "USER_ENTERED") {
   const sheets = await getSheetsClient();
 
   const response = await sheets.spreadsheets.values.update({
@@ -54,7 +54,7 @@ export async function writeSheet(spreadsheetId, range, values, valueInputOption 
  * @param {string} spreadsheetId - The ID of the spreadsheet
  * @param {string} range - A1 notation range (e.g., 'Sheet1!A:E')
  * @param {Array} values - 2D array of values to append
- * @returns {Promise<Object>} Append response
+ * @returns {Promise<object>} Append response
  */
 export async function appendSheet(spreadsheetId, range, values) {
   const sheets = await getSheetsClient();
@@ -62,7 +62,7 @@ export async function appendSheet(spreadsheetId, range, values) {
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId,
     range,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: "USER_ENTERED",
     resource: {
       values,
     },
@@ -74,7 +74,7 @@ export async function appendSheet(spreadsheetId, range, values) {
 /**
  * Get sheet metadata (name, dimensions, etc.)
  * @param {string} spreadsheetId - The ID of the spreadsheet
- * @returns {Promise<Object>} Spreadsheet metadata
+ * @returns {Promise<object>} Spreadsheet metadata
  */
 export async function getSheetMetadata(spreadsheetId) {
   const sheets = await getSheetsClient();
@@ -90,7 +90,7 @@ export async function getSheetMetadata(spreadsheetId) {
  * Clear a range in a Google Sheet
  * @param {string} spreadsheetId - The ID of the spreadsheet
  * @param {string} range - A1 notation range to clear
- * @returns {Promise<Object>} Clear response
+ * @returns {Promise<object>} Clear response
  */
 export async function clearSheet(spreadsheetId, range) {
   const sheets = await getSheetsClient();
@@ -107,7 +107,7 @@ export async function clearSheet(spreadsheetId, range) {
  * Batch update multiple ranges at once
  * @param {string} spreadsheetId - The ID of the spreadsheet
  * @param {Array} data - Array of {range, values} objects
- * @returns {Promise<Object>} Batch update response
+ * @returns {Promise<object>} Batch update response
  */
 export async function batchUpdate(spreadsheetId, data) {
   const sheets = await getSheetsClient();
@@ -115,7 +115,7 @@ export async function batchUpdate(spreadsheetId, data) {
   const response = await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
     resource: {
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: "USER_ENTERED",
       data: data.map(item => ({
         range: item.range,
         values: item.values,
@@ -130,7 +130,7 @@ export async function batchUpdate(spreadsheetId, data) {
  * Execute batch requests (for sheet operations like duplicate, delete, rename)
  * @param {string} spreadsheetId - The ID of the spreadsheet
  * @param {Array} requests - Array of batch request objects
- * @returns {Promise<Object>} Batch update response
+ * @returns {Promise<object>} Batch update response
  */
 export async function batchUpdateSpreadsheet(spreadsheetId, requests) {
   const sheets = await getSheetsClient();
@@ -151,7 +151,7 @@ export async function batchUpdateSpreadsheet(spreadsheetId, requests) {
  * @param {number} sourceSheetId - The ID of the sheet to duplicate
  * @param {string} newSheetName - Name for the duplicated sheet
  * @param {number} insertSheetIndex - Optional index where the new sheet should be inserted
- * @returns {Promise<Object>} New sheet info
+ * @returns {Promise<object>} New sheet info
  */
 export async function duplicateSheet(spreadsheetId, sourceSheetId, newSheetName, insertSheetIndex) {
   const request = {
@@ -176,7 +176,7 @@ export async function duplicateSheet(spreadsheetId, sourceSheetId, newSheetName,
  * @param {number} sheetId - The ID of the sheet
  * @param {number} startIndex - Start row index (0-based, inclusive)
  * @param {number} endIndex - End row index (0-based, exclusive)
- * @returns {Promise<Object>} Delete response
+ * @returns {Promise<object>} Delete response
  */
 export async function deleteRows(spreadsheetId, sheetId, startIndex, endIndex) {
   return await batchUpdateSpreadsheet(spreadsheetId, [
@@ -184,7 +184,7 @@ export async function deleteRows(spreadsheetId, sheetId, startIndex, endIndex) {
       deleteDimension: {
         range: {
           sheetId,
-          dimension: 'ROWS',
+          dimension: "ROWS",
           startIndex,
           endIndex,
         },
@@ -197,8 +197,8 @@ export async function deleteRows(spreadsheetId, sheetId, startIndex, endIndex) {
  * Update sheet properties (name, etc.)
  * @param {string} spreadsheetId - The ID of the spreadsheet
  * @param {number} sheetId - The ID of the sheet
- * @param {Object} properties - Properties to update
- * @returns {Promise<Object>} Update response
+ * @param {object} properties - Properties to update
+ * @returns {Promise<object>} Update response
  */
 export async function updateSheetProperties(spreadsheetId, sheetId, properties) {
   return await batchUpdateSpreadsheet(spreadsheetId, [
@@ -208,7 +208,7 @@ export async function updateSheetProperties(spreadsheetId, sheetId, properties) 
           sheetId,
           ...properties,
         },
-        fields: Object.keys(properties).join(','),
+        fields: Object.keys(properties).join(","),
       },
     },
   ]);

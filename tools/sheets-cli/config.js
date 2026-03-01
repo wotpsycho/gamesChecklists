@@ -1,18 +1,18 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { getSheetMetadata } from './sheets.js';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { getSheetMetadata } from "./sheets.js";
 
-const CONFIG_PATH = path.join(process.cwd(), '.sheets.local.json');
+const CONFIG_PATH = path.join(process.cwd(), ".sheets.local.json");
 
 /**
  * Load the spreadsheet configuration
- * @returns {Promise<Object>} Configuration object
+ * @returns {Promise<object>} Configuration object
  */
 export async function loadConfig() {
   try {
-    const content = await fs.readFile(CONFIG_PATH, 'utf-8');
+    const content = await fs.readFile(CONFIG_PATH, "utf-8");
     return JSON.parse(content);
-  } catch (err) {
+  } catch (_err) {
     // Config doesn't exist yet, return empty
     return { spreadsheets: {} };
   }
@@ -20,7 +20,7 @@ export async function loadConfig() {
 
 /**
  * Save the spreadsheet configuration
- * @param {Object} config - Configuration to save
+ * @param {object} config - Configuration to save
  */
 export async function saveConfig(config) {
   await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
@@ -34,13 +34,13 @@ export async function saveConfig(config) {
  */
 async function isChecklistSheet(spreadsheetId, sheetName) {
   try {
-    const { readSheet } = await import('./sheets.js');
+    const { readSheet } = await import("./sheets.js");
     const range = `${sheetName}!A1:A10`;
     const rows = await readSheet(spreadsheetId, range);
 
     // Look for ✓ in first column (checklist header marker)
-    return rows.some(row => row[0] === '✓');
-  } catch (err) {
+    return rows.some(row => row[0] === "✓");
+  } catch (_err) {
     return false;
   }
 }
@@ -50,14 +50,14 @@ async function isChecklistSheet(spreadsheetId, sheetName) {
  * @param {string} name - Short name/alias for the spreadsheet
  * @param {string} spreadsheetId - Google Sheets ID
  * @param {boolean} refresh - Whether to fetch latest metadata
- * @returns {Promise<Object>} Updated spreadsheet entry
+ * @returns {Promise<object>} Updated spreadsheet entry
  */
 export async function addSpreadsheet(name, spreadsheetId, refresh = true) {
   const config = await loadConfig();
 
-  let entry = {
+  const entry = {
     id: spreadsheetId,
-    title: '',
+    title: "",
     sheets: [],
     lastUpdated: new Date().toISOString(),
   };
@@ -78,7 +78,7 @@ export async function addSpreadsheet(name, spreadsheetId, refresh = true) {
     const checklistSheets = [];
     for (const sheet of allSheets) {
       // Skip sheets that end with " Meta"
-      if (sheet.name.endsWith(' Meta')) {
+      if (sheet.name.endsWith(" Meta")) {
         continue;
       }
 
@@ -111,7 +111,7 @@ export async function addSpreadsheet(name, spreadsheetId, refresh = true) {
  * Get a spreadsheet from config by name
  * @param {string} name - Short name/alias
  * @param {boolean} validate - Whether to validate and refresh cache
- * @returns {Promise<Object>} Spreadsheet entry
+ * @returns {Promise<object>} Spreadsheet entry
  */
 export async function getSpreadsheet(name, validate = false) {
   const config = await loadConfig();
@@ -135,7 +135,7 @@ export async function getSpreadsheet(name, validate = false) {
 
     const checklistSheets = [];
     for (const sheet of allSheets) {
-      if (sheet.name.endsWith(' Meta')) {
+      if (sheet.name.endsWith(" Meta")) {
         continue;
       }
 
@@ -187,7 +187,7 @@ export async function renameSpreadsheet(oldName, newName) {
 
 /**
  * List all configured spreadsheets
- * @returns {Promise<Object>} Config object
+ * @returns {Promise<object>} Config object
  */
 export async function listSpreadsheets() {
   return await loadConfig();
@@ -212,7 +212,7 @@ export async function removeSpreadsheet(name) {
  * Get spreadsheet ID from name or return if already an ID
  * @param {string} nameOrId - Short name or spreadsheet ID
  * @param {boolean} validate - Whether to validate cache
- * @returns {Promise<Object>} Object with id and metadata
+ * @returns {Promise<object>} Object with id and metadata
  */
 export async function resolveSpreadsheet(nameOrId, validate = false) {
   // Check if it's already a spreadsheet ID (long string)

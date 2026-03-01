@@ -16,7 +16,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "watch": "rollup -c -w",
-    "watch:push": "node scripts/watch-push.js"
+    "watch:push": "node scripts/watch-push.js",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": "eslint --fix"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.2.0",
@@ -24,6 +28,8 @@
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/google-apps-script": "^2.0.8",
     "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.1",
     "rollup": "^4.57.1",
     "rollup-plugin-cleanup": "^3.2.1",
     "tslib": "^2.8.1",

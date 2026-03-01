@@ -89,7 +89,8 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
   const checklistId = ++mockIdCounter;
 
   function toColumnIndex(col: column): number {
-    if (typeof col === "number") return col;
+    if (typeof col === "number")
+      return col;
     return columnIndices[col] ?? 0;
   }
 
@@ -146,7 +147,8 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
   }
 
   function rowsToA1Ranges(rows: row[], col?: column): string[] {
-    if (!rows || rows.length === 0) return [];
+    if (!rows || rows.length === 0)
+      return [];
     const colIdx = col ? toColumnIndex(col) : undefined;
     const sorted = [...rows].sort((a, b) => (a as number) - (b as number));
     const ranges: string[] = [];
@@ -169,7 +171,8 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
     const colIdx = toColumnIndex(col);
     const rangeCounts: Record<string, number> = {};
     const rows = Object.keys(rowCounts).map(Number).sort((a, b) => a - b);
-    if (rows.length === 0) return rangeCounts;
+    if (rows.length === 0)
+      return rangeCounts;
     let first = rows[0];
     let last = rows[0];
     let num = rowCounts[rows[0]];
@@ -192,7 +195,7 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
     const colIdx = toColumnIndex(col);
 
     let source: Record<string, number[]>;
-    if (col === COLUMN.ITEM || col === colIdx && colIdx === toColumnIndex(COLUMN.ITEM)) {
+    if (col === COLUMN.ITEM || (col === colIdx && colIdx === toColumnIndex(COLUMN.ITEM))) {
       source = items;
     } else {
       const colName = typeof col === "string" ? col : Object.entries(columnIndices).find(([, v]) => v === col)?.[0];
@@ -202,9 +205,11 @@ export function createMockTranslator(config: MockTranslatorConfig = {}): IStatus
     for (const [value, rows] of Object.entries(source)) {
       for (const r of rows) {
         const info: sheetValueInfo = { num: 1, value, row: r, column: colIdx };
-        if (!byRow[r]) byRow[r] = [];
+        if (!byRow[r])
+          byRow[r] = [];
         byRow[r].push(info);
-        if (!byValue[value]) byValue[value] = [];
+        if (!byValue[value])
+          byValue[value] = [];
         byValue[value].push(info);
       }
     }

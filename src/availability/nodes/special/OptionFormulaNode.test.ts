@@ -4,7 +4,7 @@ import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { virtualItems } from "../shared/registries";
 import { OptionFormulaNode } from "./OptionFormulaNode";
 
-describe("OptionFormulaNode", () => {
+describe("optionFormulaNode", () => {
   setupFormulaTests();
 
   describe("real item option (choice ID refers to existing item)", () => {
@@ -25,7 +25,7 @@ describe("OptionFormulaNode", () => {
       });
       const addOptionCalls: number[] = [];
       translator.registerParser(10, createMockParser({
-        addOption: (row) => addOptionCalls.push(row as number),
+        addOption: row => addOptionCalls.push(row as number),
         toRawPreReqsMetFormula: () => "TRUE",
         getOptions: () => [5, 6],
       }));

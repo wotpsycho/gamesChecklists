@@ -1,6 +1,6 @@
 import { buildParsers, setupFormulaTests } from "./test-helpers/setup";
 
-describe("CellFormulaParser integration", () => {
+describe("cellFormulaParser integration", () => {
   setupFormulaTests();
 
   describe("basic prerequisites", () => {
@@ -9,7 +9,7 @@ describe("CellFormulaParser integration", () => {
         items: { "Quest A": [10] },
         prereqs: { 10: "" },
       });
-      expect(parsers[10].toStatusFormula()).toBe('IFS($A$10,"CHECKED",TRUE,TRUE)');
+      expect(parsers[10].toStatusFormula()).toBe("IFS($A$10,\"CHECKED\",TRUE,TRUE)");
     });
 
     it("single item prereq", () => {
@@ -38,7 +38,7 @@ describe("CellFormulaParser integration", () => {
 
     it("line continuation with ... merges lines", () => {
       const { parsers } = buildParsers({
-        items: { "A": [10], "B": [14], "Target": [20] },
+        items: { A: [10], B: [14], Target: [20] },
         prereqs: { 20: "A &&\n... B" },
       });
       expect(parsers[20].toPreReqsMetFormula()).toBe("AND($A$10,$A$14)");
@@ -47,7 +47,7 @@ describe("CellFormulaParser integration", () => {
     it("quoted item name preserves special characters", () => {
       const { parsers } = buildParsers({
         items: { "A || B": [10], "Target": [20] },
-        prereqs: { 20: '"A || B"' },
+        prereqs: { 20: "\"A || B\"" },
       });
       // The || inside quotes is NOT treated as OR operator
       expect(parsers[20].toPreReqsMetFormula()).toBe("$A$10");
@@ -55,9 +55,9 @@ describe("CellFormulaParser integration", () => {
   });
 
   describe("boolean operators", () => {
-    it("OR operator", () => {
+    it("oR operator", () => {
       const { parsers } = buildParsers({
-        items: { "A": [10], "B": [14], "Target": [20] },
+        items: { A: [10], B: [14], Target: [20] },
         prereqs: { 20: "A || B" },
       });
       expect(parsers[20].toPreReqsMetFormula()).toBe("OR($A$10,$A$14)");
@@ -65,15 +65,15 @@ describe("CellFormulaParser integration", () => {
 
     it("explicit AND operator", () => {
       const { parsers } = buildParsers({
-        items: { "A": [10], "B": [14], "Target": [20] },
+        items: { A: [10], B: [14], Target: [20] },
         prereqs: { 20: "A && B" },
       });
       expect(parsers[20].toPreReqsMetFormula()).toBe("AND($A$10,$A$14)");
     });
 
-    it("NOT operator", () => {
+    it("nOT operator", () => {
       const { parsers } = buildParsers({
-        items: { "A": [10], "Target": [20] },
+        items: { A: [10], Target: [20] },
         prereqs: { 20: "!A" },
       });
       expect(parsers[20].toPreReqsMetFormula()).toBe("NOT($A$10)");
@@ -81,7 +81,7 @@ describe("CellFormulaParser integration", () => {
 
     it("parenthesized grouping: (A || B) && C", () => {
       const { parsers } = buildParsers({
-        items: { "A": [10], "B": [14], "C": [16], "Target": [20] },
+        items: { A: [10], B: [14], C: [16], Target: [20] },
         prereqs: { 20: "(A || B) && C" },
       });
       expect(parsers[20].toPreReqsMetFormula()).toBe("AND(OR($A$10,$A$14),$A$16)");
@@ -89,7 +89,7 @@ describe("CellFormulaParser integration", () => {
   });
 
   describe("special prefixes", () => {
-    it("MISSED prefix", () => {
+    it("mISSED prefix", () => {
       const { parsers } = buildParsers({
         items: { "Kill Boss": [10], "Spare Boss": [14] },
         prereqs: { 14: "MISSED Kill Boss" },
@@ -99,9 +99,9 @@ describe("CellFormulaParser integration", () => {
       expect(parsers[14].toPRUsedFormula()).toBe("FALSE");
     });
 
-    it("OPTIONAL prefix", () => {
+    it("oPTIONAL prefix", () => {
       const { parsers } = buildParsers({
-        items: { "Bonus": [10], "Target": [14] },
+        items: { Bonus: [10], Target: [14] },
         prereqs: { 14: "OPTIONAL Bonus" },
       });
       expect(parsers[14].toPreReqsMetFormula()).toBe("NOT($A$10)");
@@ -110,38 +110,38 @@ describe("CellFormulaParser integration", () => {
       expect(parsers[14].toUnknownFormula()).toBe("FALSE");
     });
 
-    it("CHECKED flag creates controlled root", () => {
+    it("cHECKED flag creates controlled root", () => {
       const { parsers } = buildParsers({
-        items: { "Tutorial": [10] },
+        items: { Tutorial: [10] },
         prereqs: { 10: "CHECKED" },
       });
       expect(parsers[10].isControlled()).toBe(true);
       expect(parsers[10].toControlledFormula()).toBe("TRUE");
     });
 
-    it("INITIAL flag same as CHECKED", () => {
+    it("iNITIAL flag same as CHECKED", () => {
       const { parsers } = buildParsers({
-        items: { "Tutorial": [10] },
+        items: { Tutorial: [10] },
         prereqs: { 10: "INITIAL" },
       });
       expect(parsers[10].isControlled()).toBe(true);
       expect(parsers[10].toControlledFormula()).toBe("TRUE");
     });
 
-    it("PERSIST flag does not break formula generation", () => {
+    it("pERSIST flag does not break formula generation", () => {
       const { parsers } = buildParsers({
-        items: { "Unlockable": [10] },
+        items: { Unlockable: [10] },
         prereqs: { 10: "PERSIST" },
       });
       // PERSIST is a flag on the root node, doesn't change the formula itself
-      expect(parsers[10].toStatusFormula()).toBe('IFS($A$10,"CHECKED",TRUE,TRUE)');
+      expect(parsers[10].toStatusFormula()).toBe("IFS($A$10,\"CHECKED\",TRUE,TRUE)");
     });
   });
 
-  describe("OPTION", () => {
+  describe("oPTION", () => {
     it("virtual choice: two options with no real item", () => {
       const { parsers } = buildParsers({
-        items: { "Sword": [10], "Shield": [14] },
+        items: { Sword: [10], Shield: [14] },
         prereqs: {
           10: "OPTION Pick Weapon",
           14: "OPTION Pick Weapon",
@@ -174,7 +174,7 @@ describe("CellFormulaParser integration", () => {
 
     it("single OPTION reports error", () => {
       const { parsers } = buildParsers({
-        items: { "Lonely": [10] },
+        items: { Lonely: [10] },
         prereqs: { 10: "OPTION Lonely Choice" },
       });
       expect(parsers[10].hasErrors()).toBe(true);
@@ -182,7 +182,7 @@ describe("CellFormulaParser integration", () => {
     });
   });
 
-  describe("BLOCKS/UNTIL", () => {
+  describe("bLOCKS/UNTIL", () => {
     it("injects constraints into blocked rows, skips UNTIL prereq rows", () => {
       // Row 10: "Open Gate" — the BLOCKS row. Has prereq "Dungeon Key" and BLOCKS statement.
       // Row 14: "Dungeon Key" — prereq of Open Gate (and of UNTIL), should NOT be blocked
@@ -218,9 +218,9 @@ describe("CellFormulaParser integration", () => {
       expect(parsers[10].hasErrors()).toBe(false);
     });
 
-    it("BLOCKS without UNTIL reports error", () => {
+    it("bLOCKS without UNTIL reports error", () => {
       const { parsers } = buildParsers({
-        items: { "Blocker": [10], "Boss": [14] },
+        items: { Blocker: [10], Boss: [14] },
         prereqs: { 10: "BLOCKS Boss" },
       });
       expect(parsers[10].hasErrors()).toBe(true);
@@ -228,10 +228,10 @@ describe("CellFormulaParser integration", () => {
     });
   });
 
-  describe("USES resource tracking", () => {
+  describe("uSES resource tracking", () => {
     it("single consumer", () => {
       const { parsers } = buildParsers({
-        items: { "Potion": [10, 14], "Heal": [20] },
+        items: { Potion: [10, 14], Heal: [20] },
         prereqs: { 20: "USES 1x Potion" },
       });
       const formula = parsers[20].toPreReqsMetFormula();
@@ -257,8 +257,8 @@ describe("CellFormulaParser integration", () => {
     });
   });
 
-  describe("LINKED tasks", () => {
-    it("LINKED creates controlled root with linked children", () => {
+  describe("lINKED tasks", () => {
+    it("lINKED creates controlled root with linked children", () => {
       const { parsers } = buildParsers({
         items: { "Main Quest": [10], "Step 1": [14], "Step 2": [18] },
         prereqs: {
@@ -298,7 +298,7 @@ describe("CellFormulaParser integration", () => {
       expect(parsers[22].toPreReqsMetFormula()).toBe("AND($A$10,$A$14,$A$18)");
     });
 
-    it("X_ITEMS count syntax: 2x Quest* (fewer than total)", () => {
+    it("x_ITEMS count syntax: 2x Quest* (fewer than total)", () => {
       const { parsers } = buildParsers({
         items: { "Quest 1": [10], "Quest 2": [14], "Quest 3": [18], "Target": [22] },
         prereqs: { 22: "2x Quest*" },
@@ -311,7 +311,7 @@ describe("CellFormulaParser integration", () => {
 
     it("constant comparison short-circuits", () => {
       const { parsers } = buildParsers({
-        items: { "Target": [10] },
+        items: { Target: [10] },
         prereqs: { 10: "3 >= 2" },
       });
       // 3 >= 2 is always true
@@ -329,7 +329,7 @@ describe("CellFormulaParser integration", () => {
       expect(parsers[20].toMissedFormula()).toContain("$A$14");
     });
 
-    it("OPTION + additional prereqs", () => {
+    it("oPTION + additional prereqs", () => {
       const { parsers } = buildParsers({
         items: {
           "Pick Path": [10],
@@ -356,7 +356,7 @@ describe("CellFormulaParser integration", () => {
       });
       const formula = parsers[14].toStatusFormula();
       expect(formula).toMatch(/^IFS\(/);
-      expect(formula).toContain('"CHECKED"');
+      expect(formula).toContain("\"CHECKED\"");
       expect(formula).toContain("$A$14"); // toCheckedFormula
       expect(formula).toContain("$A$10"); // prereqsMet reference
     });
@@ -365,16 +365,16 @@ describe("CellFormulaParser integration", () => {
   describe("error cases", () => {
     it("nonexistent item reports error", () => {
       const { parsers } = buildParsers({
-        items: { "Target": [10] },
+        items: { Target: [10] },
         prereqs: { 10: "Nonexistent Item" },
       });
       expect(parsers[10].hasErrors()).toBe(true);
-      expect([...parsers[10].getErrors()].join()).toContain('Could not find "Nonexistent Item"');
+      expect([...parsers[10].getErrors()].join()).toContain("Could not find \"Nonexistent Item\"");
     });
 
-    it("BLOCKS without UNTIL reports error", () => {
+    it("bLOCKS without UNTIL reports error", () => {
       const { parsers } = buildParsers({
-        items: { "Blocker": [10], "Boss": [14] },
+        items: { Blocker: [10], Boss: [14] },
         prereqs: { 10: "BLOCKS Boss" },
       });
       expect(parsers[10].hasErrors()).toBe(true);
@@ -383,7 +383,7 @@ describe("CellFormulaParser integration", () => {
 
     it("single OPTION reports error", () => {
       const { parsers } = buildParsers({
-        items: { "Choice": [10] },
+        items: { Choice: [10] },
         prereqs: { 10: "OPTION Lonely Choice" },
       });
       expect(parsers[10].hasErrors()).toBe(true);

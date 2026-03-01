@@ -7,8 +7,9 @@
     "experimentalDecorators": true,
     "module": "ES2015",
     "moduleResolution": "node",
+    "types": ["vitest/globals", "google-apps-script"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["vitest/globals"]
+    "skipLibCheck": true
   }
 }

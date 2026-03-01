@@ -1,7 +1,7 @@
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { MissedFormulaNode } from "./MissedFormulaNode";
 
-describe("MissedFormulaNode", () => {
+describe("missedFormulaNode", () => {
   setupFormulaTests();
 
   const config = { items: { "Kill Boss": [10] } };

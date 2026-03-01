@@ -1,11 +1,11 @@
-import { COLUMN, STATUS } from "../../../shared-types";
+import { STATUS } from "../../../shared-types";
 import { PHASE } from "../../constants";
 import { createMockTranslator } from "../../test-helpers/mock-translator";
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BooleanFormulaNode } from "../boolean/BooleanFormulaNode";
 import { RootNode } from "./RootNode";
 
-describe("RootNode", () => {
+describe("rootNode", () => {
   setupFormulaTests();
 
   describe("no pre-reqs (empty children)", () => {
@@ -60,7 +60,7 @@ describe("RootNode", () => {
       // Checked = $A$5, value = "CHECKED"
       // Available = TRUE (STATUS.AVAILABLE="TRUE" -> VALUE("TRUE") -> TRUE), so IFS short-circuits
       // STATUS.AVAILABLE's VALUE is also TRUE (boolean), so the IFS ends: TRUE,TRUE
-      expect(formula).toBe('IFS($A$5,"CHECKED",TRUE,TRUE)');
+      expect(formula).toBe("IFS($A$5,\"CHECKED\",TRUE,TRUE)");
     });
   });
 

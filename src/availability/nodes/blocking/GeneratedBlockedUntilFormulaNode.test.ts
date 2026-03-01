@@ -2,14 +2,14 @@ import { createMockParser } from "../../test-helpers/mock-translator";
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { GeneratedBlockedUntilFormulaNode } from "./GeneratedBlockedUntilFormulaNode";
 
-describe("GeneratedBlockedUntilFormulaNode", () => {
+describe("generatedBlockedUntilFormulaNode", () => {
   setupFormulaTests();
 
   describe("uncontrolled row", () => {
     it("toPreReqsMetFormula delegates to super (BlockedUntilFormulaNode)", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       expect(node.toPreReqsMetFormula()).toBe("OR(NOT($A$10),$A$11)");
     });
@@ -17,7 +17,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toPRUsedFormula delegates to super", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toPRUsedFormula();
       expect(formula).toContain("$A$10");
@@ -26,7 +26,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toMissedFormula delegates to super", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toMissedFormula();
       expect(formula).toContain("$A$10");
@@ -35,7 +35,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toUnknownFormula delegates to super", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toUnknownFormula();
       expect(formula).toContain("$A$10");
@@ -46,7 +46,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toPreReqsMetFormula returns TRUE", () => {
       const { node, translator } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       // Register a controlled parser for this node's row
       translator.registerParser(5, createMockParser({ isControlled: () => true }));
@@ -56,7 +56,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toPRUsedFormula returns FALSE", () => {
       const { node, translator } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       translator.registerParser(5, createMockParser({ isControlled: () => true }));
       expect(node.toPRUsedFormula()).toBe("FALSE");
@@ -65,7 +65,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toMissedFormula returns FALSE", () => {
       const { node, translator } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       translator.registerParser(5, createMockParser({ isControlled: () => true }));
       expect(node.toMissedFormula()).toBe("FALSE");
@@ -74,7 +74,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("toUnknownFormula returns FALSE", () => {
       const { node, translator } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       translator.registerParser(5, createMockParser({ isControlled: () => true }));
       expect(node.toUnknownFormula()).toBe("FALSE");
@@ -85,7 +85,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("getAllPossiblePreReqRows returns empty set", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       expect(node.getAllPossiblePreReqRows().size).toBe(0);
     });
@@ -93,7 +93,7 @@ describe("GeneratedBlockedUntilFormulaNode", () => {
     it("getDirectPreReqRows returns empty set", () => {
       const { node } = buildAndFinalize(
         t => GeneratedBlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       expect(node.getDirectPreReqRows().size).toBe(0);
     });

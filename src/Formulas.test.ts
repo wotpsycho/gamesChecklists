@@ -1,6 +1,6 @@
 import { A1, AND, IF, IFS, NOT, OR, togglePrettyPrint, VALUE } from "./Formulas";
 
-describe("Formulas", () => {
+describe("formulas", () => {
   beforeEach(() => {
     togglePrettyPrint(false);
   });
@@ -8,7 +8,7 @@ describe("Formulas", () => {
     togglePrettyPrint(true);
   });
 
-  describe("VALUE", () => {
+  describe("vALUE", () => {
     it("converts true to TRUE", () => {
       expect(VALUE(true)).toBe("TRUE");
     });
@@ -31,7 +31,7 @@ describe("Formulas", () => {
     });
 
     it("wraps strings in quotes", () => {
-      expect(VALUE("text")).toBe('"text"');
+      expect(VALUE("text")).toBe("\"text\"");
     });
 
     it("has constants", () => {
@@ -42,7 +42,7 @@ describe("Formulas", () => {
     });
   });
 
-  describe("AND", () => {
+  describe("aND", () => {
     it("unwraps single arg", () => {
       expect(AND("x")).toBe("x");
     });
@@ -68,7 +68,7 @@ describe("Formulas", () => {
     });
   });
 
-  describe("OR", () => {
+  describe("oR", () => {
     it("unwraps single arg", () => {
       expect(OR("x")).toBe("x");
     });
@@ -90,12 +90,12 @@ describe("Formulas", () => {
     });
   });
 
-  describe("NOT", () => {
-    it("NOT(TRUE) returns FALSE", () => {
+  describe("nOT", () => {
+    it("nOT(TRUE) returns FALSE", () => {
       expect(NOT("TRUE")).toBe("FALSE");
     });
 
-    it("NOT(FALSE) returns TRUE", () => {
+    it("nOT(FALSE) returns TRUE", () => {
       expect(NOT("FALSE")).toBe("TRUE");
     });
 
@@ -108,7 +108,7 @@ describe("Formulas", () => {
     });
   });
 
-  describe("IFS", () => {
+  describe("iFS", () => {
     it("drops FALSE conditions", () => {
       expect(IFS("FALSE", "a", "x", "b")).toBe("IFS(x,b)");
     });
@@ -126,12 +126,12 @@ describe("Formulas", () => {
     });
   });
 
-  describe("IF", () => {
-    it("IF(TRUE, a, b) returns a", () => {
+  describe("iF", () => {
+    it("iF(TRUE, a, b) returns a", () => {
       expect(IF("TRUE", "a", "b")).toBe("a");
     });
 
-    it("IF(FALSE, a, b) returns b", () => {
+    it("iF(FALSE, a, b) returns b", () => {
       expect(IF("FALSE", "a", "b")).toBe("b");
     });
 
@@ -140,7 +140,7 @@ describe("Formulas", () => {
     });
   });
 
-  describe("A1", () => {
+  describe("a1", () => {
     it("single cell reference", () => {
       expect(A1(5, 1)).toBe("$A$5");
     });

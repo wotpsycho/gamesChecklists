@@ -1,14 +1,14 @@
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BlockedUntilFormulaNode } from "./BlockedUntilFormulaNode";
 
-describe("BlockedUntilFormulaNode", () => {
+describe("blockedUntilFormulaNode", () => {
   setupFormulaTests();
 
   describe("create / parsing", () => {
     it("parses 'Boss UNTIL Key' text format", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ text: "Boss UNTIL Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       // OR(NOT(blocked), until) = OR(NOT($A$10), $A$11)
       // NOT($A$10) is not TRUE/FALSE constant, so OR keeps both
@@ -18,7 +18,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("accepts explicit blockedText/untilText", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       expect(node.toPreReqsMetFormula()).toBe("OR(NOT($A$10),$A$11)");
     });
@@ -28,7 +28,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("returns OR(NOT(blocked), until)", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       expect(node.toPreReqsMetFormula()).toBe("OR(NOT($A$10),$A$11)");
     });
@@ -46,7 +46,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("returns AND(blocked, until.prUsed)", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toPRUsedFormula();
       // AND(blocked.prereqsMet, until.prUsed)
@@ -59,7 +59,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("returns AND(blocked, until.rawMissed)", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toRawMissedFormula();
       expect(formula).toContain("$A$10");
@@ -70,7 +70,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("returns AND(blocked, until.missed)", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toMissedFormula();
       expect(formula).toContain("$A$10");
@@ -81,7 +81,7 @@ describe("BlockedUntilFormulaNode", () => {
     it("returns AND(blocked, until.unknown)", () => {
       const { node } = buildAndFinalize(
         t => BlockedUntilFormulaNode.create({ blockedText: "Boss", untilText: "Key", translator: t, row: 5 }),
-        { items: { "Boss": [10], "Key": [11] } },
+        { items: { Boss: [10], Key: [11] } },
       );
       const formula = node.toUnknownFormula();
       // until.unknown for a single item includes AND(NOT(missed), LT(...))

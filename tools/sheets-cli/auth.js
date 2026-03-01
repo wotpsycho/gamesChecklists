@@ -1,14 +1,14 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { authenticate } from '@google-cloud/local-auth';
-import { google } from 'googleapis';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { authenticate } from "@google-cloud/local-auth";
+import { google } from "googleapis";
 
 // Scopes required for the API
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 // Paths for credentials and token
-const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
-const TOKEN_PATH = path.join(process.cwd(), 'token.json');
+const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
+const TOKEN_PATH = path.join(process.cwd(), "token.json");
 
 /**
  * Load saved credentials if they exist
@@ -27,14 +27,14 @@ async function loadSavedCredentials() {
 
     // Combine token with client credentials (but don't save client_secret to token)
     const credentials = {
-      type: 'authorized_user',
+      type: "authorized_user",
       client_id: key.client_id,
       client_secret: key.client_secret,
       refresh_token: token.refresh_token,
     };
 
     return google.auth.fromJSON(credentials);
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 }
@@ -46,7 +46,7 @@ async function loadSavedCredentials() {
 async function saveCredentials(client) {
   // Only save refresh_token, NOT client_secret
   const payload = JSON.stringify({
-    type: 'authorized_user',
+    type: "authorized_user",
     refresh_token: client.credentials.refresh_token,
   });
   await fs.writeFile(TOKEN_PATH, payload);

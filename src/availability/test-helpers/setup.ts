@@ -1,11 +1,12 @@
 import type { IStatusFormulaTranslator } from "../interfaces";
 import type { FormulaNode } from "../nodes/base/FormulaNode";
+import type { MockTranslatorConfig } from "./mock-translator";
 import { togglePrettyPrint } from "../../Formulas";
 import { CellFormulaParser } from "../CellFormulaParser";
 import { PHASE } from "../constants";
-import { virtualItems, usesInfo } from "../nodes/shared/registries";
+import { usesInfo, virtualItems } from "../nodes/shared/registries";
 import { parentheticalMapping, quoteMapping } from "../utilities/parser-utilities";
-import { createMockTranslator, type MockTranslatorConfig } from "./mock-translator";
+import { createMockTranslator } from "./mock-translator";
 
 /**
  * Registers beforeEach/afterEach hooks for formula node tests.

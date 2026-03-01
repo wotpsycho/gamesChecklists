@@ -1,7 +1,7 @@
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { OptionalFormulaNode } from "./OptionalFormulaNode";
 
-describe("OptionalFormulaNode", () => {
+describe("optionalFormulaNode", () => {
   setupFormulaTests();
 
   const config = { items: { "Bonus Item": [10] } };

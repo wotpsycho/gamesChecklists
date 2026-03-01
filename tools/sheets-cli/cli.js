@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import fs from 'fs/promises';
-import { exportChecklist, importChecklist, validateChecklist, createChecklist } from './checklist.js';
-import { addSpreadsheet, listSpreadsheets, removeSpreadsheet, resolveSpreadsheet, getSpreadsheet } from './config.js';
-import { getSheetMetadata } from './sheets.js';
+import fs from "node:fs/promises";
+import { createChecklist, exportChecklist, importChecklist, validateChecklist } from "./checklist.js";
+import { addSpreadsheet, getSpreadsheet, listSpreadsheets, removeSpreadsheet, resolveSpreadsheet } from "./config.js";
+import { getSheetMetadata } from "./sheets.js";
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -12,7 +12,7 @@ const command = args[0];
 function parseArgs(args) {
   const options = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--')) {
+    if (args[i].startsWith("--")) {
       const key = args[i].slice(2);
       const value = args[i + 1];
       options[key] = value;
@@ -23,11 +23,11 @@ function parseArgs(args) {
 }
 
 async function exportCommand(options) {
-  const { spreadsheet, 'sheet-id': legacySheetId, sheet, output } = options;
+  const { spreadsheet, "sheet-id": legacySheetId, sheet, output } = options;
   const nameOrId = spreadsheet || legacySheetId;
 
   if (!nameOrId) {
-    console.error('Error: --spreadsheet name or --sheet-id is required');
+    console.error("Error: --spreadsheet name or --sheet-id is required");
     process.exit(1);
   }
 
@@ -40,7 +40,7 @@ async function exportCommand(options) {
     if (resolved.name) {
       console.log(`   Spreadsheet: ${resolved.name} (${resolved.entry.title})`);
       if (!sheet && resolved.entry.sheets.length > 0) {
-        console.log(`   Available sheets: ${resolved.entry.sheets.map(s => s.name).join(', ')}`);
+        console.log(`   Available sheets: ${resolved.entry.sheets.map(s => s.name).join(", ")}`);
       }
     } else {
       console.log(`   Spreadsheet ID: ${sheetId}`);
@@ -49,40 +49,40 @@ async function exportCommand(options) {
       console.log(`   Sheet: ${sheet}`);
     }
 
-    const checklist = await exportChecklist(sheetId, sheet || '');
+    const checklist = await exportChecklist(sheetId, sheet || "");
 
     console.log(`✓ Found ${checklist.items.length} items`);
     if (checklist.title) {
       console.log(`  Title: ${checklist.title}`);
     }
     if (checklist.customColumns.length > 0) {
-      console.log(`  Custom columns: ${checklist.customColumns.join(', ')}`);
+      console.log(`  Custom columns: ${checklist.customColumns.join(", ")}`);
     }
 
     if (output) {
       await fs.writeFile(output, JSON.stringify(checklist, null, 2));
       console.log(`✓ Saved to: ${output}`);
     } else {
-      console.log('\nChecklist data:');
+      console.log("\nChecklist data:");
       console.log(JSON.stringify(checklist, null, 2));
     }
   } catch (error) {
-    console.error('❌ Export failed:', error.message);
+    console.error("❌ Export failed:", error.message);
     process.exit(1);
   }
 }
 
 async function importCommand(options) {
-  const { spreadsheet, 'sheet-id': legacySheetId, sheet, input, mode = 'append' } = options;
+  const { spreadsheet, "sheet-id": legacySheetId, sheet, input, mode = "append" } = options;
   const nameOrId = spreadsheet || legacySheetId;
 
   if (!nameOrId) {
-    console.error('Error: --spreadsheet name or --sheet-id is required');
+    console.error("Error: --spreadsheet name or --sheet-id is required");
     process.exit(1);
   }
 
   if (!input) {
-    console.error('Error: --input file is required');
+    console.error("Error: --input file is required");
     process.exit(1);
   }
 
@@ -103,36 +103,36 @@ async function importCommand(options) {
     }
 
     // Read input file
-    const data = await fs.readFile(input, 'utf-8');
+    const data = await fs.readFile(input, "utf-8");
     const checklistData = JSON.parse(data);
 
     console.log(`   Items to import: ${checklistData.items?.length || 0}`);
 
     // Validate data
-    console.log('\n🔍 Validating data...');
+    console.log("\n🔍 Validating data...");
     const validation = validateChecklist(checklistData);
 
     if (validation.warnings.length > 0) {
-      console.warn('\n⚠️  Warnings:');
+      console.warn("\n⚠️  Warnings:");
       validation.warnings.forEach(w => console.warn(`  - ${w}`));
     }
 
     if (!validation.valid) {
-      console.error('\n❌ Validation failed:');
+      console.error("\n❌ Validation failed:");
       validation.errors.forEach(e => console.error(`  - ${e}`));
       process.exit(1);
     }
 
-    console.log('✓ Validation passed');
+    console.log("✓ Validation passed");
 
     // Import data
     console.log(`\n📝 Writing to sheet...`);
-    const result = await importChecklist(sheetId, checklistData, sheet || '', { mode });
+    const result = await importChecklist(sheetId, checklistData, sheet || "", { mode });
 
     console.log(`✓ Import complete!`);
     console.log(`  Updated ${result.updatedCells || 0} cells`);
   } catch (error) {
-    console.error('❌ Import failed:', error.message);
+    console.error("❌ Import failed:", error.message);
     if (error.stack) {
       console.error(error.stack);
     }
@@ -144,47 +144,47 @@ async function validateCommand(options) {
   const { input } = options;
 
   if (!input) {
-    console.error('Error: --input file is required');
+    console.error("Error: --input file is required");
     process.exit(1);
   }
 
   try {
-    const data = await fs.readFile(input, 'utf-8');
+    const data = await fs.readFile(input, "utf-8");
     const checklistData = JSON.parse(data);
 
-    console.log('🔍 Validating checklist data...\n');
+    console.log("🔍 Validating checklist data...\n");
     const validation = validateChecklist(checklistData);
 
     if (validation.warnings.length > 0) {
-      console.warn('⚠️  Warnings:');
+      console.warn("⚠️  Warnings:");
       validation.warnings.forEach(w => console.warn(`  - ${w}`));
-      console.log('');
+      console.log("");
     }
 
     if (validation.valid) {
-      console.log('✅ Validation passed!');
+      console.log("✅ Validation passed!");
       console.log(`   ${checklistData.items.length} items validated`);
     } else {
-      console.error('❌ Validation failed:\n');
+      console.error("❌ Validation failed:\n");
       validation.errors.forEach(e => console.error(`  - ${e}`));
       process.exit(1);
     }
   } catch (error) {
-    console.error('❌ Validation failed:', error.message);
+    console.error("❌ Validation failed:", error.message);
     process.exit(1);
   }
 }
 
 async function addSheetCommand(options) {
-  const { name, 'sheet-id': sheetId } = options;
+  const { name, "sheet-id": sheetId } = options;
 
   if (!name) {
-    console.error('Error: --name is required');
+    console.error("Error: --name is required");
     process.exit(1);
   }
 
   if (!sheetId) {
-    console.error('Error: --sheet-id is required');
+    console.error("Error: --sheet-id is required");
     process.exit(1);
   }
 
@@ -194,10 +194,10 @@ async function addSheetCommand(options) {
 
     console.log(`✓ Added spreadsheet: ${name}`);
     console.log(`  Title: ${entry.title}`);
-    console.log(`  Sheets: ${entry.sheets.map(s => s.name).join(', ')}`);
+    console.log(`  Sheets: ${entry.sheets.map(s => s.name).join(", ")}`);
     console.log(`  ID: ${entry.id}`);
   } catch (error) {
-    console.error('❌ Failed to add spreadsheet:', error.message);
+    console.error("❌ Failed to add spreadsheet:", error.message);
     process.exit(1);
   }
 }
@@ -208,8 +208,8 @@ async function listSheetsCommand() {
     const names = Object.keys(config.spreadsheets);
 
     if (names.length === 0) {
-      console.log('No spreadsheets configured.');
-      console.log('\nAdd one with: node cli.js add-sheet --name <name> --sheet-id <id>');
+      console.log("No spreadsheets configured.");
+      console.log("\nAdd one with: node cli.js add-sheet --name <name> --sheet-id <id>");
       return;
     }
 
@@ -218,13 +218,13 @@ async function listSheetsCommand() {
       const entry = config.spreadsheets[name];
       console.log(`  ${name}`);
       console.log(`    Title: ${entry.title}`);
-      console.log(`    Sheets: ${entry.sheets.map(s => s.name).join(', ')}`);
+      console.log(`    Sheets: ${entry.sheets.map(s => s.name).join(", ")}`);
       console.log(`    ID: ${entry.id}`);
       console.log(`    Last updated: ${new Date(entry.lastUpdated).toLocaleString()}`);
-      console.log('');
+      console.log("");
     }
   } catch (error) {
-    console.error('❌ Failed to list spreadsheets:', error.message);
+    console.error("❌ Failed to list spreadsheets:", error.message);
     process.exit(1);
   }
 }
@@ -233,7 +233,7 @@ async function removeSheetCommand(options) {
   const { name } = options;
 
   if (!name) {
-    console.error('Error: --name is required');
+    console.error("Error: --name is required");
     process.exit(1);
   }
 
@@ -241,7 +241,7 @@ async function removeSheetCommand(options) {
     await removeSpreadsheet(name);
     console.log(`✓ Removed spreadsheet: ${name}`);
   } catch (error) {
-    console.error('❌ Failed to remove spreadsheet:', error.message);
+    console.error("❌ Failed to remove spreadsheet:", error.message);
     process.exit(1);
   }
 }
@@ -250,12 +250,12 @@ async function createChecklistCommand(options) {
   const { spreadsheet, name, template } = options;
 
   if (!spreadsheet) {
-    console.error('Error: --spreadsheet name is required');
+    console.error("Error: --spreadsheet name is required");
     process.exit(1);
   }
 
   if (!name) {
-    console.error('Error: --name is required (name for the new checklist)');
+    console.error("Error: --name is required (name for the new checklist)");
     process.exit(1);
   }
 
@@ -265,7 +265,7 @@ async function createChecklistCommand(options) {
 
     if (entry.sheets.length === 0) {
       console.error(`❌ No checklist sheets found in spreadsheet "${spreadsheet}"`);
-      console.error('   Make sure the spreadsheet has at least one checklist with a ✓ column');
+      console.error("   Make sure the spreadsheet has at least one checklist with a ✓ column");
       process.exit(1);
     }
 
@@ -275,7 +275,7 @@ async function createChecklistCommand(options) {
       templateSheet = entry.sheets.find(s => s.name === template);
       if (!templateSheet) {
         console.error(`❌ Template sheet "${template}" not found`);
-        console.error(`   Available sheets: ${entry.sheets.map(s => s.name).join(', ')}`);
+        console.error(`   Available sheets: ${entry.sheets.map(s => s.name).join(", ")}`);
         process.exit(1);
       }
     } else {
@@ -286,7 +286,7 @@ async function createChecklistCommand(options) {
 
     if (!templateSheet.metaSheet) {
       console.error(`❌ Template sheet "${templateSheet.name}" does not have an associated meta sheet`);
-      console.error('   Create a meta sheet for the template first');
+      console.error("   Create a meta sheet for the template first");
       process.exit(1);
     }
 
@@ -308,7 +308,7 @@ async function createChecklistCommand(options) {
     console.log(`\n🎉 New checklist ready to use!`);
     console.log(`   Open: https://docs.google.com/spreadsheets/d/${entry.id}`);
   } catch (error) {
-    console.error('❌ Failed to create checklist:', error.message);
+    console.error("❌ Failed to create checklist:", error.message);
     if (error.stack) {
       console.error(error.stack);
     }
@@ -396,30 +396,30 @@ async function main() {
   const options = parseArgs(args.slice(1));
 
   switch (command) {
-    case 'export':
+    case "export":
       await exportCommand(options);
       break;
-    case 'import':
+    case "import":
       await importCommand(options);
       break;
-    case 'validate':
+    case "validate":
       await validateCommand(options);
       break;
-    case 'add-sheet':
+    case "add-sheet":
       await addSheetCommand(options);
       break;
-    case 'list-sheets':
+    case "list-sheets":
       await listSheetsCommand();
       break;
-    case 'remove-sheet':
+    case "remove-sheet":
       await removeSheetCommand(options);
       break;
-    case 'create-checklist':
+    case "create-checklist":
       await createChecklistCommand(options);
       break;
-    case 'help':
-    case '--help':
-    case '-h':
+    case "help":
+    case "--help":
+    case "-h":
       printHelp();
       break;
     default:
@@ -429,7 +429,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error('Fatal error:', error);
+main().catch((error) => {
+  console.error("Fatal error:", error);
   process.exit(1);
 });

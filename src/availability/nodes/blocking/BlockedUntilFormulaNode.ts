@@ -14,6 +14,11 @@ const untilRegExp = /^(?:(.*?) +)?UNTIL +(.*?)$/;
 export class BlockedUntilFormulaNode extends FormulaNode<boolean> {
   static create({ text, blockedText, untilText, translator, row }: BlockedArgs) {
     const match = text?.match(untilRegExp) || [];
+    if (!blockedText && !match[1]) {
+      // if no blocked text, treat as a normal boolean condition
+      return BooleanFormulaNode.create({ text: untilText || match[2], translator, row });
+    }
+
     return new BlockedUntilFormulaNode(blockedText || match[1], untilText || match[2], translator, row);
   }
 

@@ -3,7 +3,7 @@ import { createMockTranslator } from "../../test-helpers/mock-translator";
 import { buildAndFinalize, setupFormulaTests } from "../../test-helpers/setup";
 import { BooleanFormulaValueNode } from "./BooleanFormulaValueNode";
 
-describe("BooleanFormulaValueNode", () => {
+describe("booleanFormulaValueNode", () => {
   setupFormulaTests();
 
   describe("value detection", () => {

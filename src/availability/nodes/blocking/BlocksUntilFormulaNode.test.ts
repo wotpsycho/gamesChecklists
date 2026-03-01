@@ -3,7 +3,7 @@ import { createMockParser, createMockTranslator } from "../../test-helpers/mock-
 import { setupFormulaTests } from "../../test-helpers/setup";
 import { BlocksUntilFormulaNode } from "./BlocksUntilFormulaNode";
 
-describe("BlocksUntilFormulaNode", () => {
+describe("blocksUntilFormulaNode", () => {
   setupFormulaTests();
 
   // Helper: BLOCKS row at row 5, "Key" at row 15 (not self-referential).
@@ -14,7 +14,7 @@ describe("BlocksUntilFormulaNode", () => {
 
   function validConfig() {
     return createMockTranslator({
-      items: { "Boss": [10, 12], "Key": [15] },
+      items: { Boss: [10, 12], Key: [15] },
     });
   }
 
@@ -99,7 +99,10 @@ describe("BlocksUntilFormulaNode", () => {
     it("accepts explicit blocksText/untilText", () => {
       const translator = setupValidTranslator();
       const node = BlocksUntilFormulaNode.create({
-        blocksText: "Boss", untilText: "Key", translator, row: 5,
+        blocksText: "Boss",
+        untilText: "Key",
+        translator,
+        row: 5,
       });
       translator.setPhase(PHASE.FINALIZING);
       node.finalize();
@@ -110,7 +113,7 @@ describe("BlocksUntilFormulaNode", () => {
 
   describe("errors", () => {
     it("reports error when UNTIL clause is missing", () => {
-      const translator = createMockTranslator({ items: { "Boss": [10] } });
+      const translator = createMockTranslator({ items: { Boss: [10] } });
       const node = BlocksUntilFormulaNode.create({ text: "Boss", translator, row: 5 });
       translator.setPhase(PHASE.FINALIZING);
       node.finalize();
@@ -123,10 +126,12 @@ describe("BlocksUntilFormulaNode", () => {
       // "Key" at row 11, but parser for row 11 returns empty prereqs
       // So UNTIL child's getAllPossiblePreReqRows won't include row 5
       const translator = createMockTranslator({
-        items: { "Boss": [10], "Key": [11] },
+        items: { Boss: [10], Key: [11] },
       });
       const node = BlocksUntilFormulaNode.create({
-        text: "Boss UNTIL Key", translator, row: 5,
+        text: "Boss UNTIL Key",
+        translator,
+        row: 5,
       });
       translator.setPhase(PHASE.FINALIZING);
       node.finalize();
@@ -139,7 +144,7 @@ describe("BlocksUntilFormulaNode", () => {
   describe("finalize (injection of blocking constraints)", () => {
     it("injects GeneratedBlockedUntilFormulaNode into matched blocked rows", () => {
       const translator = createMockTranslator({
-        items: { "Boss": [10, 12], "Key": [15] },
+        items: { Boss: [10, 12], Key: [15] },
       });
 
       const addChildCalls: Record<number, unknown[]> = { 10: [], 12: [] };
@@ -155,7 +160,9 @@ describe("BlocksUntilFormulaNode", () => {
       }));
 
       const node = BlocksUntilFormulaNode.create({
-        text: "Boss UNTIL Key", translator, row: 5,
+        text: "Boss UNTIL Key",
+        translator,
+        row: 5,
       });
 
       translator.setPhase(PHASE.FINALIZING);
@@ -169,7 +176,7 @@ describe("BlocksUntilFormulaNode", () => {
     it("does not block UNTIL's own prereq rows", () => {
       const translator = createMockTranslator({
         // "Boss" matches rows 10, 11. "Key" at row 15.
-        items: { "Boss": [10, 11], "Key": [15] },
+        items: { Boss: [10, 11], Key: [15] },
       });
 
       const addChildCalls: Record<number, unknown[]> = { 10: [], 11: [] };
@@ -186,7 +193,9 @@ describe("BlocksUntilFormulaNode", () => {
       }));
 
       const node = BlocksUntilFormulaNode.create({
-        text: "Boss UNTIL Key", translator, row: 5,
+        text: "Boss UNTIL Key",
+        translator,
+        row: 5,
       });
 
       translator.setPhase(PHASE.FINALIZING);
